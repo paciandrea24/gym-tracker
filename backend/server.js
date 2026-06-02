@@ -124,14 +124,16 @@ app.get('/api/history', async (req, res) => {
     }
 });
 
-app.get('*', (req, res, next) => {
-    // Se la richiesta inizia con /api, lasciala passare al router delle API
-    if (req.path.startsWith('/api')) {
-        return next();
+app.use((req, res, next) => {
+    // Se la richiesta NON inizia per /api, serviamo l'index.html
+    if (!req.path.startsWith('/api')) {
+        return res.sendFile(path.join(__dirname, '../public/index.html'));
     }
-    // Altrimenti serviamo il file index.html per la PWA
-    res.sendFile(path.join(__dirname, '../public/index.html'));
+    // Altrimenti prosegui normalmente verso le API
+    next();
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server avviato sulla porta ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server avviato sulla porta ${PORT}`);
+});
