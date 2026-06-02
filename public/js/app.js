@@ -171,7 +171,7 @@ async function handleMicRecord() {
         micBtn.classList.add("bg-orange-500");
 
         try {
-            const url = `https://gym-tracker-nutrition.onrender.com/api/analyze-meal`;
+            const url = `/api/analyze-meal`;
             const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
