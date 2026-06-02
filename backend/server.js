@@ -124,7 +124,12 @@ app.get('/api/history', async (req, res) => {
     }
 });
 
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
+    // Se la richiesta inizia con /api, lasciala passare al router delle API
+    if (req.path.startsWith('/api')) {
+        return next();
+    }
+    // Altrimenti serviamo il file index.html per la PWA
     res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
