@@ -18,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Diciamo a Express di usare la cartella superiore (dove sta il tuo index.html) come cartella pubblica
-app.use(express.static(path.join(__dirname, '../')));
+app.use(express.static(path.join(__dirname, '../public')));
 
 // 1. Connessione a MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -122,6 +122,10 @@ app.get('/api/history', async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
