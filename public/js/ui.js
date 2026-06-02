@@ -54,7 +54,7 @@ export function renderRoutinesList(container, routines, onOpenRoutine, onCreateR
 }
 
 // --- RENDER DASHBOARD (SINGOLA SCHEDA E STORICO) ---
-export function renderDashboard(container, routine, history, currentTab, onTabSwitch, onStartSession, onAddExerciseClick, onDeleteClick, onBack) {
+export function renderDashboard(container, routine, history, currentTab, onTabSwitch, onStartSession, onAddExerciseClick, onDeleteClick, onHistoryExClick, onBack) {
     const exercises = routine.exercises;
     const hasExercises = exercises.length > 0;
     let contentHtml = '';
@@ -124,11 +124,14 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                             </summary>
                             <div class="p-4 border-t border-gray-50 space-y-4 bg-gray-50/50 rounded-b-2xl">
                                 ${session.exercises.map(ex => `
-                                    <div>
-                                        <h4 class="text-sm font-bold text-gray-700 mb-2">${ex.name}</h4>
+                                    <div class="history-ex-row cursor-pointer hover:bg-white p-2 -mx-2 rounded-xl transition-colors group/row" data-ex-id="${ex.exerciseId}" data-ex-name="${ex.name}">
+                                        <div class="flex justify-between items-center mb-2">
+                                            <h4 class="text-sm font-bold text-gray-700 group-hover/row:text-blue-600 transition-colors">${ex.name}</h4>
+                                            <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-full font-bold opacity-0 group-hover/row:opacity-100 transition-opacity">Vedi Grafici</span>
+                                        </div>
                                         <div class="space-y-1">
                                             ${ex.sets.map((s, i) => `
-                                                <div class="flex justify-between text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                                                <div class="flex justify-between text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm group-hover/row:border-blue-100 transition-colors">
                                                     <span>Serie ${i + 1}</span>
                                                     <span class="font-bold text-gray-900">
                                                         ${ex.type === 'cardio' ? s.reps + ' min' : (ex.type === 'corpo-libero' ? s.reps + ' rep' : (s.kg || 0) + ' kg x ' + s.reps + ' rep')}
@@ -159,7 +162,7 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                 <button id="tab-storico" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${currentTab === 'storico' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}">Storico</button>
             </div>
         </header>
-        <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
+        <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50 min-h-screen">
             ${contentHtml}
         </main>
     `;
@@ -174,6 +177,10 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
         container.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => onDeleteClick(btn.dataset.deleteId)));
     } else if (currentTab === 'scheda' && !hasExercises) {
         document.getElementById('add-ex-btn').addEventListener('click', onAddExerciseClick);
+    } else if (currentTab === 'storico') {
+        container.querySelectorAll('.history-ex-row').forEach(row => {
+            row.addEventListener('click', () => onHistoryExClick(row.dataset.exId, row.dataset.exName));
+        });
     }
 }
 
@@ -191,7 +198,7 @@ export function renderActiveSession(container, session, routine, onExerciseClick
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
             </div>
         </header>
-        <main class="p-4 space-y-4 pb-28 safe-pb bg-gray-50">
+        <main class="p-4 space-y-4 pb-32 safe-pb bg-gray-50">
             ${todoIds.length === 0 ? `
                 <div class="text-center py-10">
                     <div class="text-6xl mb-4">🏆</div>
@@ -215,7 +222,7 @@ export function renderActiveSession(container, session, routine, onExerciseClick
     }).join('')}
         </main>
         
-        <div class="fixed bottom-0 left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto safe-pb z-20">
+        <div class="fixed bottom-[76px] left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto safe-pb z-20">
             <button id="end-session-btn" class="w-full ${todoIds.length === 0 ? 'bg-gray-900 text-white' : 'bg-white text-red-500 border border-red-200'} font-bold text-lg py-4 rounded-2xl shadow-sm active:scale-95 transition-transform">
                 ${todoIds.length === 0 ? 'Salva e Torna alla Scheda' : 'Termina in anticipo'}
             </button>
@@ -348,22 +355,18 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">${exercise.name}</h1>
         </header>
-        <main class="p-4 pb-28 safe-pb bg-gray-50">
+        <main class="p-4 pb-32 safe-pb bg-gray-50">
             ${lastSessionHtml}
             <div class="space-y-4">
                 ${currentSessionData.map((set, idx) => {
         let inputHtml = '';
+        // ... (Logica helper inputs invariata)
         if (exercise.type === 'cardio') {
             inputHtml = generateAdjustableInput(idx, 'reps', set.reps, 1, 'Minuti');
         } else if (exercise.type === 'corpo-libero') {
             inputHtml = generateAdjustableInput(idx, 'reps', set.reps, 1, 'Ripetizioni');
         } else {
-            inputHtml = `
-                            <div class="flex space-x-4">
-                                ${generateAdjustableInput(idx, 'kg', set.kg, 1.25, 'Kg')}
-                                ${generateAdjustableInput(idx, 'reps', set.reps, 1, 'Reps')}
-                            </div>
-                        `;
+            inputHtml = `<div class="flex space-x-4">${generateAdjustableInput(idx, 'kg', set.kg, 1.25, 'Kg')}${generateAdjustableInput(idx, 'reps', set.reps, 1, 'Reps')}</div>`;
         }
         return `
                     <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
@@ -378,7 +381,7 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             </div>
         </main>
         
-        <div class="fixed bottom-0 left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto safe-pb z-20">
+        <div class="fixed bottom-[76px] left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto safe-pb z-20">
             <button id="complete-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 Segna come Fatto
@@ -390,9 +393,7 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
     document.getElementById('complete-btn').addEventListener('click', onComplete);
 
     container.querySelectorAll('.set-input').forEach(input => {
-        input.addEventListener('input', (e) => {
-            onInput(parseInt(e.target.dataset.idx, 10), e.target.dataset.field, e.target.value);
-        });
+        input.addEventListener('input', (e) => onInput(parseInt(e.target.dataset.idx, 10), e.target.dataset.field, e.target.value));
     });
 
     container.querySelectorAll('.adjust-btn').forEach(btn => {
@@ -401,13 +402,10 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             const field = btn.dataset.field;
             const step = parseFloat(btn.dataset.step);
             const action = btn.dataset.action;
-
             const inputElement = container.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
             let currentValue = parseFloat(inputElement.value) || 0;
-
             if (action === 'plus') currentValue += step;
             else if (action === 'minus') currentValue = Math.max(0, currentValue - step);
-
             currentValue = parseFloat(currentValue.toFixed(2));
             inputElement.value = currentValue;
             onInput(idx, field, currentValue);
@@ -427,11 +425,10 @@ export function updateFeedback(setId, status) {
 
 // Aggiungi questo in ui.js
 
-export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onDeleteMeal, onEditGoals) {
+export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals) {
     let contentHtml = '';
 
     if (currentTab === 'oggi') {
-        // --- VISTA OGGI ---
         let consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
         mealsData.forEach(meal => {
             consumate.calorie += meal.calorie;
@@ -440,13 +437,11 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             consumate.grassi += meal.grassi;
         });
 
-        // FIX BUG: Arrotonda i totali di oggi a 1 cifra decimale
         consumate.calorie = parseFloat(consumate.calorie.toFixed(1));
         consumate.proteine = parseFloat(consumate.proteine.toFixed(1));
         consumate.carbo = parseFloat(consumate.carbo.toFixed(1));
         consumate.grassi = parseFloat(consumate.grassi.toFixed(1));
 
-        // Calcolo e arrotondamento delle calorie rimaste
         let calorieRimaste = parseFloat((goals.calorie - consumate.calorie).toFixed(1));
 
         contentHtml = `
@@ -470,9 +465,13 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                 </div>
             </div>
 
-            <button id="mic-btn" class="w-full bg-gray-900 text-white font-black text-xl py-5 rounded-2xl shadow-xl active:scale-95 transition-transform flex justify-center items-center gap-2 mb-6">
+            <button id="mic-btn" class="w-full bg-gray-900 text-white font-black text-xl py-4 rounded-2xl shadow-xl active:scale-95 transition-transform flex justify-center items-center gap-2 mb-3">
                 <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                REGISTRA PASTO
+                REGISTRA VOCE
+            </button>
+            
+            <button id="manual-meal-btn" class="w-full bg-white text-gray-900 border border-gray-200 font-bold text-lg py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-2 mb-6">
+                ➕ Inserisci Manualmente
             </button>
 
             <div class="flex justify-between items-end mb-3">
@@ -503,7 +502,6 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             </div>
         `;
     } else {
-        // --- VISTA STORICO ---
         const grouped = {};
         mealsData.forEach(meal => {
             const dateStr = new Date(meal.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -516,7 +514,6 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             grouped[dateStr].totals.grassi += meal.grassi;
         });
 
-        // FIX BUG: Arrotonda i totali di ogni giorno nello storico
         Object.values(grouped).forEach(day => {
             day.totals.cal = parseFloat(day.totals.cal.toFixed(1));
             day.totals.pro = parseFloat(day.totals.pro.toFixed(1));
@@ -596,8 +593,115 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
 
     if (currentTab === 'oggi') {
         document.getElementById('mic-btn').addEventListener('click', onMicClick);
+        document.getElementById('manual-meal-btn').addEventListener('click', onManualClick);
         container.querySelectorAll('.delete-meal-btn').forEach(btn => {
             btn.addEventListener('click', () => onDeleteMeal(btn.dataset.deleteId));
         });
     }
+}
+
+// Aggiunta a ui.js per il Form Manuale
+export function renderManualMealForm(container, onSave, onCancel) {
+    container.innerHTML = `
+        <header class="bg-white shadow-sm p-4 sticky top-0 z-10 flex items-center">
+            <button id="cancel-meal-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <h1 class="text-xl font-bold text-gray-900 truncate">Pasto Manuale</h1>
+        </header>
+        <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Pasto (es. Colazione)</label>
+                    <input type="text" id="m-pasto" placeholder="Pranzo" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Alimento/i</label>
+                    <input type="text" id="m-alimenti" placeholder="Es. Pollo e Riso" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Calorie Totali</label>
+                    <input type="number" id="m-cal" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                </div>
+                <div class="flex space-x-2">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Proteine</label>
+                        <input type="number" id="m-pro" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Carbo</label>
+                        <input type="number" id="m-carbo" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Grassi</label>
+                        <input type="number" id="m-fat" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
+                    </div>
+                </div>
+            </div>
+            <button id="save-meal-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-6">
+                Salva Pasto
+            </button>
+        </main>
+    `;
+
+    document.getElementById('cancel-meal-btn').addEventListener('click', onCancel);
+    document.getElementById('save-meal-btn').addEventListener('click', () => {
+        const pasto = document.getElementById('m-pasto').value.trim() || 'Spuntino';
+        const alimenti = document.getElementById('m-alimenti').value.trim();
+        const calorie = parseFloat(document.getElementById('m-cal').value) || 0;
+        const proteine = parseFloat(document.getElementById('m-pro').value) || 0;
+        const carboidrati = parseFloat(document.getElementById('m-carbo').value) || 0;
+        const grassi = parseFloat(document.getElementById('m-fat').value) || 0;
+
+        if (!alimenti || calorie <= 0) return alert("Inserisci l'alimento e le calorie");
+
+        onSave({ pasto, alimenti, calorie, proteine, carboidrati, grassi });
+    });
+}
+
+// Aggiunta a ui.js per i Grafici della Palestra
+export function renderExerciseStats(container, exerciseName, labels, weightData, volumeData, onBack) {
+    container.innerHTML = `
+        <header class="bg-white shadow-sm p-4 sticky top-0 z-10 flex items-center">
+            <button id="back-stats-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <h1 class="text-xl font-bold text-gray-900 truncate">Progresso</h1>
+        </header>
+        <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50">
+            <h2 class="text-2xl font-black text-gray-900 px-1 mb-2">${exerciseName}</h2>
+            
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Peso Massimo (Kg) per Sessione</h3>
+                <canvas id="chartWeight"></canvas>
+            </div>
+            
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Volume Totale (Kg x Rep)</h3>
+                <canvas id="chartVol"></canvas>
+            </div>
+        </main>
+    `;
+
+    document.getElementById('back-stats-btn').addEventListener('click', onBack);
+
+    // Disegna Grafico Lineare Peso
+    new Chart(document.getElementById('chartWeight'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{ label: 'Kg Max', data: weightData, borderColor: '#111827', tension: 0.3, backgroundColor: '#111827' }]
+        },
+        options: { plugins: { legend: { display: false } } }
+    });
+
+    // Disegna Grafico a Barre Volume
+    new Chart(document.getElementById('chartVol'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{ label: 'Volume', data: volumeData, backgroundColor: '#3b82f6', borderRadius: 4 }]
+        },
+        options: { plugins: { legend: { display: false } } }
+    });
 }

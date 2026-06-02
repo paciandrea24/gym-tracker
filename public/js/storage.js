@@ -194,7 +194,7 @@ export function addMealToToday(mealObj) {
 // --- GESTIONE OBIETTIVI NUTRIZIONALI ---
 export function getNutritionGoals() {
     return JSON.parse(localStorage.getItem('nutriGoals')) || {
-        calorie: 2000, proteine: 150, carbo: 200, grassi: 60
+        calorie: 2285, proteine: 100, carbo: 325, grassi: 65
     };
 }
 

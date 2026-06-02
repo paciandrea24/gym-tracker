@@ -29,7 +29,6 @@ function setupNavigation() {
     const navGym = document.getElementById('nav-gym');
     const navNutri = document.getElementById('nav-nutri');
 
-    // Assicuriamoci che i tasti esistano nel DOM prima di aggiungere i listener
     if (navGym) navGym.addEventListener('click', () => switchModule('gym'));
     if (navNutri) navNutri.addEventListener('click', () => switchModule('nutrition'));
 }
@@ -39,7 +38,6 @@ function switchModule(module) {
     const navGym = document.getElementById('nav-gym');
     const navNutri = document.getElementById('nav-nutri');
 
-    // Aggiorna visivamente i bottoni della Bottom Navigation
     if (navGym && navNutri) {
         navGym.classList.toggle('text-gray-900', module === 'gym');
         navGym.classList.toggle('text-gray-400', module !== 'gym');
@@ -64,9 +62,8 @@ function loadCurrentModule() {
     }
 }
 
-
 // ==========================================
-// MODULO 1: NUTRIZIONE (Full-Stack Backend)
+// MODULO 1: NUTRIZIONE (Intelligenza + Manuale)
 // ==========================================
 
 async function showNutritionDashboard() {
@@ -77,11 +74,7 @@ async function showNutritionDashboard() {
     `;
 
     try {
-        // Seleziona l'API giusta in base al tab in cui ci troviamo
-        const url = currentNutriTab === 'oggi'
-            ? 'https://gym-tracker-nutrition.onrender.com/api/today-meals'
-            : 'https://gym-tracker-nutrition.onrender.com/api/history';
-
+        const url = currentNutriTab === 'oggi' ? '/api/today-meals' : '/api/history';
         const response = await fetch(url);
         if (!response.ok) throw new Error("Errore del server");
 
@@ -89,154 +82,134 @@ async function showNutritionDashboard() {
         const goals = storage.getNutritionGoals();
 
         ui.renderNutritionDashboard(
-            appContainer,
-            mealsData,
-            goals,
-            currentNutriTab,      // Passiamo il tab attuale
-            (tab) => {            // Funzione per cambiare tab
-                currentNutriTab = tab;
-                showNutritionDashboard();
-            },
+            appContainer, mealsData, goals, currentNutriTab,
+            (tab) => { currentNutriTab = tab; showNutritionDashboard(); },
             handleMicRecord,
+            handleManualMealClick,
             handleDeleteMeal,
             handleEditGoals
         );
 
     } catch (error) {
-        console.error("Errore fetch pasti:", error);
         appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`;
     }
 }
 
+function handleManualMealClick() {
+    ui.renderManualMealForm(appContainer, async (mealData) => {
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold">Salvataggio in corso...</div>`;
+        try {
+            const response = await fetch('/api/meals', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(mealData)
+            });
+            if (response.ok) showNutritionDashboard();
+            else alert("Errore nel salvataggio");
+        } catch (e) {
+            alert("Errore di connessione");
+        }
+    }, showNutritionDashboard);
+}
+
 async function handleMicRecord() {
     const micBtn = document.getElementById('mic-btn');
-    const originalBtnHtml = `<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg> REGISTRA PASTO`;
+    const originalBtnHtml = `<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg> REGISTRA VOCE`;
 
-    // 1. SE STIAMO GIA' REGISTRANDO: il click serve a FERMARE il microfono
     if (isRecording && currentRecognition) {
-        currentRecognition.stop(); // Questo farà scattare l'evento 'onend' in automatico
+        currentRecognition.stop();
         return;
     }
 
-    // 2. SE NON STIAMO REGISTRANDO: Prepariamo l'ascolto
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        alert("Il riconoscimento vocale non è supportato in questo browser.");
+        alert("Il riconoscimento vocale non è supportato.");
         return;
     }
 
     currentRecognition = new SpeechRecognition();
     currentRecognition.lang = 'it-IT';
-
-    // IL SEGRETO È QUI: Modalità continua attivata! Non si ferma mai alle pause.
     currentRecognition.continuous = true;
     currentRecognition.interimResults = false;
 
     finalTranscript = "";
     isRecording = true;
 
-    // Cambiamo la grafica per far capire che deve ri-cliccare per fermare
     micBtn.innerHTML = "⏹️ Ascoltando... Clicca per terminare";
     micBtn.classList.add("animate-pulse", "bg-red-600");
-    micBtn.classList.remove("bg-blue-600");
 
     currentRecognition.start();
 
-    // 3. Accumuliamo il testo man mano che parli (anche con le pause)
     currentRecognition.onresult = (event) => {
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript + " ";
-            }
+            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + " ";
         }
     };
 
-    // 4. QUANDO FERMI MANUALMENTE IL MICROFONO: Invia tutto all'IA
     currentRecognition.onend = async () => {
         isRecording = false;
 
-        // Se hai cliccato senza dire niente, ripristina il bottone
         if (!finalTranscript.trim()) {
             micBtn.innerHTML = originalBtnHtml;
             micBtn.classList.remove("animate-pulse", "bg-red-600", "bg-orange-500");
-            micBtn.classList.add("bg-blue-600");
             return;
         }
 
-        console.log("Audio Trascritto Completo:", finalTranscript);
-
-        // Feedback visivo: Invio al server
-        micBtn.innerHTML = "⏳ Analisi e Salvataggio...";
+        micBtn.innerHTML = "⏳ Analisi in corso...";
         micBtn.classList.remove("animate-pulse", "bg-red-600");
         micBtn.classList.add("bg-orange-500");
 
         try {
-            const url = `/api/analyze-meal`;
-            const response = await fetch(url, {
+            const response = await fetch(`/api/analyze-meal`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text: finalTranscript })
             });
 
-            if (!response.ok) throw new Error("Errore di comunicazione col Server Node.js");
+            if (!response.ok) throw new Error("Errore col Server");
 
             const data = await response.json();
 
             if (data.success) {
-                showNutritionDashboard(); // Ricarica la grafica
+                showNutritionDashboard();
             } else {
                 throw new Error(data.error);
             }
-
         } catch (error) {
-            alert("Errore durante il salvataggio: " + error.message);
+            alert("Errore: " + error.message);
             micBtn.innerHTML = originalBtnHtml;
             micBtn.classList.remove("bg-orange-500");
-            micBtn.classList.add("bg-blue-600");
         }
     };
 
-    // Gestione di eventuali errori del microfono
     currentRecognition.onerror = (event) => {
-        if (event.error !== 'aborted') { // Ignoriamo l'errore "aborted" che scatta quando lo fermiamo noi
-            alert("Errore microfono: " + event.error);
-        }
+        if (event.error !== 'aborted') alert("Errore microfono: " + event.error);
         isRecording = false;
         micBtn.innerHTML = originalBtnHtml;
         micBtn.classList.remove("animate-pulse", "bg-red-600", "bg-orange-500");
-        micBtn.classList.add("bg-blue-600");
     };
 }
 
 async function handleDeleteMeal(mealId) {
     if (!window.confirm("Vuoi eliminare questo pasto?")) return;
-
     try {
-        const url = `https://gym-tracker-nutrition.onrender.com/api/meals/${mealId}`;
-        const response = await fetch(url, { method: "DELETE" });
-
-        if (response.ok) {
-            showNutritionDashboard(); // Ricarica la pagina e aggiorna i grafici
-        } else {
-            alert("Errore durante l'eliminazione");
-        }
+        const response = await fetch(`/api/meals/${mealId}`, { method: "DELETE" });
+        if (response.ok) showNutritionDashboard();
+        else alert("Errore durante l'eliminazione");
     } catch (error) {
-        alert("Impossibile connettersi al server per eliminare il pasto");
+        alert("Impossibile connettersi al server");
     }
 }
 
 function handleEditGoals() {
     const currentGoals = storage.getNutritionGoals();
+    const cal = window.prompt("Calorie giornaliere:", currentGoals.calorie);
+    if (!cal) return;
 
-    // Mostriamo dei semplici prompt in sequenza (in futuro si può fare una modale più bella)
-    const cal = window.prompt("Obiettivo Calorie giornaliere:", currentGoals.calorie);
-    if (!cal) return; // Se l'utente annulla, fermiamo tutto
+    const pro = window.prompt("Proteine (g):", currentGoals.proteine);
+    const cho = window.prompt("Carboidrati (g):", currentGoals.carbo);
+    const fat = window.prompt("Grassi (g):", currentGoals.grassi);
 
-    const pro = window.prompt("Obiettivo Proteine (g):", currentGoals.proteine);
-    const cho = window.prompt("Obiettivo Carboidrati (g):", currentGoals.carbo);
-    const fat = window.prompt("Obiettivo Grassi (g):", currentGoals.grassi);
-
-    // Se ha inserito tutto, salviamo
     if (cal && pro && cho && fat) {
         storage.saveNutritionGoals({
             calorie: parseInt(cal, 10),
@@ -244,29 +217,21 @@ function handleEditGoals() {
             carbo: parseInt(cho, 10),
             grassi: parseInt(fat, 10)
         });
-        showNutritionDashboard(); // Ricarica la grafica coi nuovi obiettivi
+        showNutritionDashboard();
     }
 }
 
-
 // ==========================================
-// MODULO 2: PALESTRA (Logica Esistente Intatta)
+// MODULO 2: PALESTRA (Grafici e Logica)
 // ==========================================
 
 function showRoutinesList() {
     const routines = storage.getRoutines();
-    ui.renderRoutinesList(
-        appContainer,
-        routines,
-        handleOpenRoutine,
-        handleCreateRoutine,
-        handleEditRoutineName,
-        handleDeleteRoutine
-    );
+    ui.renderRoutinesList(appContainer, routines, handleOpenRoutine, handleCreateRoutine, handleEditRoutineName, handleDeleteRoutine);
 }
 
 function handleCreateRoutine() {
-    const name = window.prompt("Scegli un nome per la tua nuova scheda:", "Nuova Scheda");
+    const name = window.prompt("Nome scheda:", "Nuova Scheda");
     if (name && name.trim() !== "") {
         storage.createRoutine(name.trim());
         showRoutinesList();
@@ -274,7 +239,7 @@ function handleCreateRoutine() {
 }
 
 function handleEditRoutineName(routineId, oldName) {
-    const newName = window.prompt("Modifica il nome della scheda:", oldName);
+    const newName = window.prompt("Modifica nome:", oldName);
     if (newName && newName.trim() !== "") {
         storage.editRoutineName(routineId, newName.trim());
         showRoutinesList();
@@ -282,7 +247,7 @@ function handleEditRoutineName(routineId, oldName) {
 }
 
 function handleDeleteRoutine(routineId) {
-    if (window.confirm("Sei sicuro di voler eliminare interamente questa scheda e i suoi esercizi? (Lo storico rimarrà accessibile)")) {
+    if (window.confirm("Eliminare scheda?")) {
         storage.deleteRoutine(routineId);
         showRoutinesList();
     }
@@ -296,19 +261,13 @@ function handleOpenRoutine(routineId) {
 
 function showDashboard() {
     const routine = storage.getRoutine(currentRoutineId);
-    if (!routine) return showRoutinesList(); // Fallback se cancellata
+    if (!routine) return showRoutinesList();
 
     const history = storage.getHistoryForRoutine(currentRoutineId);
     ui.renderDashboard(
-        appContainer,
-        routine,
-        history,
-        currentTab,
-        handleTabSwitch,
-        handleStartSession,
-        showRoutineBuilder,
-        handleDeleteExercise,
-        showRoutinesList // Bottone "Back"
+        appContainer, routine, history, currentTab,
+        handleTabSwitch, handleStartSession, showRoutineBuilder,
+        handleDeleteExercise, handleShowExerciseStats, showRoutinesList
     );
 }
 
@@ -318,7 +277,7 @@ function handleTabSwitch(tab) {
 }
 
 function handleDeleteExercise(exerciseId) {
-    if (window.confirm("Sei sicuro di voler eliminare questo esercizio?")) {
+    if (window.confirm("Eliminare esercizio?")) {
         storage.removeExerciseFromRoutine(currentRoutineId, exerciseId);
         showDashboard();
     }
@@ -347,9 +306,8 @@ function showActiveSession() {
 function handleEndSession() {
     const session = storage.getActiveSession();
     if (session && session.todo.length > 0) {
-        if (!window.confirm("Vuoi davvero terminare l'allenamento? Gli esercizi rimanenti non saranno salvati nello storico.")) return;
+        if (!window.confirm("Terminare in anticipo?")) return;
     }
-
     storage.endActiveSession();
     currentTab = 'storico';
     showDashboard();
@@ -377,13 +335,8 @@ function handleOpenExercise(exerciseId) {
     }
 
     ui.renderActiveExercise(
-        appContainer,
-        currentExercise,
-        lastSession,
-        currentSessionData,
-        handleInput,
-        handleCompleteExercise,
-        showActiveSession
+        appContainer, currentExercise, lastSession, currentSessionData,
+        handleInput, handleCompleteExercise, showActiveSession
     );
 }
 
@@ -406,5 +359,40 @@ function handleCompleteExercise() {
     showActiveSession();
 }
 
-// Avvia l'app quando il DOM è pronto
+function handleShowExerciseStats(exerciseId, exerciseName) {
+    const history = storage.getHistoryForRoutine(currentRoutineId);
+
+    // Trova le sessioni che contengono l'esercizio
+    const sessionsWithEx = history
+        .filter(session => session.exercises.some(e => e.exerciseId === exerciseId))
+        .sort((a, b) => a.endTime - b.endTime);
+
+    if (sessionsWithEx.length === 0) return alert("Dati insufficienti per il grafico.");
+
+    const labels = [];
+    const maxWeights = [];
+    const totalVolumes = [];
+
+    sessionsWithEx.forEach(session => {
+        const dateStr = new Date(session.endTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+        const exData = session.exercises.find(e => e.exerciseId === exerciseId);
+
+        labels.push(dateStr);
+
+        let maxKg = 0;
+        let vol = 0;
+        exData.sets.forEach(set => {
+            const kg = parseFloat(set.kg) || 0;
+            const reps = parseInt(set.reps) || 0;
+            if (kg > maxKg) maxKg = kg;
+            vol += (kg > 0 ? kg * reps : reps);
+        });
+
+        maxWeights.push(maxKg);
+        totalVolumes.push(vol);
+    });
+
+    ui.renderExerciseStats(appContainer, exerciseName, labels, maxWeights, totalVolumes, showDashboard);
+}
+
 document.addEventListener('DOMContentLoaded', init);
