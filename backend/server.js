@@ -100,6 +100,17 @@ app.post('/api/analyze-meal', async (req, res) => {
     }
 });
 
+// API per salvataggio manuale (Senza Gemini)
+app.post('/api/meals', async (req, res) => {
+    try {
+        const newMeal = new Meal(req.body);
+        await newMeal.save();
+        res.json({ success: true, meal: newMeal });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // 5. API per recuperare i pasti di oggi
 app.get('/api/today-meals', async (req, res) => {
     try {
