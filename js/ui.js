@@ -9,7 +9,7 @@ export function renderRoutinesList(container, routines, onOpenRoutine, onCreateR
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             </button>
         </header>
-        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
             ${routines.length === 0 ? `
                 <div class="text-center py-10">
                     <p class="text-gray-500 font-medium">Nessuna scheda presente.</p>
@@ -159,7 +159,7 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                 <button id="tab-storico" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${currentTab === 'storico' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}">Storico</button>
             </div>
         </header>
-        <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
             ${contentHtml}
         </main>
     `;
@@ -191,7 +191,7 @@ export function renderActiveSession(container, session, routine, onExerciseClick
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
             </div>
         </header>
-        <main class="p-4 space-y-4 pb-28 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-4 pb-28 safe-pb bg-gray-50">
             ${todoIds.length === 0 ? `
                 <div class="text-center py-10">
                     <div class="text-6xl mb-4">🏆</div>
@@ -235,7 +235,7 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">Nuovo Esercizio</h1>
         </header>
-        <main class="p-4 space-y-4 bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-4 bg-gray-50">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Nome Esercizio</label>
@@ -348,7 +348,7 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">${exercise.name}</h1>
         </header>
-        <main class="p-4 pb-28 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 pb-28 safe-pb bg-gray-50">
             ${lastSessionHtml}
             <div class="space-y-4">
                 ${currentSessionData.map((set, idx) => {
@@ -422,4 +422,182 @@ export function updateFeedback(setId, status) {
     if (status === 'Salvato ✓') statusEl.className = 'text-xs text-green-600 font-bold transition-colors';
     else if (status === 'Salvataggio...') statusEl.className = 'text-xs text-orange-500 font-bold transition-colors';
     else statusEl.className = 'text-xs text-gray-400 font-medium transition-colors';
+}
+
+
+// Aggiungi questo in ui.js
+
+export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onDeleteMeal, onEditGoals) {
+    let contentHtml = '';
+
+    if (currentTab === 'oggi') {
+        // --- VISTA OGGI ---
+        let consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
+        mealsData.forEach(meal => {
+            consumate.calorie += meal.calorie;
+            consumate.proteine += meal.proteine;
+            consumate.carbo += meal.carboidrati;
+            consumate.grassi += meal.grassi;
+        });
+
+        // FIX BUG: Arrotonda i totali di oggi a 1 cifra decimale
+        consumate.calorie = parseFloat(consumate.calorie.toFixed(1));
+        consumate.proteine = parseFloat(consumate.proteine.toFixed(1));
+        consumate.carbo = parseFloat(consumate.carbo.toFixed(1));
+        consumate.grassi = parseFloat(consumate.grassi.toFixed(1));
+
+        // Calcolo e arrotondamento delle calorie rimaste
+        let calorieRimaste = parseFloat((goals.calorie - consumate.calorie).toFixed(1));
+
+        contentHtml = `
+            <div class="bg-gray-900 text-white p-5 rounded-2xl shadow-xl mb-6">
+                <p class="text-sm text-gray-400 font-bold uppercase tracking-wider mb-1">Calorie Rimaste</p>
+                <h2 class="text-4xl font-black">${calorieRimaste} <span class="text-lg font-normal text-gray-400">/ ${goals.calorie}</span></h2>
+                
+                <div class="flex justify-between mt-6 gap-2">
+                    <div class="flex-1 bg-white/10 p-3 rounded-xl text-center">
+                        <p class="text-[10px] text-gray-400 uppercase font-bold">Pro</p>
+                        <p class="font-bold text-lg">${consumate.proteine}<span class="text-xs font-normal text-gray-400">/${goals.proteine}g</span></p>
+                    </div>
+                    <div class="flex-1 bg-white/10 p-3 rounded-xl text-center">
+                        <p class="text-[10px] text-gray-400 uppercase font-bold">Carbo</p>
+                        <p class="font-bold text-lg">${consumate.carbo}<span class="text-xs font-normal text-gray-400">/${goals.carbo}g</span></p>
+                    </div>
+                    <div class="flex-1 bg-white/10 p-3 rounded-xl text-center">
+                        <p class="text-[10px] text-gray-400 uppercase font-bold">Grassi</p>
+                        <p class="font-bold text-lg">${consumate.grassi}<span class="text-xs font-normal text-gray-400">/${goals.grassi}g</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <button id="mic-btn" class="w-full bg-gray-900 text-white font-black text-xl py-5 rounded-2xl shadow-xl active:scale-95 transition-transform flex justify-center items-center gap-2 mb-6">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                REGISTRA PASTO
+            </button>
+
+            <div class="flex justify-between items-end mb-3">
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Pasti di oggi</h2>
+            </div>
+            
+            <div class="space-y-3">
+                ${mealsData.length === 0 ? `
+                    <div class="text-center py-10">
+                        <p class="text-gray-500 font-medium">Non hai ancora registrato nulla oggi.</p>
+                    </div>
+                ` : mealsData.map(meal => `
+                    <div class="w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+                        <div class="flex-1 pr-3">
+                            <h3 class="text-lg font-bold text-gray-800">${meal.alimenti}</h3>
+                            <p class="text-sm font-medium text-gray-500 mt-1 flex items-center gap-2">
+                                <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md uppercase tracking-wider">${meal.pasto}</span>
+                                <span class="font-bold text-gray-900">${parseFloat(meal.calorie.toFixed(1))} kcal</span>
+                            </p>
+                        </div>
+                        <div class="flex items-center space-x-2 pl-3 border-l border-gray-100 flex-shrink-0">
+                            <button data-delete-id="${meal._id}" class="delete-meal-btn p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-95 transition-transform">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        // --- VISTA STORICO ---
+        const grouped = {};
+        mealsData.forEach(meal => {
+            const dateStr = new Date(meal.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+            if (!grouped[dateStr]) grouped[dateStr] = { meals: [], totals: { cal: 0, pro: 0, car: 0, grassi: 0 } };
+
+            grouped[dateStr].meals.push(meal);
+            grouped[dateStr].totals.cal += meal.calorie;
+            grouped[dateStr].totals.pro += meal.proteine;
+            grouped[dateStr].totals.car += meal.carboidrati;
+            grouped[dateStr].totals.grassi += meal.grassi;
+        });
+
+        // FIX BUG: Arrotonda i totali di ogni giorno nello storico
+        Object.values(grouped).forEach(day => {
+            day.totals.cal = parseFloat(day.totals.cal.toFixed(1));
+            day.totals.pro = parseFloat(day.totals.pro.toFixed(1));
+            day.totals.car = parseFloat(day.totals.car.toFixed(1));
+            day.totals.grassi = parseFloat(day.totals.grassi.toFixed(1));
+        });
+
+        contentHtml = `
+            ${Object.keys(grouped).length === 0 ? `
+                <div class="text-center py-10"><p class="text-gray-500 font-medium">Nessun pasto registrato nello storico.</p></div>
+            ` : `
+                <div class="space-y-4">
+                    ${Object.keys(grouped).map(dateStr => {
+            const day = grouped[dateStr];
+            return `
+                            <details class="bg-white rounded-2xl shadow-sm border border-gray-100 group">
+                                <summary class="p-4 font-bold text-gray-800 flex justify-between items-center cursor-pointer outline-none list-none [&::-webkit-details-marker]:hidden">
+                                    <div class="flex items-center gap-3">
+                                        <div class="bg-gray-100 text-gray-900 p-2 rounded-lg">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-base text-gray-900 capitalize">${dateStr}</h3>
+                                            <p class="text-xs text-gray-500 font-medium mt-1">
+                                                ${day.totals.cal} kcal • ${day.totals.pro}g P • ${day.totals.car}g C • ${day.totals.grassi}g G
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="text-gray-400 transition-transform group-open:rotate-180">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </div>
+                                </summary>
+                                <div class="p-4 border-t border-gray-50 space-y-4 bg-gray-50/50 rounded-b-2xl">
+                                    ${day.meals.map(meal => `
+                                        <div>
+                                            <h4 class="text-sm font-bold text-gray-700 mb-2">${meal.alimenti}</h4>
+                                            <div class="space-y-1">
+                                                <div class="flex justify-between items-center text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                                                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">${meal.pasto}</span>
+                                                    <span class="font-bold text-gray-900">${parseFloat(meal.calorie.toFixed(1))} kcal</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </details>
+                        `;
+        }).join('')}
+                </div>
+            `}
+        `;
+    }
+
+    container.innerHTML = `
+        <header class="bg-white shadow-sm p-4 sticky top-0 z-10">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Nutrizione</h1>
+                <button id="edit-goals-btn" class="p-2 text-gray-600 hover:text-gray-900 bg-gray-100 rounded-full active:scale-95 transition-transform">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                </button>
+            </div>
+            
+            <div class="flex bg-gray-100 p-1 rounded-xl">
+                <button id="tab-oggi" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${currentTab === 'oggi' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}">Oggi</button>
+                <button id="tab-storico" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${currentTab === 'storico' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}">Storico</button>
+            </div>
+        </header>
+        
+        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
+            ${contentHtml}
+        </main>
+    `;
+
+    document.getElementById('edit-goals-btn').addEventListener('click', onEditGoals);
+    document.getElementById('tab-oggi').addEventListener('click', () => onTabSwitch('oggi'));
+    document.getElementById('tab-storico').addEventListener('click', () => onTabSwitch('storico'));
+
+    if (currentTab === 'oggi') {
+        document.getElementById('mic-btn').addEventListener('click', onMicClick);
+        container.querySelectorAll('.delete-meal-btn').forEach(btn => {
+            btn.addEventListener('click', () => onDeleteMeal(btn.dataset.deleteId));
+        });
+    }
 }

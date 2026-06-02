@@ -174,3 +174,30 @@ export function getDraft(exerciseId) {
 export function clearDraft() {
     localStorage.removeItem('workoutDraft');
 }
+
+export function getTodayNutrition() {
+    const today = new Date().toISOString().split('T')[0]; // es. "2024-05-20"
+    const history = JSON.parse(localStorage.getItem('nutriHistory')) || {};
+    return history[today] || []; // Ritorna un array di pasti di oggi
+}
+
+export function addMealToToday(mealObj) {
+    const today = new Date().toISOString().split('T')[0];
+    const history = JSON.parse(localStorage.getItem('nutriHistory')) || {};
+
+    if (!history[today]) history[today] = [];
+    history[today].push(mealObj);
+
+    localStorage.setItem('nutriHistory', JSON.stringify(history));
+}
+
+// --- GESTIONE OBIETTIVI NUTRIZIONALI ---
+export function getNutritionGoals() {
+    return JSON.parse(localStorage.getItem('nutriGoals')) || {
+        calorie: 2000, proteine: 150, carbo: 200, grassi: 60
+    };
+}
+
+export function saveNutritionGoals(goals) {
+    localStorage.setItem('nutriGoals', JSON.stringify(goals));
+}
