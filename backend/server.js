@@ -85,7 +85,18 @@ app.post('/api/analyze-meal', async (req, res) => {
 
     } catch (error) {
         console.error("Errore del server:", error);
-        res.status(500).json({ success: false, error: error.message });
+
+        if (error?.status === 429) {
+            return res.status(429).json({
+                success: false,
+                error: "Hai superato il limite giornaliero di Gemini. Riprova domani."
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: "Errore interno del server"
+        });
     }
 });
 
