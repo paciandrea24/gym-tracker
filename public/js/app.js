@@ -79,8 +79,8 @@ async function showNutritionDashboard() {
     try {
         // Seleziona l'API giusta in base al tab in cui ci troviamo
         const url = currentNutriTab === 'oggi'
-            ? '/api/today-meals'
-            : '/api/history';
+            ? 'https://gym-tracker-nutrition.onrender.com/api/today-meals'
+            : 'https://gym-tracker-nutrition.onrender.com/api/history';
 
         const response = await fetch(url);
         if (!response.ok) throw new Error("Errore del server");
@@ -171,7 +171,7 @@ async function handleMicRecord() {
         micBtn.classList.add("bg-orange-500");
 
         try {
-            const url = `/api/analyze-meal`;
+            const url = `https://gym-tracker-nutrition.onrender.com/api/analyze-meal`;
             const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -212,7 +212,7 @@ async function handleDeleteMeal(mealId) {
     if (!window.confirm("Vuoi eliminare questo pasto?")) return;
 
     try {
-        const url = `/api/meals/${mealId}`;
+        const url = `https://gym-tracker-nutrition.onrender.com/api/meals/${mealId}`;
         const response = await fetch(url, { method: "DELETE" });
 
         if (response.ok) {
