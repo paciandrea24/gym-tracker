@@ -604,7 +604,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
     }
 }
 
-// --- RENDER DETTAGLIO PASTO ---
+/// --- RENDER DETTAGLIO PASTO ---
 export function renderMealDetails(container, meal, onBack) {
     const dateObj = new Date(meal.data);
     const dateStr = dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -619,7 +619,7 @@ export function renderMealDetails(container, meal, onBack) {
         </header>
         <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50 min-h-screen">
             
-            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <div class="bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-100">
                 <div class="flex items-center justify-between mb-4">
                     <span class="text-xs font-bold bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-wider">${meal.pasto}</span>
                     <span class="text-xs text-gray-400 font-medium">${dateStr} - ${timeStr}</span>
@@ -632,18 +632,18 @@ export function renderMealDetails(container, meal, onBack) {
                         <span class="text-2xl font-black text-gray-900">${Number(meal.calorie).toFixed(1)} <span class="text-sm font-normal text-gray-500">kcal</span></span>
                     </div>
                     
-                    <div class="grid grid-cols-3 gap-3">
-                        <div class="bg-blue-50 p-4 rounded-2xl text-center border border-blue-100">
-                            <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Proteine</p>
-                            <p class="text-xl font-black text-blue-700">${Number(meal.proteine).toFixed(1)}g</p>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="bg-blue-50 p-2 sm:p-3 rounded-2xl flex flex-col justify-center items-center border border-blue-100">
+                            <p class="text-[9px] font-bold text-blue-400 uppercase mb-1 w-full text-center truncate">Proteine</p>
+                            <p class="text-lg sm:text-xl font-black text-blue-700">${Number(meal.proteine).toFixed(1)}g</p>
                         </div>
-                        <div class="bg-green-50 p-4 rounded-2xl text-center border border-green-100">
-                            <p class="text-[10px] font-bold text-green-500 uppercase tracking-wider mb-1">Carboidrati</p>
-                            <p class="text-xl font-black text-green-700">${Number(meal.carboidrati).toFixed(1)}g</p>
+                        <div class="bg-green-50 p-2 sm:p-3 rounded-2xl flex flex-col justify-center items-center border border-green-100">
+                            <p class="text-[9px] font-bold text-green-500 uppercase mb-1 w-full text-center truncate">Carboidrati</p>
+                            <p class="text-lg sm:text-xl font-black text-green-700">${Number(meal.carboidrati).toFixed(1)}g</p>
                         </div>
-                        <div class="bg-yellow-50 p-4 rounded-2xl text-center border border-yellow-100">
-                            <p class="text-[10px] font-bold text-yellow-600 uppercase tracking-wider mb-1">Grassi</p>
-                            <p class="text-xl font-black text-yellow-700">${Number(meal.grassi).toFixed(1)}g</p>
+                        <div class="bg-yellow-50 p-2 sm:p-3 rounded-2xl flex flex-col justify-center items-center border border-yellow-100">
+                            <p class="text-[9px] font-bold text-yellow-600 uppercase mb-1 w-full text-center truncate">Grassi</p>
+                            <p class="text-lg sm:text-xl font-black text-yellow-700">${Number(meal.grassi).toFixed(1)}g</p>
                         </div>
                     </div>
                 </div>
