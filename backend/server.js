@@ -40,17 +40,17 @@ const Meal = mongoose.model('Meal', MealSchema);
 // 3. Configurazione Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// 4. L'API che la tua PWA chiamerà
+// 4. L'API che la tua PWA chiamerà (Versione Robusta e con Log)
 app.post('/api/analyze-meal', async (req, res) => {
     try {
         const { text } = req.body;
+        console.log("🗣️ Testo ricevuto dall'app:", text);
 
         const model = genAI.getGenerativeModel({
             model: "gemini-1.5-flash",
             generationConfig: { responseMimeType: "application/json" }
         });
 
-        // 1. LA TUA TABELLA DEI CIBI (Valori per 100g)
         const dizionarioPersonale = `
         - Pan Bauletto: 277 kcal, 7.5g proteine, 50g carboidrati, 4g grassi
         - Latte parzialmente scremato: 46 kcal, 3.4g proteine, 4.8g carboidrati, 1.5g grassi
@@ -58,45 +58,39 @@ app.post('/api/analyze-meal', async (req, res) => {
         - Yogurt Greco Fage 0%: 54 kcal, 10.3g proteine, 3g carboidrati, 0g grassi
         `;
 
-        // 2. IL NUOVO PROMPT (Con gestione intelligente delle calorie)
         const prompt = `Sei un assistente nutrizionale per un'app italiana. L'utente detterà un pasto. 
         Testo: "${text}"
         
         ORDINE DI PRIORITÀ TASSATIVO PER I CALCOLI:
         1. VALORI ESPLICITI DETTATI: Questa è la REGOLA ASSOLUTA e ha la precedenza su tutto.
-           - Se l'utente detta le CALORIE, usa ESATTAMENTE il numero di calorie detto dall'utente (NON usare formule matematiche).
-           - Se l'utente detta i MACRONUTRIENTI (proteine, carboidrati, grassi), usa ESATTAMENTE i numeri dettati.
-           - SOLO SE l'utente detta i macronutrienti ma si dimentica di dettare le calorie, calcolale tu con la formula: (Proteine * 4) + (Carboidrati * 4) + (Grassi * 9).
+           - Se l'utente detta le CALORIE, usa ESATTAMENTE il numero di calorie.
+           - Se l'utente detta i MACRONUTRIENTI, usa ESATTAMENTE i numeri dettati.
+           - SOLO SE l'utente detta i macronutrienti ma si dimentica le calorie, calcolale: (Pro * 4) + (Carbo * 4) + (Grassi * 9).
         2. DIZIONARIO PERSONALE: Solo se l'utente NON detta i valori, cerca l'alimento in questa lista (i valori sono su 100g): 
         ${dizionarioPersonale}
-        ATTENZIONE ALLA MATEMATICA: Se l'utente dice il peso (es. 150g), devi dividere quel peso per 100 e moltiplicarlo per i valori della tabella. (Es. 150g / 100 = 1.5. Quindi moltiplica i valori per 1.5).
-        3. CONOSCENZA GENERALE: Se l'alimento non è nel dizionario e l'utente non ha dettato i macro, stima usando i database standard e fai attenzione alle proporzioni matematiche.
+        ATTENZIONE ALLA MATEMATICA: Se l'utente dice il peso (es. 150g), dividi quel peso per 100 e moltiplicalo per i valori della tabella.
+        3. CONOSCENZA GENERALE: Se l'alimento non è nel dizionario, stima usando i database standard.
         
         Restituisci SOLO un JSON puro con: { "pasto": "Stringa (es. Colazione, Pranzo)", "alimenti": "Stringa", "calorie": Numero, "proteine": Numero, "grassi": Numero, "carboidrati": Numero }. Non scrivere altro.`;
 
         const result = await model.generateContent(prompt);
-        const jsonText = result.response.text();
+        let jsonText = result.response.text();
+        console.log("🤖 Risposta grezza di Gemini:", jsonText);
+
+        // FONDAMENTALE: Pulizia di eventuali simboli strani che fanno crashare JSON.parse
+        jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
         const mealData = JSON.parse(jsonText);
 
         const newMeal = new Meal(mealData);
         await newMeal.save();
+        console.log("✅ Pasto salvato nel Database:", newMeal);
 
         res.json({ success: true, meal: newMeal });
 
     } catch (error) {
-        console.error("Errore del server:", error);
-
-        if (error?.status === 429) {
-            return res.status(429).json({
-                success: false,
-                error: "Hai superato il limite giornaliero di Gemini. Riprova domani."
-            });
-        }
-
-        res.status(500).json({
-            success: false,
-            error: "Errore interno del server"
-        });
+        console.error("❌ ERRORE DEL SERVER (API):", error.message);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
