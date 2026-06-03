@@ -1,112 +1,52 @@
-// --- MIGRAZIONE DATI E FIX SCHERMATA BIANCA ---
-function runMigration() {
-    try {
-        // 1. Migrazione della vecchia singola scheda nel nuovo formato multi-scheda
-        const legacyRoutine = localStorage.getItem('gymRoutine');
-        const defaultRoutineId = 'routine-' + Date.now();
-
-        if (legacyRoutine) {
-            const routines = [{
-                id: defaultRoutineId,
-                name: 'La mia Scheda',
-                exercises: JSON.parse(legacyRoutine)
-            }];
-            localStorage.setItem('gymRoutines', JSON.stringify(routines));
-            localStorage.removeItem('gymRoutine'); // Pulizia vecchio formato
-        }
-
-        // 2. Controllo e aggiornamento dello Storico
-        let history = JSON.parse(localStorage.getItem('gymHistory')) || [];
-        if (history.length > 0 && !history[0].exercises) {
-            // Se trova un formato troppo vecchio (dai nostri primi test), lo resetta per evitare crash futuri
-            history = [];
-            localStorage.setItem('gymHistory', JSON.stringify([]));
-        } else if (legacyRoutine && history.length > 0) {
-            // Collega il vecchio storico valido alla nuova scheda appena creata
-            const migratedHistory = history.map(h => ({ ...h, routineId: h.routineId || defaultRoutineId }));
-            localStorage.setItem('gymHistory', JSON.stringify(migratedHistory));
-        }
-
-        // 3. FIX SCHERMATA BIANCA: Chiude eventuali sessioni "appese" incompatibili
-        const activeSession = localStorage.getItem('activeWorkoutSession');
-        if (activeSession) {
-            const parsedSession = JSON.parse(activeSession);
-            // Se l'allenamento aperto non ha l'ID della scheda (versione vecchia), lo elimina
-            if (!parsedSession.routineId) {
-                localStorage.removeItem('activeWorkoutSession');
-                localStorage.removeItem('workoutDraft');
-            }
-        }
-    } catch (error) {
-        console.error("Errore durante la migrazione dei dati:", error);
-        // Fallback di sicurezza: distrugge sessioni bloccate in caso di errore critico
-        localStorage.removeItem('activeWorkoutSession');
-    }
-}
-runMigration();
-
-// --- GESTIONE SCHEDE MULTIPLE (ROUTINES) ---
-export function getRoutines() {
-    return JSON.parse(localStorage.getItem('gymRoutines')) || [];
+// --- GESTIONE SCHEDE MULTIPLE (MONGODB) ---
+export async function getRoutines() {
+    try { const res = await fetch('/api/gym/routines'); return await res.json(); } catch (e) { return []; }
 }
 
-export function createRoutine(name) {
-    const routines = getRoutines();
-    routines.push({ id: 'routine-' + Date.now(), name, exercises: [] });
-    localStorage.setItem('gymRoutines', JSON.stringify(routines));
+export async function saveRoutine(routine) {
+    await fetch('/api/gym/routines', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(routine)
+    });
 }
 
-export function editRoutineName(routineId, newName) {
-    const routines = getRoutines();
+export async function createRoutine(name) {
+    const routine = { id: 'routine-' + Date.now(), name, exercises: [] };
+    await saveRoutine(routine);
+}
+
+export async function editRoutineName(routineId, newName) {
+    const routines = await getRoutines();
     const routine = routines.find(r => r.id === routineId);
-    if (routine) {
-        routine.name = newName;
-        localStorage.setItem('gymRoutines', JSON.stringify(routines));
-    }
+    if (routine) { routine.name = newName; await saveRoutine(routine); }
 }
 
-export function deleteRoutine(routineId) {
-    let routines = getRoutines();
-    routines = routines.filter(r => r.id !== routineId);
-    localStorage.setItem('gymRoutines', JSON.stringify(routines));
+export async function deleteRoutine(routineId) {
+    await fetch(`/api/gym/routines/${routineId}`, { method: 'DELETE' });
 }
 
-export function getRoutine(routineId) {
-    const routines = getRoutines();
+export async function getRoutine(routineId) {
+    const routines = await getRoutines();
     return routines.find(r => r.id === routineId) || null;
 }
 
-// --- GESTIONE ESERCIZI NELLA SINGOLA SCHEDA ---
-export function addExerciseToRoutine(routineId, exercise) {
-    const routines = getRoutines();
-    const routine = routines.find(r => r.id === routineId);
-    if (routine) {
-        routine.exercises.push(exercise);
-        localStorage.setItem('gymRoutines', JSON.stringify(routines));
-    }
+export async function addExerciseToRoutine(routineId, exercise) {
+    const routine = await getRoutine(routineId);
+    if (routine) { routine.exercises.push(exercise); await saveRoutine(routine); }
 }
 
-export function removeExerciseFromRoutine(routineId, exerciseId) {
-    const routines = getRoutines();
-    const routine = routines.find(r => r.id === routineId);
+export async function removeExerciseFromRoutine(routineId, exerciseId) {
+    const routine = await getRoutine(routineId);
     if (routine) {
         routine.exercises = routine.exercises.filter(ex => ex.id !== exerciseId);
-        localStorage.setItem('gymRoutines', JSON.stringify(routines));
+        await saveRoutine(routine);
     }
 }
 
-// --- GESTIONE SESSIONE ATTIVA (L'ALLENAMENTO IN CORSO) ---
-export function getActiveSession() {
-    return JSON.parse(localStorage.getItem('activeWorkoutSession')) || null;
-}
+// --- SESSIONE ATTIVA & BOZZE (Rimangono in Locale per non perderle se si ricarica la pagina) ---
+export function getActiveSession() { return JSON.parse(localStorage.getItem('activeWorkoutSession')) || null; }
 
 export function startSession(routineId, exerciseIds) {
-    const session = {
-        id: Date.now(),
-        routineId: routineId,
-        todo: exerciseIds,
-        completed: []
-    };
+    const session = { id: Date.now(), routineId, todo: exerciseIds, completed: [] };
     localStorage.setItem('activeWorkoutSession', JSON.stringify(session));
     return session;
 }
@@ -114,42 +54,30 @@ export function startSession(routineId, exerciseIds) {
 export function completeExerciseInSession(exercise, sessionData) {
     const session = getActiveSession();
     if (!session) return;
-
     session.todo = session.todo.filter(id => id !== exercise.id);
-    session.completed.push({
-        exerciseId: exercise.id,
-        name: exercise.name,
-        type: exercise.type,
-        sets: sessionData
-    });
-
+    session.completed.push({ exerciseId: exercise.id, name: exercise.name, type: exercise.type, sets: sessionData });
     localStorage.setItem('activeWorkoutSession', JSON.stringify(session));
 }
 
-export function endActiveSession() {
+export async function endActiveSession() {
     const session = getActiveSession();
     if (session && session.completed.length > 0) {
-        const history = JSON.parse(localStorage.getItem('gymHistory')) || [];
-        history.push({
-            sessionId: session.id,
-            routineId: session.routineId,
-            endTime: Date.now(),
-            exercises: session.completed
+        const historyRecord = { sessionId: session.id, routineId: session.routineId, endTime: Date.now(), exercises: session.completed };
+        await fetch('/api/gym/history', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(historyRecord)
         });
-        localStorage.setItem('gymHistory', JSON.stringify(history));
     }
     localStorage.removeItem('activeWorkoutSession');
     clearDraft();
 }
 
-// --- GESTIONE STORICO (HISTORY) ---
-export function getHistoryForRoutine(routineId) {
-    const history = JSON.parse(localStorage.getItem('gymHistory')) || [];
-    return history.filter(h => h.routineId === routineId);
+export async function getHistoryForRoutine(routineId) {
+    try { const res = await fetch('/api/gym/history'); const history = await res.json(); return history.filter(h => h.routineId === routineId); }
+    catch (e) { return []; }
 }
 
-export function getLastSession(routineId, exerciseId) {
-    const history = getHistoryForRoutine(routineId);
+export async function getLastSession(routineId, exerciseId) {
+    const history = await getHistoryForRoutine(routineId);
     for (let i = history.length - 1; i >= 0; i--) {
         const exerciseRecord = history[i].exercises.find(e => e.exerciseId === exerciseId);
         if (exerciseRecord) return exerciseRecord;
@@ -157,47 +85,15 @@ export function getLastSession(routineId, exerciseId) {
     return null;
 }
 
-// --- GESTIONE BOZZA (DRAFT) ---
-export function saveDraft(exerciseId, sessionData) {
-    localStorage.setItem('workoutDraft', JSON.stringify({ exerciseId, data: sessionData }));
-}
-
+export function saveDraft(exerciseId, sessionData) { localStorage.setItem('workoutDraft', JSON.stringify({ exerciseId, data: sessionData })); }
 export function getDraft(exerciseId) {
     const draft = localStorage.getItem('workoutDraft');
-    if (draft) {
-        const parsedDraft = JSON.parse(draft);
-        if (parsedDraft.exerciseId === exerciseId) return parsedDraft.data;
-    }
+    if (draft) { const parsedDraft = JSON.parse(draft); if (parsedDraft.exerciseId === exerciseId) return parsedDraft.data; }
     return null;
 }
+export function clearDraft() { localStorage.removeItem('workoutDraft'); }
 
-export function clearDraft() {
-    localStorage.removeItem('workoutDraft');
-}
-
-export function getTodayNutrition() {
-    const today = new Date().toISOString().split('T')[0]; // es. "2024-05-20"
-    const history = JSON.parse(localStorage.getItem('nutriHistory')) || {};
-    return history[today] || []; // Ritorna un array di pasti di oggi
-}
-
-export function addMealToToday(mealObj) {
-    const today = new Date().toISOString().split('T')[0];
-    const history = JSON.parse(localStorage.getItem('nutriHistory')) || {};
-
-    if (!history[today]) history[today] = [];
-    history[today].push(mealObj);
-
-    localStorage.setItem('nutriHistory', JSON.stringify(history));
-}
-
-// --- GESTIONE OBIETTIVI NUTRIZIONALI ---
 export function getNutritionGoals() {
-    return JSON.parse(localStorage.getItem('nutriGoals')) || {
-        calorie: 2285, proteine: 100, carbo: 325, grassi: 65
-    };
+    return JSON.parse(localStorage.getItem('nutriGoals')) || { calorie: 2000, proteine: 150, carbo: 200, grassi: 60 };
 }
-
-export function saveNutritionGoals(goals) {
-    localStorage.setItem('nutriGoals', JSON.stringify(goals));
-}
+export function saveNutritionGoals(goals) { localStorage.setItem('nutriGoals', JSON.stringify(goals)); }
