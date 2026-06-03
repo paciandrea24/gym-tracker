@@ -203,22 +203,15 @@ async function handleDeleteMeal(mealId) {
 
 function handleEditGoals() {
     const currentGoals = storage.getNutritionGoals();
-    const cal = window.prompt("Calorie giornaliere:", currentGoals.calorie);
-    if (!cal) return;
-
-    const pro = window.prompt("Proteine (g):", currentGoals.proteine);
-    const cho = window.prompt("Carboidrati (g):", currentGoals.carbo);
-    const fat = window.prompt("Grassi (g):", currentGoals.grassi);
-
-    if (cal && pro && cho && fat) {
-        storage.saveNutritionGoals({
-            calorie: parseInt(cal, 10),
-            proteine: parseInt(pro, 10),
-            carbo: parseInt(cho, 10),
-            grassi: parseInt(fat, 10)
-        });
-        showNutritionDashboard();
-    }
+    ui.renderEditGoalsForm(
+        appContainer,
+        currentGoals,
+        (newGoals) => {
+            storage.saveNutritionGoals(newGoals);
+            showNutritionDashboard();
+        },
+        showNutritionDashboard
+    );
 }
 
 // ==========================================

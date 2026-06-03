@@ -3,7 +3,7 @@ import { formatDate } from './utils.js';
 // --- RENDER LISTA SCHEDE (HOME) ---
 export function renderRoutinesList(container, routines, onOpenRoutine, onCreateRoutine, onEditRoutineName, onDeleteRoutine) {
     container.innerHTML = `
-        <header class="bg-white shadow-sm p-5 sticky top-0 z-10 flex justify-between items-center">
+        <header class="bg-white shadow-sm pt-14 pb-4 px-5 sticky top-0 z-10 flex justify-between items-center">
             <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Le Mie Schede</h1>
             <button id="create-routine-btn" class="bg-gray-900 text-white p-2 rounded-full shadow-md active:scale-95 transition-transform">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -150,7 +150,7 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
     }
 
     container.innerHTML = `
-        <header class="bg-white shadow-sm p-4 sticky top-0 z-10">
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10">
             <div class="flex items-center mb-4">
                 <button id="back-list-btn" class="mr-2 text-gray-500 hover:text-gray-900 p-2 -ml-2">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -188,7 +188,7 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
 export function renderActiveSession(container, session, routine, onExerciseClick, onEndSession) {
     const todoIds = session.todo;
     container.innerHTML = `
-        <header class="bg-white shadow-sm p-5 sticky top-0 z-10 flex justify-between items-center">
+        <header class="bg-white shadow-sm pt-14 pb-4 px-5 sticky top-0 z-10 flex justify-between items-center">
             <div>
                 <h1 class="text-xl font-bold text-gray-900 tracking-tight">In Allenamento</h1>
                 <p class="text-xs text-gray-500 mt-1">${todoIds.length} esercizi rimanenti</p>
@@ -236,7 +236,7 @@ export function renderActiveSession(container, session, routine, onExerciseClick
 // --- RENDER FORM CREAZIONE ESERCIZIO ---
 export function renderRoutineBuilder(container, onSave, onCancel) {
     container.innerHTML = `
-        <header class="bg-white shadow-sm p-4 sticky top-0 z-10 flex items-center">
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
             <button id="cancel-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
@@ -349,7 +349,7 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
     }
 
     container.innerHTML = `
-        <header class="bg-white shadow-sm p-4 sticky top-0 z-10 flex items-center">
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
             <button id="back-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
@@ -360,13 +360,17 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             <div class="space-y-4">
                 ${currentSessionData.map((set, idx) => {
         let inputHtml = '';
-        // ... (Logica helper inputs invariata)
         if (exercise.type === 'cardio') {
             inputHtml = generateAdjustableInput(idx, 'reps', set.reps, 1, 'Minuti');
         } else if (exercise.type === 'corpo-libero') {
             inputHtml = generateAdjustableInput(idx, 'reps', set.reps, 1, 'Ripetizioni');
         } else {
-            inputHtml = `<div class="flex space-x-4">${generateAdjustableInput(idx, 'kg', set.kg, 1.25, 'Kg')}${generateAdjustableInput(idx, 'reps', set.reps, 1, 'Reps')}</div>`;
+            inputHtml = `
+                            <div class="flex space-x-4">
+                                ${generateAdjustableInput(idx, 'kg', set.kg, 1.25, 'Kg')}
+                                ${generateAdjustableInput(idx, 'reps', set.reps, 1, 'Reps')}
+                            </div>
+                        `;
         }
         return `
                     <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
@@ -393,7 +397,9 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
     document.getElementById('complete-btn').addEventListener('click', onComplete);
 
     container.querySelectorAll('.set-input').forEach(input => {
-        input.addEventListener('input', (e) => onInput(parseInt(e.target.dataset.idx, 10), e.target.dataset.field, e.target.value));
+        input.addEventListener('input', (e) => {
+            onInput(parseInt(e.target.dataset.idx, 10), e.target.dataset.field, e.target.value);
+        });
     });
 
     container.querySelectorAll('.adjust-btn').forEach(btn => {
@@ -402,10 +408,13 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             const field = btn.dataset.field;
             const step = parseFloat(btn.dataset.step);
             const action = btn.dataset.action;
+
             const inputElement = container.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
             let currentValue = parseFloat(inputElement.value) || 0;
+
             if (action === 'plus') currentValue += step;
             else if (action === 'minus') currentValue = Math.max(0, currentValue - step);
+
             currentValue = parseFloat(currentValue.toFixed(2));
             inputElement.value = currentValue;
             onInput(idx, field, currentValue);
@@ -422,9 +431,7 @@ export function updateFeedback(setId, status) {
     else statusEl.className = 'text-xs text-gray-400 font-medium transition-colors';
 }
 
-
-// Aggiungi questo in ui.js
-
+// --- RENDER NUTRIZIONE ---
 export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals) {
     let contentHtml = '';
 
@@ -450,17 +457,17 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                 <h2 class="text-4xl font-black">${calorieRimaste} <span class="text-lg font-normal text-gray-400">/ ${goals.calorie}</span></h2>
                 
                 <div class="flex justify-between mt-6 gap-2">
-                    <div class="flex-1 bg-white/10 p-3 rounded-xl text-center">
-                        <p class="text-[10px] text-gray-400 uppercase font-bold">Pro</p>
-                        <p class="font-bold text-lg">${consumate.proteine}<span class="text-xs font-normal text-gray-400">/${goals.proteine}g</span></p>
+                    <div class="flex-1 bg-white/10 p-2 rounded-xl text-center">
+                        <p class="text-[9px] text-gray-400 uppercase font-bold">Proteine</p>
+                        <p class="font-bold text-base sm:text-lg">${consumate.proteine}<span class="text-[10px] font-normal text-gray-400">/${goals.proteine}g</span></p>
                     </div>
-                    <div class="flex-1 bg-white/10 p-3 rounded-xl text-center">
-                        <p class="text-[10px] text-gray-400 uppercase font-bold">Carbo</p>
-                        <p class="font-bold text-lg">${consumate.carbo}<span class="text-xs font-normal text-gray-400">/${goals.carbo}g</span></p>
+                    <div class="flex-1 bg-white/10 p-2 rounded-xl text-center">
+                        <p class="text-[9px] text-gray-400 uppercase font-bold">Carboidrati</p>
+                        <p class="font-bold text-base sm:text-lg">${consumate.carbo}<span class="text-[10px] font-normal text-gray-400">/${goals.carbo}g</span></p>
                     </div>
-                    <div class="flex-1 bg-white/10 p-3 rounded-xl text-center">
-                        <p class="text-[10px] text-gray-400 uppercase font-bold">Grassi</p>
-                        <p class="font-bold text-lg">${consumate.grassi}<span class="text-xs font-normal text-gray-400">/${goals.grassi}g</span></p>
+                    <div class="flex-1 bg-white/10 p-2 rounded-xl text-center">
+                        <p class="text-[9px] text-gray-400 uppercase font-bold">Grassi</p>
+                        <p class="font-bold text-base sm:text-lg">${consumate.grassi}<span class="text-[10px] font-normal text-gray-400">/${goals.grassi}g</span></p>
                     </div>
                 </div>
             </div>
@@ -568,7 +575,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
     }
 
     container.innerHTML = `
-        <header class="bg-white shadow-sm p-4 sticky top-0 z-10">
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10">
             <div class="flex justify-between items-center mb-4">
                 <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Nutrizione</h1>
                 <button id="edit-goals-btn" class="p-2 text-gray-600 hover:text-gray-900 bg-gray-100 rounded-full active:scale-95 transition-transform">
@@ -600,10 +607,10 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
     }
 }
 
-// Aggiunta a ui.js per il Form Manuale
+// --- RENDER FORM PASTO MANUALE ---
 export function renderManualMealForm(container, onSave, onCancel) {
     container.innerHTML = `
-        <header class="bg-white shadow-sm p-4 sticky top-0 z-10 flex items-center">
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
             <button id="cancel-meal-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
@@ -616,30 +623,41 @@ export function renderManualMealForm(container, onSave, onCancel) {
                     <input type="text" id="m-pasto" placeholder="Pranzo" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Alimento/i</label>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Alimento</label>
                     <input type="text" id="m-alimenti" placeholder="Es. Pollo e Riso" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Calorie Totali</label>
-                    <input type="number" id="m-cal" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                    <label class="block text-xs font-semibold text-blue-500 uppercase mb-2">Peso consumato (in grammi)</label>
+                    <input type="number" id="m-peso" placeholder="es. 150" class="w-full bg-blue-50 border border-blue-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
-                <div class="flex space-x-2">
-                    <div class="flex-1">
-                        <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Proteine</label>
-                        <input type="number" id="m-pro" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Carbo</label>
-                        <input type="number" id="m-carbo" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Grassi</label>
-                        <input type="number" id="m-fat" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
+                
+                <div class="pt-2 border-t border-gray-100">
+                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Valori Nutrizionali (su 100g)</p>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Calorie (per 100g)</label>
+                            <input type="number" id="m-cal-100" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                        </div>
+                        <div class="flex space-x-2">
+                            <div class="flex-1">
+                                <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Proteine (g)</label>
+                                <input type="number" id="m-pro-100" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Carbo (g)</label>
+                                <input type="number" id="m-carbo-100" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Grassi (g)</label>
+                                <input type="number" id="m-fat-100" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold outline-none">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             <button id="save-meal-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-6">
-                Salva Pasto
+                Calcola e Salva Pasto
             </button>
         </main>
     `;
@@ -648,21 +666,31 @@ export function renderManualMealForm(container, onSave, onCancel) {
     document.getElementById('save-meal-btn').addEventListener('click', () => {
         const pasto = document.getElementById('m-pasto').value.trim() || 'Spuntino';
         const alimenti = document.getElementById('m-alimenti').value.trim();
-        const calorie = parseFloat(document.getElementById('m-cal').value) || 0;
-        const proteine = parseFloat(document.getElementById('m-pro').value) || 0;
-        const carboidrati = parseFloat(document.getElementById('m-carbo').value) || 0;
-        const grassi = parseFloat(document.getElementById('m-fat').value) || 0;
+        const peso = parseFloat(document.getElementById('m-peso').value);
 
-        if (!alimenti || calorie <= 0) return alert("Inserisci l'alimento e le calorie");
+        const cal100 = parseFloat(document.getElementById('m-cal-100').value) || 0;
+        const pro100 = parseFloat(document.getElementById('m-pro-100').value) || 0;
+        const carbo100 = parseFloat(document.getElementById('m-carbo-100').value) || 0;
+        const fat100 = parseFloat(document.getElementById('m-fat-100').value) || 0;
+
+        if (!alimenti || isNaN(peso) || peso <= 0 || cal100 <= 0) {
+            return alert("Compila correttamente Alimento, Peso e Calorie per 100g.");
+        }
+
+        const multiplier = peso / 100;
+        const calorie = parseFloat((cal100 * multiplier).toFixed(1));
+        const proteine = parseFloat((pro100 * multiplier).toFixed(1));
+        const carboidrati = parseFloat((carbo100 * multiplier).toFixed(1));
+        const grassi = parseFloat((fat100 * multiplier).toFixed(1));
 
         onSave({ pasto, alimenti, calorie, proteine, carboidrati, grassi });
     });
 }
 
-// Aggiunta a ui.js per i Grafici della Palestra
+// --- RENDER GRAFICI ---
 export function renderExerciseStats(container, exerciseName, labels, weightData, volumeData, onBack) {
     container.innerHTML = `
-        <header class="bg-white shadow-sm p-4 sticky top-0 z-10 flex items-center">
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
             <button id="back-stats-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
@@ -685,7 +713,6 @@ export function renderExerciseStats(container, exerciseName, labels, weightData,
 
     document.getElementById('back-stats-btn').addEventListener('click', onBack);
 
-    // Disegna Grafico Lineare Peso
     new Chart(document.getElementById('chartWeight'), {
         type: 'line',
         data: {
@@ -695,7 +722,6 @@ export function renderExerciseStats(container, exerciseName, labels, weightData,
         options: { plugins: { legend: { display: false } } }
     });
 
-    // Disegna Grafico a Barre Volume
     new Chart(document.getElementById('chartVol'), {
         type: 'bar',
         data: {
@@ -703,5 +729,59 @@ export function renderExerciseStats(container, exerciseName, labels, weightData,
             datasets: [{ label: 'Volume', data: volumeData, backgroundColor: '#3b82f6', borderRadius: 4 }]
         },
         options: { plugins: { legend: { display: false } } }
+    });
+}
+
+// --- RENDER FORM MODIFICA OBIETTIVI ---
+export function renderEditGoalsForm(container, currentGoals, onSave, onCancel) {
+    container.innerHTML = `
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
+            <button id="cancel-goals-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <h1 class="text-xl font-bold text-gray-900 truncate">Obiettivi Nutrizionali</h1>
+        </header>
+        <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb min-h-screen">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Calorie Giornaliere</label>
+                    <input type="number" id="g-cal" value="${currentGoals.calorie}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                </div>
+                <div class="pt-2 border-t border-gray-100">
+                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Macronutrienti (in grammi)</p>
+                    <div class="flex space-x-2">
+                        <div class="flex-1">
+                            <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Proteine</label>
+                            <input type="number" id="g-pro" value="${currentGoals.proteine}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Carboidrati</label>
+                            <input type="number" id="g-carbo" value="${currentGoals.carbo}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Grassi</label>
+                            <input type="number" id="g-fat" value="${currentGoals.grassi}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button id="save-goals-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-6">
+                Salva Obiettivi
+            </button>
+        </main>
+    `;
+
+    document.getElementById('cancel-goals-btn').addEventListener('click', onCancel);
+    document.getElementById('save-goals-btn').addEventListener('click', () => {
+        const cal = parseInt(document.getElementById('g-cal').value, 10);
+        const pro = parseInt(document.getElementById('g-pro').value, 10);
+        const carbo = parseInt(document.getElementById('g-carbo').value, 10);
+        const fat = parseInt(document.getElementById('g-fat').value, 10);
+
+        if (cal > 0 && pro >= 0 && carbo >= 0 && fat >= 0) {
+            onSave({ calorie: cal, proteine: pro, carbo: carbo, grassi: fat });
+        } else {
+            alert("Inserisci valori validi superiori a zero.");
+        }
     });
 }
