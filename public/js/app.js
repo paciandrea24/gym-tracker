@@ -1,6 +1,6 @@
-import * as storage from './storage.js?v=3';
-import * as ui from './ui.js?v=3';
-import { debounce } from './utils.js?v=3';
+import * as storage from './storage.js?v=5';
+import * as ui from './ui.js?v=5';
+import { debounce } from './utils.js?v=5';
 
 const appContainer = document.getElementById('app');
 
@@ -14,6 +14,7 @@ let currentRecognition = null;
 let finalTranscript = "";
 let currentNutriTab = 'oggi';
 let currentMealsData = [];
+let html5QrCode = null; // Variabile globale per la fotocamera
 
 function init() { setupNavigation(); loadCurrentModule(); }
 
@@ -57,7 +58,7 @@ async function showNutritionDashboard() {
         const mealsData = await response.json();
         currentMealsData = mealsData;
         const goals = storage.getNutritionGoals();
-        ui.renderNutritionDashboard(appContainer, mealsData, goals, currentNutriTab, (tab) => { currentNutriTab = tab; showNutritionDashboard(); }, handleMicRecord, handleManualMealClick, handleDeleteMeal, handleEditGoals, handleMealClick);
+        ui.renderNutritionDashboard(appContainer, mealsData, goals, currentNutriTab, (tab) => { currentNutriTab = tab; showNutritionDashboard(); }, handleMicRecord, handleManualMealClick, handleDeleteMeal, handleEditGoals, handleMealClick, handleScanClick, handleCloseScanner);
     } catch (error) { appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`; }
 }
 
@@ -71,18 +72,105 @@ function handleMealClick(mealId) {
 function handleManualMealClick() {
     ui.renderManualMealForm(appContainer, async (mealData) => {
         appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio in corso...</div>`;
-
-        // Creiamo l'array con un singolo ingrediente per coerenza con il nuovo database
         mealData.ingredienti = [{
             nome: mealData.alimenti, calorie: mealData.calorie, proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi
         }];
-
         try {
             const response = await fetch('/api/meals', { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mealData) });
             if (response.ok) showNutritionDashboard(); else alert("Errore nel salvataggio");
         } catch (e) { alert("Errore di connessione"); }
     }, showNutritionDashboard);
 }
+
+// --- LOGICA DELLO SCANNER ---
+function handleScanClick() {
+    document.getElementById('action-buttons').classList.add('hidden');
+    document.getElementById('scanner-container').classList.remove('hidden');
+
+    if (!html5QrCode) {
+        // Usa la libreria inserita nel file HTML
+        html5QrCode = new Html5Qrcode("reader");
+    }
+
+    html5QrCode.start(
+        { facingMode: "environment" }, // Usa la fotocamera posteriore
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText) => {
+            // Se trova un codice a barre con successo
+            await handleCloseScanner();
+            fetchProductFromBarcode(decodedText);
+        },
+        (errorMessage) => {
+            // Ignora gli errori di mancata lettura (è normale finché non si inquadra bene)
+        }
+    ).catch(err => {
+        alert("Errore nell'avvio della fotocamera: controlla i permessi.");
+        handleCloseScanner();
+    });
+}
+
+async function handleCloseScanner() {
+    if (html5QrCode) {
+        try { await html5QrCode.stop(); } catch (e) { /* Scanner già fermo */ }
+    }
+    const container = document.getElementById('scanner-container');
+    const actionBtns = document.getElementById('action-buttons');
+    if (container) container.classList.add('hidden');
+    if (actionBtns) actionBtns.classList.remove('hidden');
+}
+
+async function fetchProductFromBarcode(barcode) {
+    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-blue-600">Ricerca nel database mondiale...</div>`;
+    try {
+        const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        const data = await res.json();
+
+        if (data.status === 1) {
+            const p = data.product;
+            const name = p.product_name || "Prodotto Sconosciuto";
+            const n = p.nutriments || {};
+
+            // Estrapoliamo i valori su 100g
+            const cal = n['energy-kcal_100g'] || 0;
+            const pro = n['proteins_100g'] || 0;
+            const carbo = n['carbohydrates_100g'] || 0;
+            const fat = n['fat_100g'] || 0;
+
+            openPreFilledManualMeal(name, cal, pro, carbo, fat);
+        } else {
+            alert("Spiacente, prodotto non trovato nel database.");
+            showNutritionDashboard();
+        }
+    } catch (e) {
+        alert("Errore di connessione a Open Food Facts.");
+        showNutritionDashboard();
+    }
+}
+
+function openPreFilledManualMeal(name, cal, pro, carbo, fat) {
+    // Riutilizziamo il form manuale
+    ui.renderManualMealForm(appContainer, async (mealData) => {
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio in corso...</div>`;
+        mealData.ingredienti = [{
+            nome: mealData.alimenti, calorie: mealData.calorie, proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi
+        }];
+        try {
+            const response = await fetch('/api/meals', { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mealData) });
+            if (response.ok) showNutritionDashboard(); else alert("Errore nel salvataggio");
+        } catch (e) { alert("Errore di connessione"); }
+    }, showNutritionDashboard);
+
+    // E lo pre-compiliamo magicamente!
+    document.getElementById('m-alimenti').value = name;
+    document.getElementById('m-cal-100').value = cal;
+    document.getElementById('m-pro-100').value = pro;
+    document.getElementById('m-carbo-100').value = carbo;
+    document.getElementById('m-fat-100').value = fat;
+
+    // Focussiamo l'attenzione dell'utente solo sull'unica cosa mancante: il peso consumato.
+    setTimeout(() => document.getElementById('m-peso').focus(), 300);
+}
+
 
 async function handleMicRecord() {
     const micBtn = document.getElementById('mic-btn');

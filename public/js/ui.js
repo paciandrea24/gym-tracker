@@ -1,4 +1,4 @@
-import { formatDate } from './utils.js?v=4';
+import { formatDate } from './utils.js?v=6';
 
 // --- RENDER LISTA SCHEDE (HOME) ---
 export function renderRoutinesList(container, routines, onOpenRoutine, onCreateRoutine, onEditRoutineName, onDeleteRoutine) {
@@ -233,7 +233,7 @@ export function renderActiveSession(container, session, routine, onExerciseClick
     document.getElementById('end-session-btn').addEventListener('click', onEndSession);
 }
 
-// --- RENDER FORM CREAZIONE ESERCIZIO (RIPRISTINATO AL 100%) ---
+// --- RENDER FORM CREAZIONE ESERCIZIO ---
 export function renderRoutineBuilder(container, onSave, onCancel) {
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
@@ -431,8 +431,8 @@ export function updateFeedback(setId, status) {
     else statusEl.className = 'text-xs text-gray-400 font-medium transition-colors';
 }
 
-// --- RENDER NUTRIZIONE (CON SPUNTE VERDI) ---
-export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick) {
+// --- RENDER NUTRIZIONE (AGGIORNATO CON SCANNER E SPUNTE) ---
+export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner) {
     let contentHtml = '';
     const checkIcon = `<svg class="w-4 h-4 text-green-400 inline-block ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
 
@@ -473,9 +473,19 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                 REGISTRA VOCE
             </button>
             
-            <button id="manual-meal-btn" class="w-full bg-white text-gray-900 border border-gray-200 font-bold text-lg py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-2 mb-6">
-                ➕ Inserisci Manualmente
-            </button>
+            <div id="scanner-container" class="hidden mb-6 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
+                <div id="reader" class="w-full rounded-xl overflow-hidden mb-2 bg-black"></div>
+                <button id="close-scanner-btn" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla Scansione</button>
+            </div>
+
+            <div id="action-buttons" class="flex space-x-2 mb-6">
+                <button id="manual-meal-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                    ➕ Manuale
+                </button>
+                <button id="scan-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg> Scanner
+                </button>
+            </div>
 
             <div class="flex justify-between items-end mb-3">
                 <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Pasti di oggi</h2>
@@ -592,6 +602,8 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
     if (currentTab === 'oggi') {
         document.getElementById('mic-btn').addEventListener('click', onMicClick);
         document.getElementById('manual-meal-btn').addEventListener('click', onManualClick);
+        document.getElementById('scan-btn').addEventListener('click', onScanClick);
+        document.getElementById('close-scanner-btn').addEventListener('click', onCloseScanner);
 
         container.querySelectorAll('.delete-meal-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -606,7 +618,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
     }
 }
 
-// --- RENDER DETTAGLIO PASTO (CON INGREDIENTI) ---
+// --- RENDER DETTAGLIO PASTO (AGGIORNATO CON INGREDIENTI) ---
 export function renderMealDetails(container, meal, onBack) {
     const dateObj = new Date(meal.data);
     const dateStr = dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
