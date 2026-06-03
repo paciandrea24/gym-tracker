@@ -46,7 +46,7 @@ app.post('/api/analyze-meal', async (req, res) => {
         const { text } = req.body;
 
         const model = genAI.getGenerativeModel({
-            model: "gemini-3.5-flash",
+            model: "gemini-1.5-flash",
             generationConfig: { responseMimeType: "application/json" }
         });
 
