@@ -438,36 +438,31 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
     if (currentTab === 'oggi') {
         let consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
         mealsData.forEach(meal => {
-            consumate.calorie += meal.calorie;
-            consumate.proteine += meal.proteine;
-            consumate.carbo += meal.carboidrati;
-            consumate.grassi += meal.grassi;
+            consumate.calorie += Number(meal.calorie) || 0;
+            consumate.proteine += Number(meal.proteine) || 0;
+            consumate.carbo += Number(meal.carboidrati) || 0;
+            consumate.grassi += Number(meal.grassi) || 0;
         });
 
-        consumate.calorie = parseFloat(consumate.calorie.toFixed(1));
-        consumate.proteine = parseFloat(consumate.proteine.toFixed(1));
-        consumate.carbo = parseFloat(consumate.carbo.toFixed(1));
-        consumate.grassi = parseFloat(consumate.grassi.toFixed(1));
-
-        let calorieRimaste = parseFloat((goals.calorie - consumate.calorie).toFixed(1));
+        let calorieRimaste = Number(goals.calorie) - consumate.calorie;
 
         contentHtml = `
             <div class="bg-gray-900 text-white p-5 rounded-2xl shadow-xl mb-6">
                 <p class="text-sm text-gray-400 font-bold uppercase tracking-wider mb-1">Calorie Rimaste</p>
-                <h2 class="text-4xl font-black">${calorieRimaste} <span class="text-lg font-normal text-gray-400">/ ${goals.calorie}</span></h2>
+                <h2 class="text-4xl font-black">${Number(calorieRimaste).toFixed(1)} <span class="text-lg font-normal text-gray-400">/ ${goals.calorie}</span></h2>
                 
                 <div class="flex justify-between mt-6 gap-2">
                     <div class="flex-1 bg-white/10 p-2 rounded-xl text-center">
                         <p class="text-[9px] text-gray-400 uppercase font-bold">Proteine</p>
-                        <p class="font-bold text-base sm:text-lg">${consumate.proteine}<span class="text-[10px] font-normal text-gray-400">/${goals.proteine}g</span></p>
+                        <p class="font-bold text-base sm:text-lg">${Number(consumate.proteine).toFixed(1)}<span class="text-[10px] font-normal text-gray-400">/${goals.proteine}g</span></p>
                     </div>
                     <div class="flex-1 bg-white/10 p-2 rounded-xl text-center">
                         <p class="text-[9px] text-gray-400 uppercase font-bold">Carboidrati</p>
-                        <p class="font-bold text-base sm:text-lg">${consumate.carbo}<span class="text-[10px] font-normal text-gray-400">/${goals.carbo}g</span></p>
+                        <p class="font-bold text-base sm:text-lg">${Number(consumate.carbo).toFixed(1)}<span class="text-[10px] font-normal text-gray-400">/${goals.carbo}g</span></p>
                     </div>
                     <div class="flex-1 bg-white/10 p-2 rounded-xl text-center">
                         <p class="text-[9px] text-gray-400 uppercase font-bold">Grassi</p>
-                        <p class="font-bold text-base sm:text-lg">${consumate.grassi}<span class="text-[10px] font-normal text-gray-400">/${goals.grassi}g</span></p>
+                        <p class="font-bold text-base sm:text-lg">${Number(consumate.grassi).toFixed(1)}<span class="text-[10px] font-normal text-gray-400">/${goals.grassi}g</span></p>
                     </div>
                 </div>
             </div>
@@ -491,12 +486,12 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                         <p class="text-gray-500 font-medium">Non hai ancora registrato nulla oggi.</p>
                     </div>
                 ` : mealsData.map(meal => `
-                    <div class="meal-row w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer active:scale-95 transition-transform" data-id="${meal._id}">
+                    <div class="meal-row w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer active:scale-95 transition-transform group" data-id="${meal._id}">
                         <div class="flex-1 pr-3 pointer-events-none">
-                            <h3 class="text-lg font-bold text-gray-800">${meal.alimenti}</h3>
+                            <h3 class="text-lg font-bold text-gray-800 group-hover:text-blue-600 transition-colors">${meal.alimenti}</h3>
                             <p class="text-sm font-medium text-gray-500 mt-1 flex items-center gap-2">
                                 <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md uppercase tracking-wider">${meal.pasto}</span>
-                                <span class="font-bold text-gray-900">${parseFloat(meal.calorie.toFixed(1))} kcal</span>
+                                <span class="font-bold text-gray-900">${Number(meal.calorie).toFixed(1)} kcal</span>
                             </p>
                         </div>
                         <div class="flex items-center space-x-2 pl-3 border-l border-gray-100 flex-shrink-0">
@@ -515,17 +510,10 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             if (!grouped[dateStr]) grouped[dateStr] = { meals: [], totals: { cal: 0, pro: 0, car: 0, grassi: 0 } };
 
             grouped[dateStr].meals.push(meal);
-            grouped[dateStr].totals.cal += meal.calorie;
-            grouped[dateStr].totals.pro += meal.proteine;
-            grouped[dateStr].totals.car += meal.carboidrati;
-            grouped[dateStr].totals.grassi += meal.grassi;
-        });
-
-        Object.values(grouped).forEach(day => {
-            day.totals.cal = parseFloat(day.totals.cal.toFixed(1));
-            day.totals.pro = parseFloat(day.totals.pro.toFixed(1));
-            day.totals.car = parseFloat(day.totals.car.toFixed(1));
-            day.totals.grassi = parseFloat(day.totals.grassi.toFixed(1));
+            grouped[dateStr].totals.cal += Number(meal.calorie) || 0;
+            grouped[dateStr].totals.pro += Number(meal.proteine) || 0;
+            grouped[dateStr].totals.car += Number(meal.carboidrati) || 0;
+            grouped[dateStr].totals.grassi += Number(meal.grassi) || 0;
         });
 
         contentHtml = `
@@ -545,7 +533,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                                         <div>
                                             <h3 class="text-base text-gray-900 capitalize">${dateStr}</h3>
                                             <p class="text-xs text-gray-500 font-medium mt-1">
-                                                ${day.totals.cal} kcal • ${day.totals.pro}g P • ${day.totals.car}g C • ${day.totals.grassi}g G
+                                                ${Number(day.totals.cal).toFixed(1)} kcal • ${Number(day.totals.pro).toFixed(1)}g P • ${Number(day.totals.car).toFixed(1)}g C • ${Number(day.totals.grassi).toFixed(1)}g G
                                             </p>
                                         </div>
                                     </div>
@@ -555,15 +543,14 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                                 </summary>
                                 <div class="p-4 border-t border-gray-50 space-y-4 bg-gray-50/50 rounded-b-2xl">
                                     ${day.meals.map(meal => `
-                                        <div class="meal-row cursor-pointer hover:bg-gray-100 p-3 -mx-3 rounded-xl transition-colors border border-transparent hover:border-gray-200 group/meal" data-id="${meal._id}">
+                                        <div class="p-3 -mx-3 rounded-xl border border-transparent">
                                             <div class="flex justify-between items-center mb-2">
-                                                <h4 class="text-sm font-bold text-gray-700 group-hover/meal:text-blue-600 transition-colors pointer-events-none">${meal.alimenti}</h4>
-                                                <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-full font-bold opacity-0 group-hover/meal:opacity-100 transition-opacity">Vedi Dettagli</span>
+                                                <h4 class="text-sm font-bold text-gray-700">${meal.alimenti}</h4>
                                             </div>
                                             <div class="space-y-1">
-                                                <div class="flex justify-between items-center text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm pointer-events-none">
+                                                <div class="flex justify-between items-center text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
                                                     <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">${meal.pasto}</span>
-                                                    <span class="font-bold text-gray-900">${parseFloat(meal.calorie.toFixed(1))} kcal</span>
+                                                    <span class="font-bold text-gray-900">${Number(meal.calorie).toFixed(1)} kcal</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -585,13 +572,11 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 </button>
             </div>
-            
             <div class="flex bg-gray-100 p-1 rounded-xl">
                 <button id="tab-oggi" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${currentTab === 'oggi' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}">Oggi</button>
                 <button id="tab-storico" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${currentTab === 'storico' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}">Storico</button>
             </div>
         </header>
-        
         <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
             ${contentHtml}
         </main>
@@ -605,22 +590,68 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
         document.getElementById('mic-btn').addEventListener('click', onMicClick);
         document.getElementById('manual-meal-btn').addEventListener('click', onManualClick);
 
-        // Eventi Cancellazione e Click sul Pasto (Oggi)
         container.querySelectorAll('.delete-meal-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Evita che il click sul cestino apra anche il pasto
+                e.stopPropagation();
                 onDeleteMeal(btn.dataset.deleteId);
             });
         });
-        container.querySelectorAll('.meal-row').forEach(row => {
-            row.addEventListener('click', () => onMealClick(row.dataset.id));
-        });
-    } else {
-        // Eventi Click sul Pasto (Storico)
+
+        // I Click funzionano solo su "Oggi" come richiesto
         container.querySelectorAll('.meal-row').forEach(row => {
             row.addEventListener('click', () => onMealClick(row.dataset.id));
         });
     }
+}
+
+// --- RENDER DETTAGLIO PASTO ---
+export function renderMealDetails(container, meal, onBack) {
+    const dateObj = new Date(meal.data);
+    const dateStr = dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+    const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+    container.innerHTML = `
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
+            <button id="back-meal-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <h1 class="text-xl font-bold text-gray-900 truncate">Dettagli Pasto</h1>
+        </header>
+        <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50 min-h-screen">
+            
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs font-bold bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-wider">${meal.pasto}</span>
+                    <span class="text-xs text-gray-400 font-medium">${dateStr} - ${timeStr}</span>
+                </div>
+                <h2 class="text-2xl font-black text-gray-900 mb-8 leading-tight">${meal.alimenti}</h2>
+                
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-widest">Calorie Totali</span>
+                        <span class="text-2xl font-black text-gray-900">${Number(meal.calorie).toFixed(1)} <span class="text-sm font-normal text-gray-500">kcal</span></span>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-blue-50 p-4 rounded-2xl text-center border border-blue-100">
+                            <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Proteine</p>
+                            <p class="text-xl font-black text-blue-700">${Number(meal.proteine).toFixed(1)}g</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-2xl text-center border border-green-100">
+                            <p class="text-[10px] font-bold text-green-500 uppercase tracking-wider mb-1">Carboidrati</p>
+                            <p class="text-xl font-black text-green-700">${Number(meal.carboidrati).toFixed(1)}g</p>
+                        </div>
+                        <div class="bg-yellow-50 p-4 rounded-2xl text-center border border-yellow-100">
+                            <p class="text-[10px] font-bold text-yellow-600 uppercase tracking-wider mb-1">Grassi</p>
+                            <p class="text-xl font-black text-yellow-700">${Number(meal.grassi).toFixed(1)}g</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    `;
+
+    document.getElementById('back-meal-btn').addEventListener('click', onBack);
 }
 
 // --- RENDER FORM PASTO MANUALE ---

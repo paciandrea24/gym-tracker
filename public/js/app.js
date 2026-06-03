@@ -7,7 +7,7 @@ const appContainer = document.getElementById('app');
 // ==========================================
 // STATO APPLICATIVO GLOBALE
 // ==========================================
-let currentAppModule = 'gym'; // Può essere 'gym' o 'nutrition'
+let currentAppModule = 'gym';
 let currentRoutineId = null;
 let currentTab = 'scheda';
 let currentExercise = null;
@@ -16,7 +16,7 @@ let isRecording = false;
 let currentRecognition = null;
 let finalTranscript = "";
 let currentNutriTab = 'oggi';
-let currentMealsData = []; // Salva i pasti per vederne i dettagli
+let currentMealsData = []; // Salva i pasti per mostrarne i dettagli al click
 
 // ==========================================
 // INIZIALIZZAZIONE E NAVIGAZIONE
@@ -64,7 +64,7 @@ function loadCurrentModule() {
 }
 
 // ==========================================
-// MODULO 1: NUTRIZIONE (Intelligenza + Manuale)
+// MODULO 1: NUTRIZIONE (Intelligenza + Manuale + Dettagli)
 // ==========================================
 
 async function showNutritionDashboard() {
@@ -80,8 +80,7 @@ async function showNutritionDashboard() {
         if (!response.ok) throw new Error("Errore del server");
 
         const mealsData = await response.json();
-        currentMealsData = mealsData; // Salva i dati in memoria
-
+        currentMealsData = mealsData; // Memorizziamo per i click
         const goals = storage.getNutritionGoals();
 
         ui.renderNutritionDashboard(
@@ -91,7 +90,7 @@ async function showNutritionDashboard() {
             handleManualMealClick,
             handleDeleteMeal,
             handleEditGoals,
-            handleMealClick // Passiamo la nuova funzione per il click
+            handleMealClick // Colleghiamo la funzione di click
         );
 
     } catch (error) {
@@ -100,10 +99,21 @@ async function showNutritionDashboard() {
 }
 
 function handleMealClick(mealId) {
-    // Trova il pasto cliccato nei dati salvati
-    const meal = currentMealsData.find(m => m._id === mealId);
-    if (meal) {
+    try {
+        // Cerca il pasto
+        const meal = currentMealsData.find(m => String(m._id) === String(mealId));
+
+        if (!meal) {
+            alert("Errore: Pasto non trovato nei dati in memoria.");
+            return;
+        }
+
+        // Apre la schermata
         ui.renderMealDetails(appContainer, meal, showNutritionDashboard);
+
+    } catch (error) {
+        // Se c'è un crash matematico o di lettura, ora te lo dice!
+        alert("Errore durante l'apertura del pasto: " + error.message);
     }
 }
 
@@ -225,6 +235,7 @@ function handleEditGoals() {
         showNutritionDashboard
     );
 }
+
 
 // ==========================================
 // MODULO 2: PALESTRA (Grafici e Logica)
@@ -366,8 +377,6 @@ function handleCompleteExercise() {
 
 function handleShowExerciseStats(exerciseId, exerciseName) {
     const history = storage.getHistoryForRoutine(currentRoutineId);
-
-    // Trova le sessioni che contengono l'esercizio
     const sessionsWithEx = history
         .filter(session => session.exercises.some(e => e.exerciseId === exerciseId))
         .sort((a, b) => a.endTime - b.endTime);
