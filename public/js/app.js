@@ -16,6 +16,7 @@ let isRecording = false;
 let currentRecognition = null;
 let finalTranscript = "";
 let currentNutriTab = 'oggi';
+let currentMealsData = []; // Salva i pasti per vederne i dettagli
 
 // ==========================================
 // INIZIALIZZAZIONE E NAVIGAZIONE
@@ -79,6 +80,8 @@ async function showNutritionDashboard() {
         if (!response.ok) throw new Error("Errore del server");
 
         const mealsData = await response.json();
+        currentMealsData = mealsData; // Salva i dati in memoria
+
         const goals = storage.getNutritionGoals();
 
         ui.renderNutritionDashboard(
@@ -87,11 +90,20 @@ async function showNutritionDashboard() {
             handleMicRecord,
             handleManualMealClick,
             handleDeleteMeal,
-            handleEditGoals
+            handleEditGoals,
+            handleMealClick // Passiamo la nuova funzione per il click
         );
 
     } catch (error) {
         appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`;
+    }
+}
+
+function handleMealClick(mealId) {
+    // Trova il pasto cliccato nei dati salvati
+    const meal = currentMealsData.find(m => m._id === mealId);
+    if (meal) {
+        ui.renderMealDetails(appContainer, meal, showNutritionDashboard);
     }
 }
 

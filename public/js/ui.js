@@ -432,7 +432,7 @@ export function updateFeedback(setId, status) {
 }
 
 // --- RENDER NUTRIZIONE ---
-export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals) {
+export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick) {
     let contentHtml = '';
 
     if (currentTab === 'oggi') {
@@ -491,8 +491,8 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                         <p class="text-gray-500 font-medium">Non hai ancora registrato nulla oggi.</p>
                     </div>
                 ` : mealsData.map(meal => `
-                    <div class="w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-                        <div class="flex-1 pr-3">
+                    <div class="meal-row w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer active:scale-95 transition-transform" data-id="${meal._id}">
+                        <div class="flex-1 pr-3 pointer-events-none">
                             <h3 class="text-lg font-bold text-gray-800">${meal.alimenti}</h3>
                             <p class="text-sm font-medium text-gray-500 mt-1 flex items-center gap-2">
                                 <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md uppercase tracking-wider">${meal.pasto}</span>
@@ -500,7 +500,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                             </p>
                         </div>
                         <div class="flex items-center space-x-2 pl-3 border-l border-gray-100 flex-shrink-0">
-                            <button data-delete-id="${meal._id}" class="delete-meal-btn p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-95 transition-transform">
+                            <button data-delete-id="${meal._id}" class="delete-meal-btn p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-110 transition-transform">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                             </button>
                         </div>
@@ -555,10 +555,13 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                                 </summary>
                                 <div class="p-4 border-t border-gray-50 space-y-4 bg-gray-50/50 rounded-b-2xl">
                                     ${day.meals.map(meal => `
-                                        <div>
-                                            <h4 class="text-sm font-bold text-gray-700 mb-2">${meal.alimenti}</h4>
+                                        <div class="meal-row cursor-pointer hover:bg-gray-100 p-3 -mx-3 rounded-xl transition-colors border border-transparent hover:border-gray-200 group/meal" data-id="${meal._id}">
+                                            <div class="flex justify-between items-center mb-2">
+                                                <h4 class="text-sm font-bold text-gray-700 group-hover/meal:text-blue-600 transition-colors pointer-events-none">${meal.alimenti}</h4>
+                                                <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-full font-bold opacity-0 group-hover/meal:opacity-100 transition-opacity">Vedi Dettagli</span>
+                                            </div>
                                             <div class="space-y-1">
-                                                <div class="flex justify-between items-center text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                                                <div class="flex justify-between items-center text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm pointer-events-none">
                                                     <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">${meal.pasto}</span>
                                                     <span class="font-bold text-gray-900">${parseFloat(meal.calorie.toFixed(1))} kcal</span>
                                                 </div>
@@ -601,8 +604,21 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
     if (currentTab === 'oggi') {
         document.getElementById('mic-btn').addEventListener('click', onMicClick);
         document.getElementById('manual-meal-btn').addEventListener('click', onManualClick);
+
+        // Eventi Cancellazione e Click sul Pasto (Oggi)
         container.querySelectorAll('.delete-meal-btn').forEach(btn => {
-            btn.addEventListener('click', () => onDeleteMeal(btn.dataset.deleteId));
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Evita che il click sul cestino apra anche il pasto
+                onDeleteMeal(btn.dataset.deleteId);
+            });
+        });
+        container.querySelectorAll('.meal-row').forEach(row => {
+            row.addEventListener('click', () => onMealClick(row.dataset.id));
+        });
+    } else {
+        // Eventi Click sul Pasto (Storico)
+        container.querySelectorAll('.meal-row').forEach(row => {
+            row.addEventListener('click', () => onMealClick(row.dataset.id));
         });
     }
 }
