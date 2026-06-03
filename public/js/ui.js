@@ -1,4 +1,4 @@
-import { formatDate } from './utils.js';
+import { formatDate } from './utils.js?v=2';
 
 // --- RENDER LISTA SCHEDE (HOME) ---
 export function renderRoutinesList(container, routines, onOpenRoutine, onCreateRoutine, onEditRoutineName, onDeleteRoutine) {

@@ -1,6 +1,6 @@
-import * as storage from './storage.js';
-import * as ui from './ui.js';
-import { debounce } from './utils.js';
+import * as storage from './storage.js?v=2';
+import * as ui from './ui.js?v=2';
+import { debounce } from './utils.js?v=2';
 
 const appContainer = document.getElementById('app');
 
