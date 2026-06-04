@@ -1,6 +1,6 @@
-import * as storage from './storage.js?v=8';
-import * as ui from './ui.js?v=8';
-import { debounce } from './utils.js?v=8';
+import * as storage from './storage.js?v=9';
+import * as ui from './ui.js?v=9';
+import { debounce } from './utils.js?v=9';
 
 const appContainer = document.getElementById('app');
 
@@ -82,8 +82,8 @@ function handleManualMealClick() {
     }, showNutritionDashboard);
 }
 
-// --- LOGICA DELLO SCANNER (MIGLIORATA PER IPHONE) ---
-function handleScanClick() {
+// --- LOGICA DELLO SCANNER (HACK PER IPHONE MULTI-LENTE) ---
+async function handleScanClick() {
     document.getElementById('action-buttons').classList.add('hidden');
     document.getElementById('scanner-container').classList.remove('hidden');
 
@@ -91,30 +91,53 @@ function handleScanClick() {
         html5QrCode = new Html5Qrcode("reader");
     }
 
-    html5QrCode.start(
-        { facingMode: "environment" },
-        {
-            fps: 15, // Più rapido a scattare fotogrammi
-            // HO RIMOSSO IL "QRBOX": in questo modo la libreria legge TUTTO lo schermo
-            // Non c'è più bisogno di inquadrare perfettamente al centro!
-            aspectRatio: 1.0
-        },
-        async (decodedText) => {
-            await handleCloseScanner();
-            fetchProductFromBarcode(decodedText);
-        },
-        (errorMessage) => {
-            // Ignoriamo gli errori temporanei mentre cerca di mettere a fuoco
+    try {
+        // 1. Chiediamo prima i permessi hardware per mappare le fotocamere fisiche
+        const devices = await Html5Qrcode.getCameras();
+
+        if (devices && devices.length > 0) {
+            // 2. Cerchiamo la lente corretta. Evitiamo "ultrawide" che su iPhone non mette a fuoco
+            let selectedCameraId = devices[0].id; // Fallback alla prima
+
+            for (let i = 0; i < devices.length; i++) {
+                let label = devices[i].label.toLowerCase();
+                // Selezioniamo la posteriore
+                if (label.includes("back") || label.includes("posteriore") || label.includes("environment")) {
+                    selectedCameraId = devices[i].id;
+                    // Se troviamo una posteriore che NON è ultra-grandangolare, la blocchiamo
+                    if (!label.includes("ultrawide") && !label.includes("ultra wide")) {
+                        break;
+                    }
+                }
+            }
+
+            // 3. Avviamo lo scanner forzando l'ID della fotocamera giusta
+            await html5QrCode.start(
+                selectedCameraId, // Usiamo l'ID esplicito invece del generico "environment"
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 150 }, // Il rettangolo aiuta l'iPhone a calcolare la messa a fuoco
+                    disableFlip: false
+                },
+                async (decodedText) => {
+                    await handleCloseScanner();
+                    fetchProductFromBarcode(decodedText);
+                },
+                (errorMessage) => { /* Ignora log di ricerca */ }
+            );
+        } else {
+            alert("Nessuna fotocamera rilevata dal browser.");
+            handleCloseScanner();
         }
-    ).catch(err => {
-        alert("Errore nell'avvio della fotocamera: controlla i permessi o ricarica la pagina.");
+    } catch (err) {
+        alert("Consenti l'accesso alla fotocamera per usare questa funzione.");
         handleCloseScanner();
-    });
+    }
 }
 
 async function handleCloseScanner() {
     if (html5QrCode) {
-        try { await html5QrCode.stop(); } catch (e) { /* Scanner già fermo */ }
+        try { await html5QrCode.stop(); } catch (e) { /* Già fermo */ }
     }
     const container = document.getElementById('scanner-container');
     const actionBtns = document.getElementById('action-buttons');
@@ -123,7 +146,7 @@ async function handleCloseScanner() {
 }
 
 async function fetchProductFromBarcode(barcode) {
-    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-blue-600">Ricerca prodotto in corso...</div>`;
+    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-blue-600">Ricerca prodotto nel database mondiale...</div>`;
     try {
         const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
         const data = await res.json();
@@ -133,7 +156,6 @@ async function fetchProductFromBarcode(barcode) {
             const name = p.product_name || "Prodotto Sconosciuto";
             const n = p.nutriments || {};
 
-            // Estrapoliamo i valori su 100g
             const cal = n['energy-kcal_100g'] || 0;
             const pro = n['proteins_100g'] || 0;
             const carbo = n['carbohydrates_100g'] || 0;
@@ -141,7 +163,7 @@ async function fetchProductFromBarcode(barcode) {
 
             openPreFilledManualMeal(name, cal, pro, carbo, fat);
         } else {
-            alert("Spiacente, prodotto non trovato nel database mondiale.");
+            alert("Spiacente, prodotto non trovato nel database.");
             showNutritionDashboard();
         }
     } catch (e) {
