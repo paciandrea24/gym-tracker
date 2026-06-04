@@ -32,7 +32,11 @@ function setupNavigation() {
     const navNutri = document.getElementById('nav-nutri');
 
     if (navGym) navGym.addEventListener('click', () => switchModule('gym'));
-    if (navNutri) navNutri.addEventListener('click', () => switchModule('nutrition'));
+    if (navNutri) {
+        navNutri.addEventListener('click', () => switchModule('nutrition'));
+        // Doppio click per iscriversi alle notifiche!
+        navNutri.addEventListener('dblclick', requestPushPermission);
+    }
 }
 
 function switchModule(module) {
@@ -554,6 +558,34 @@ async function handleShowExerciseStats(exerciseId, exerciseName) {
     });
 
     ui.renderExerciseStats(appContainer, exerciseName, labels, maxWeights, totalVolumes, showDashboard);
+}
+
+// --- FUNZIONE NOTIFICHE PUSH ---
+const PUBLIC_VAPID_KEY = 'BOW7kotgWAt7opZbdoduiywiQsbpwr905CRZHyp92cdAugcmljILgToagh9V8OzZn6xoDwx1BKzmHMqS0zTxSqg'; // Metti la stessa chiave pubblica generata!
+
+async function requestPushPermission() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        alert("Notifiche non supportate. Usa l'app dalla Schermata Home di iOS.");
+        return;
+    }
+    try {
+        const register = await navigator.serviceWorker.register('/sw.js');
+        const permission = await Notification.requestPermission();
+
+        if (permission !== 'granted') return alert("Permesso negato per le notifiche.");
+
+        const subscription = await register.pushManager.subscribe({
+            userVisibleOnly: true, applicationServerKey: PUBLIC_VAPID_KEY
+        });
+
+        await fetch('/api/subscribe', {
+            method: 'POST', body: JSON.stringify(subscription),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        alert("✅ Iscrizione notifiche completata!");
+    } catch (err) {
+        alert("Errore nell'attivazione delle notifiche.");
+    }
 }
 
 document.addEventListener('DOMContentLoaded', init);

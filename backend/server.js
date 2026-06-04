@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import webpush from 'web-push';
 
 dotenv.config();
 
@@ -42,6 +43,21 @@ const HistorySchema = new mongoose.Schema({
     sessionId: Number, routineId: String, endTime: Number, exercises: Array
 });
 const History = mongoose.model('History', HistorySchema);
+
+// --- CONFIGURAZIONE NOTIFICHE PUSH ---
+if (process.env.PUBLIC_VAPID_KEY && process.env.PRIVATE_VAPID_KEY) {
+    webpush.setVapidDetails(
+        'mailto:tuamail@example.com', // Metti la tua vera mail qui
+        process.env.PUBLIC_VAPID_KEY,
+        process.env.PRIVATE_VAPID_KEY
+    );
+}
+
+const SubscriptionSchema = new mongoose.Schema({
+    endpoint: String,
+    keys: mongoose.Schema.Types.Mixed,
+});
+const Subscription = mongoose.model('Subscription', SubscriptionSchema);
 
 
 // --- API NUTRIZIONE ---
@@ -166,6 +182,68 @@ app.post('/api/gym/history', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false }); }
 });
 
+
+// --- API ISCRIZIONE NOTIFICHE ---
+app.post('/api/subscribe', async (req, res) => {
+    try {
+        const sub = req.body;
+        await Subscription.findOneAndUpdate({ endpoint: sub.endpoint }, sub, { upsert: true });
+        res.status(201).json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// --- ROTTA SEGRETA PER CRON-JOB (Notifiche Intelligenti) ---
+app.get('/api/trigger-notifications', async (req, res) => {
+    if (req.query.secret !== process.env.CRON_SECRET) {
+        return res.status(403).json({ error: "Accesso negato" });
+    }
+
+    const tipoNotifica = req.query.type;
+    let payloadStr = "";
+    let shouldSend = true;
+
+    if (tipoNotifica === 'acqua') {
+        payloadStr = JSON.stringify({
+            title: "Idratazione! 💧",
+            body: "È ora di bere un bel bicchiere d'acqua! Mantieniti idratato."
+        });
+    } else if (tipoNotifica === 'cena') {
+        // Controllo intelligente: hai già cenato oggi?
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        // Cerca nel DB un pasto di oggi la cui stringa 'pasto' contenga "cena" (ignorando maiuscole/minuscole)
+        const cenaLoggata = await Meal.findOne({
+            data: { $gte: startOfDay },
+            pasto: { $regex: /cena/i }
+        });
+
+        if (cenaLoggata) {
+            shouldSend = false; // Hai già inserito la cena, non ti disturbo!
+        } else {
+            payloadStr = JSON.stringify({
+                title: "Diario Alimentare 🍽️",
+                body: "Non hai ancora loggato la cena! Ricordati di inserirla prima di andare a letto."
+            });
+        }
+    }
+
+    if (!shouldSend) {
+        return res.json({ success: true, message: "Notifica annullata: obiettivo già raggiunto." });
+    }
+
+    try {
+        const subs = await Subscription.find();
+        subs.forEach(sub => {
+            webpush.sendNotification(sub, payloadStr).catch(err => console.error("Errore push:", err));
+        });
+        res.json({ success: true, message: `Notifiche '${tipoNotifica}' inviate!` });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 app.use((req, res, next) => {
     if (!req.path.startsWith('/api')) return res.sendFile(path.join(__dirname, '../public/index.html'));
