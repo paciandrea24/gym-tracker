@@ -25,6 +25,7 @@ let codeReader = null;
 function init() {
     setupNavigation();
     loadCurrentModule();
+    fetchStreak();
 }
 
 function setupNavigation() {
@@ -137,7 +138,10 @@ function handleManualMealClick() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(mealData)
             });
-            if (response.ok) showNutritionDashboard();
+            if (response.ok) {
+                showNutritionDashboard();
+                triggerStreak();
+            }
             else alert("Errore nel salvataggio");
         } catch (e) {
             alert("Errore di connessione");
@@ -268,7 +272,10 @@ function openPreFilledManualMeal(name, cal, pro, carbo, fat) {
         }];
         try {
             const response = await fetch('/api/meals', { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mealData) });
-            if (response.ok) showNutritionDashboard(); else alert("Errore nel salvataggio");
+            if (response.ok) {
+                showNutritionDashboard();
+                triggerStreak();
+            } else alert("Errore nel salvataggio");
         } catch (e) { alert("Errore di connessione"); }
     }, showNutritionDashboard);
 
@@ -364,7 +371,10 @@ async function handleDeleteMeal(mealId) {
     if (!window.confirm("Vuoi eliminare questo pasto?")) return;
     try {
         const response = await fetch(`/api/meals/${mealId}`, { method: "DELETE" });
-        if (response.ok) showNutritionDashboard();
+        if (response.ok) {
+            showNutritionDashboard();
+            fetchStreak();
+        }
         else alert("Errore durante l'eliminazione");
     } catch (error) {
         alert("Impossibile connettersi al server");
@@ -476,6 +486,7 @@ async function handleEndSession() {
     }
     appContainer.innerHTML = `<p class="text-center mt-20 animate-pulse">Salvataggio nel Database...</p>`;
     await storage.endActiveSession();
+    triggerStreak();
     currentTab = 'storico';
     showDashboard();
 }
@@ -585,6 +596,58 @@ async function requestPushPermission() {
         alert("✅ Iscrizione notifiche completata!");
     } catch (err) {
         alert("Errore nell'attivazione delle notifiche.");
+    }
+}
+
+// ==========================================
+// SISTEMA FIAMMA (STREAK)
+// ==========================================
+export async function fetchStreak() {
+    try {
+        const res = await fetch('/api/streak');
+        const data = await res.json();
+        updateStreakUI(data.currentStreak, data.activeToday, false);
+    } catch (e) { console.error("Impossibile caricare la streak", e); }
+}
+
+export async function triggerStreak() {
+    try {
+        const container = document.getElementById('streak-icon');
+        const wasActive = container && !container.classList.contains('grayscale');
+
+        const res = await fetch('/api/streak/trigger', { method: 'POST' });
+        const data = await res.json();
+
+        updateStreakUI(data.currentStreak, data.activeToday, !wasActive);
+    } catch (e) { console.error("Errore aggiornamento streak", e); }
+}
+
+function updateStreakUI(count, activeToday, playAnimation = false) {
+    const icon = document.getElementById('streak-icon');
+    const countEl = document.getElementById('streak-count');
+    const container = document.getElementById('streak-container');
+
+    if (!icon || !countEl) return;
+
+    countEl.textContent = count;
+
+    if (activeToday) {
+        icon.classList.remove('text-gray-400', 'grayscale');
+        countEl.classList.remove('text-gray-400');
+        countEl.classList.add('text-orange-500');
+        container.classList.remove('bg-gray-50', 'border-gray-100');
+        container.classList.add('border-orange-200', 'bg-orange-50');
+
+        if (playAnimation) {
+            icon.classList.add('animate-bounce', 'scale-125');
+            setTimeout(() => icon.classList.remove('animate-bounce', 'scale-125'), 1500);
+        }
+    } else {
+        icon.classList.add('text-gray-400', 'grayscale');
+        countEl.classList.remove('text-orange-500');
+        countEl.classList.add('text-gray-400');
+        container.classList.remove('border-orange-200', 'bg-orange-50');
+        container.classList.add('bg-gray-50', 'border-gray-100');
     }
 }
 

@@ -44,6 +44,82 @@ const HistorySchema = new mongoose.Schema({
 });
 const History = mongoose.model('History', HistorySchema);
 
+// --- MODELLO DATABASE PER LA FIAMMA (STREAK) ---
+const StreakSchema = new mongoose.Schema({
+    userId: { type: String, default: 'admin' }, // Essendo l'app tua, usiamo un utente fisso
+    currentStreak: { type: Number, default: 0 },
+    lastActiveDate: { type: String, default: '' } // Salveremo la data nel formato YYYY-MM-DD
+});
+const Streak = mongoose.model('Streak', StreakSchema);
+
+// Funzione di supporto per avere sempre la data italiana (evita bug di fuso orario sul server)
+function getItalyDateStr(offsetDays = 0) {
+    const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
+    d.setDate(d.getDate() + offsetDays);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// --- API: OTTIENI LO STATO DELLA FIAMMA ---
+app.get('/api/streak', async (req, res) => {
+    try {
+        const todayStr = getItalyDateStr(0);
+        const yesterdayStr = getItalyDateStr(-1);
+
+        let streak = await Streak.findOne({ userId: 'admin' });
+        if (!streak) {
+            return res.json({ currentStreak: 0, activeToday: false });
+        }
+
+        let activeToday = (streak.lastActiveDate === todayStr);
+        let current = streak.currentStreak;
+
+        // Se l'ultima azione non è di oggi e nemmeno di ieri, la catena si è spezzata
+        if (!activeToday && streak.lastActiveDate !== yesterdayStr && streak.lastActiveDate !== '') {
+            current = 0;
+        }
+
+        res.json({ currentStreak: current, activeToday });
+    } catch (e) {
+        res.status(500).json({ error: "Errore streak" });
+    }
+});
+
+// --- API: INFIAMMA (TRIGGER QUANDO SALVI PASTO/ALLENAMENTO) ---
+app.post('/api/streak/trigger', async (req, res) => {
+    try {
+        const todayStr = getItalyDateStr(0);
+        const yesterdayStr = getItalyDateStr(-1);
+
+        let streak = await Streak.findOne({ userId: 'admin' });
+
+        // Se non esiste, lo crea al giorno 1
+        if (!streak) {
+            streak = new Streak({ userId: 'admin', currentStreak: 1, lastActiveDate: todayStr });
+            await streak.save();
+            return res.json({ currentStreak: 1, activeToday: true });
+        }
+
+        // Se è già attivo oggi, non fa nulla (evita che la fiamma salga di 2 in un giorno)
+        if (streak.lastActiveDate === todayStr) {
+            return res.json({ currentStreak: streak.currentStreak, activeToday: true });
+        }
+
+        // Se l'ultima volta è stata ieri, aumenta di 1! Altrimenti, riparte da 1.
+        if (streak.lastActiveDate === yesterdayStr) {
+            streak.currentStreak += 1;
+        } else {
+            streak.currentStreak = 1;
+        }
+
+        streak.lastActiveDate = todayStr;
+        await streak.save();
+
+        res.json({ currentStreak: streak.currentStreak, activeToday: true });
+    } catch (e) {
+        res.status(500).json({ error: "Errore salvataggio streak" });
+    }
+});
+
 // --- CONFIGURAZIONE NOTIFICHE PUSH ---
 if (process.env.PUBLIC_VAPID_KEY && process.env.PRIVATE_VAPID_KEY) {
     webpush.setVapidDetails(
@@ -141,8 +217,36 @@ app.get('/api/today-meals', async (req, res) => {
 });
 
 app.delete('/api/meals/:id', async (req, res) => {
-    try { await Meal.findByIdAndDelete(req.params.id); res.json({ success: true }); }
-    catch (error) { res.status(500).json({ success: false }); }
+    try {
+        await Meal.findByIdAndDelete(req.params.id);
+
+        // --- GESTIONE RIMOZIONE FIAMMA (EDGE CASE) ---
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        // Controlla se sono rimasti altri pasti loggati oggi
+        const pastiRimanentiOggi = await Meal.countDocuments({ data: { $gte: startOfDay } });
+        // Controlla se c'è almeno un allenamento oggi (endTime è un timestamp numerico)
+        const workoutOggi = await History.countDocuments({ endTime: { $gte: startOfDay.getTime() } });
+
+        // Se non ci sono più pasti e non ci sono allenamenti oggi...
+        if (pastiRimanentiOggi === 0 && workoutOggi === 0) {
+            const todayStr = getItalyDateStr(0);
+            let streak = await Streak.findOne({ userId: 'admin' });
+
+            // Se la fiamma era stata attivata oggi, facciamo "Rollback" (Marcia indietro)
+            if (streak && streak.lastActiveDate === todayStr) {
+                streak.currentStreak = Math.max(0, streak.currentStreak - 1); // Abbassa di 1 (senza andare sotto zero)
+                streak.lastActiveDate = getItalyDateStr(-1); // Riportiamo l'ultimo giorno attivo a ieri
+                await streak.save();
+            }
+        }
+        // ---------------------------------------------
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false });
+    }
 });
 
 app.get('/api/history', async (req, res) => {
