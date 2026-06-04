@@ -1,6 +1,6 @@
-import * as storage from './storage.js?v=7';
-import * as ui from './ui.js?v=7';
-import { debounce } from './utils.js?v=7';
+import * as storage from './storage.js?v=8';
+import * as ui from './ui.js?v=8';
+import { debounce } from './utils.js?v=8';
 
 const appContainer = document.getElementById('app');
 
@@ -82,7 +82,7 @@ function handleManualMealClick() {
     }, showNutritionDashboard);
 }
 
-// --- LOGICA DELLO SCANNER OTTIMIZZATA PER SMARTPHONE ---
+// --- LOGICA DELLO SCANNER (MIGLIORATA PER IPHONE) ---
 function handleScanClick() {
     document.getElementById('action-buttons').classList.add('hidden');
     document.getElementById('scanner-container').classList.remove('hidden');
@@ -91,14 +91,13 @@ function handleScanClick() {
         html5QrCode = new Html5Qrcode("reader");
     }
 
-    // Creiamo un rettangolo orizzontale dinamico basato sullo schermo
-    const boxWidth = Math.min(window.innerWidth - 60, 300);
-
     html5QrCode.start(
         { facingMode: "environment" },
         {
-            fps: 10,
-            qrbox: { width: boxWidth, height: 120 } // Rettangolo perfetto per codici EAN
+            fps: 15, // Più rapido a scattare fotogrammi
+            // HO RIMOSSO IL "QRBOX": in questo modo la libreria legge TUTTO lo schermo
+            // Non c'è più bisogno di inquadrare perfettamente al centro!
+            aspectRatio: 1.0
         },
         async (decodedText) => {
             await handleCloseScanner();
@@ -108,7 +107,7 @@ function handleScanClick() {
             // Ignoriamo gli errori temporanei mentre cerca di mettere a fuoco
         }
     ).catch(err => {
-        alert("Errore nell'avvio della fotocamera: controlla i permessi.");
+        alert("Errore nell'avvio della fotocamera: controlla i permessi o ricarica la pagina.");
         handleCloseScanner();
     });
 }
@@ -124,7 +123,7 @@ async function handleCloseScanner() {
 }
 
 async function fetchProductFromBarcode(barcode) {
-    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-blue-600">Ricerca nel database mondiale...</div>`;
+    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-blue-600">Ricerca prodotto in corso...</div>`;
     try {
         const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
         const data = await res.json();
@@ -142,7 +141,7 @@ async function fetchProductFromBarcode(barcode) {
 
             openPreFilledManualMeal(name, cal, pro, carbo, fat);
         } else {
-            alert("Spiacente, prodotto non trovato nel database.");
+            alert("Spiacente, prodotto non trovato nel database mondiale.");
             showNutritionDashboard();
         }
     } catch (e) {

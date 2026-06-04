@@ -1,3 +1,5 @@
+import { formatDate } from './utils.js?v=8';
+
 // --- GESTIONE SCHEDE MULTIPLE (MONGODB) ---
 export async function getRoutines() {
     try { const res = await fetch('/api/gym/routines'); return await res.json(); } catch (e) { return []; }
