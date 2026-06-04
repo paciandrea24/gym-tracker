@@ -17,7 +17,7 @@ let currentRecognition = null;
 let finalTranscript = "";
 let currentNutriTab = 'oggi';
 let currentMealsData = [];
-let html5QrCode = null; // Variabile globale per lo scanner
+let codeReader = null;
 
 // ==========================================
 // INIZIALIZZAZIONE E NAVIGAZIONE
@@ -141,49 +141,48 @@ function handleManualMealClick() {
     }, showNutritionDashboard);
 }
 
-// --- LOGICA DELLO SCANNER LIVE (HACK IPHONE LENTE CORRETTA) ---
+// --- LOGICA DELLO SCANNER LIVE CON ZXING ---
 async function handleScanClick() {
     document.getElementById('action-buttons').classList.add('hidden');
     document.getElementById('scanner-container').classList.remove('hidden');
 
-    if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode("reader");
+    // Inizializza ZXing se non esiste
+    if (!codeReader) {
+        codeReader = new ZXing.BrowserMultiFormatReader();
     }
 
     try {
-        // 1. Legge tutte le fotocamere dell'iPhone
-        const devices = await Html5Qrcode.getCameras();
+        // 1. Legge tutte le fotocamere del dispositivo
+        const videoInputDevices = await codeReader.listVideoInputDevices();
 
-        if (devices && devices.length > 0) {
-            let selectedCameraId = devices[0].id;
+        if (videoInputDevices && videoInputDevices.length > 0) {
+            let selectedDeviceId = videoInputDevices[0].deviceId;
 
-            // 2. Cerchiamo la fotocamera posteriore evitando la lente "Ultrawide" che sfoca
-            for (let i = 0; i < devices.length; i++) {
-                let label = devices[i].label.toLowerCase();
+            // 2. Cerchiamo la fotocamera posteriore evitando l'ultrawide
+            for (let i = 0; i < videoInputDevices.length; i++) {
+                let label = videoInputDevices[i].label.toLowerCase();
                 if (label.includes("back") || label.includes("posteriore") || label.includes("environment")) {
-                    selectedCameraId = devices[i].id;
+                    selectedDeviceId = videoInputDevices[i].deviceId;
                     if (!label.includes("ultrawide") && !label.includes("ultra wide")) {
                         break;
                     }
                 }
             }
 
-            // 3. Avviamo la videocamera live
-            await html5QrCode.start(
-                selectedCameraId,
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 150 }, // Rettangolo per aiutare la messa a fuoco
-                    disableFlip: false
-                },
-                async (decodedText) => {
-                    await handleCloseScanner();
-                    fetchProductFromBarcode(decodedText);
-                },
-                (errorMessage) => {
-                    // Ignora log in background durante la messa a fuoco
+            // 3. Avviamo la scansione agganciandola al tag <video>
+            codeReader.decodeFromVideoDevice(selectedDeviceId, 'reader-video', (result, err) => {
+                if (result) {
+                    // Codice a barre trovato!
+                    const barcode = result.getText();
+                    handleCloseScanner();
+                    fetchProductFromBarcode(barcode);
                 }
-            );
+
+                // Ignoriamo gli errori NotFound (avvengono ogni millisecondo in cui non c'è un codice nell'inquadratura)
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error("Errore scanner:", err);
+                }
+            });
         } else {
             alert("Nessuna fotocamera rilevata dal browser.");
             handleCloseScanner();
@@ -195,9 +194,11 @@ async function handleScanClick() {
 }
 
 async function handleCloseScanner() {
-    if (html5QrCode) {
-        try { await html5QrCode.stop(); } catch (e) { }
+    // Ferma la fotocamera e pulisce lo stream video
+    if (codeReader) {
+        codeReader.reset();
     }
+
     const container = document.getElementById('scanner-container');
     const actionBtns = document.getElementById('action-buttons');
     if (container) container.classList.add('hidden');

@@ -475,7 +475,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             
             <div id="scanner-container" class="hidden mb-6 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
                 <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra il codice a barre</p>
-                <div id="reader" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[250px]"></div>
+                <video id="reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[250px]" autoplay playsinline></video>
                 <button id="close-scanner-btn" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla Scansione</button>
             </div>
 
