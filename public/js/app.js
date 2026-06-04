@@ -216,7 +216,31 @@ async function fetchProductFromBarcode(barcode) {
             const name = p.product_name || "Prodotto Sconosciuto";
             const n = p.nutriments || {};
 
-            const cal = n['energy-kcal_100g'] || 0;
+            // --- INIZIO NUOVA LOGICA CALORIE (Forzata a Kcal) ---
+            let cal = n['energy-kcal_100g'];
+
+            // 1. Se manca il campo kcal, peschiamo quello kJ o generico e lo convertiamo
+            if (cal === undefined || cal === null) {
+                if (n['energy-kj_100g']) {
+                    cal = n['energy-kj_100g'] / 4.184; // 1 kcal = 4.184 kJ
+                } else if (n['energy_100g']) {
+                    // Il campo generico di OFF è quasi sempre in kJ
+                    cal = n['energy_100g'] / 4.184;
+                } else {
+                    cal = 0;
+                }
+            }
+
+            // 2. Correzione errori DB umano: 
+            // Se le calorie superano 900 su 100g è impossibile. Sono chiaramente kJ!
+            if (cal > 900) {
+                cal = cal / 4.184;
+            }
+
+            // Arrotondiamo a un decimale per non avere numeri lunghissimi
+            cal = parseFloat(Number(cal).toFixed(1));
+            // --- FINE NUOVA LOGICA CALORIE ---
+
             const pro = n['proteins_100g'] || 0;
             const carbo = n['carbohydrates_100g'] || 0;
             const fat = n['fat_100g'] || 0;
