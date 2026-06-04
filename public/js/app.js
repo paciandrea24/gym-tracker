@@ -1,6 +1,6 @@
-import * as storage from './storage.js?v=5';
-import * as ui from './ui.js?v=5';
-import { debounce } from './utils.js?v=5';
+import * as storage from './storage.js?v=7';
+import * as ui from './ui.js?v=7';
+import { debounce } from './utils.js?v=7';
 
 const appContainer = document.getElementById('app');
 
@@ -14,7 +14,7 @@ let currentRecognition = null;
 let finalTranscript = "";
 let currentNutriTab = 'oggi';
 let currentMealsData = [];
-let html5QrCode = null; // Variabile globale per la fotocamera
+let html5QrCode = null;
 
 function init() { setupNavigation(); loadCurrentModule(); }
 
@@ -82,26 +82,30 @@ function handleManualMealClick() {
     }, showNutritionDashboard);
 }
 
-// --- LOGICA DELLO SCANNER ---
+// --- LOGICA DELLO SCANNER OTTIMIZZATA PER SMARTPHONE ---
 function handleScanClick() {
     document.getElementById('action-buttons').classList.add('hidden');
     document.getElementById('scanner-container').classList.remove('hidden');
 
     if (!html5QrCode) {
-        // Usa la libreria inserita nel file HTML
         html5QrCode = new Html5Qrcode("reader");
     }
 
+    // Creiamo un rettangolo orizzontale dinamico basato sullo schermo
+    const boxWidth = Math.min(window.innerWidth - 60, 300);
+
     html5QrCode.start(
-        { facingMode: "environment" }, // Usa la fotocamera posteriore
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { facingMode: "environment" },
+        {
+            fps: 10,
+            qrbox: { width: boxWidth, height: 120 } // Rettangolo perfetto per codici EAN
+        },
         async (decodedText) => {
-            // Se trova un codice a barre con successo
             await handleCloseScanner();
             fetchProductFromBarcode(decodedText);
         },
         (errorMessage) => {
-            // Ignora gli errori di mancata lettura (è normale finché non si inquadra bene)
+            // Ignoriamo gli errori temporanei mentre cerca di mettere a fuoco
         }
     ).catch(err => {
         alert("Errore nell'avvio della fotocamera: controlla i permessi.");
@@ -148,7 +152,6 @@ async function fetchProductFromBarcode(barcode) {
 }
 
 function openPreFilledManualMeal(name, cal, pro, carbo, fat) {
-    // Riutilizziamo il form manuale
     ui.renderManualMealForm(appContainer, async (mealData) => {
         appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio in corso...</div>`;
         mealData.ingredienti = [{
@@ -160,14 +163,12 @@ function openPreFilledManualMeal(name, cal, pro, carbo, fat) {
         } catch (e) { alert("Errore di connessione"); }
     }, showNutritionDashboard);
 
-    // E lo pre-compiliamo magicamente!
     document.getElementById('m-alimenti').value = name;
     document.getElementById('m-cal-100').value = cal;
     document.getElementById('m-pro-100').value = pro;
     document.getElementById('m-carbo-100').value = carbo;
     document.getElementById('m-fat-100').value = fat;
 
-    // Focussiamo l'attenzione dell'utente solo sull'unica cosa mancante: il peso consumato.
     setTimeout(() => document.getElementById('m-peso').focus(), 300);
 }
 

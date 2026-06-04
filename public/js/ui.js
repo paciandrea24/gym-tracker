@@ -1,4 +1,4 @@
-import { formatDate } from './utils.js?v=6';
+import { formatDate } from './utils.js?v=7';
 
 // --- RENDER LISTA SCHEDE (HOME) ---
 export function renderRoutinesList(container, routines, onOpenRoutine, onCreateRoutine, onEditRoutineName, onDeleteRoutine) {
@@ -431,7 +431,7 @@ export function updateFeedback(setId, status) {
     else statusEl.className = 'text-xs text-gray-400 font-medium transition-colors';
 }
 
-// --- RENDER NUTRIZIONE (AGGIORNATO CON SCANNER E SPUNTE) ---
+// --- RENDER NUTRIZIONE (CON SCANNER E SPUNTE) ---
 export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner) {
     let contentHtml = '';
     const checkIcon = `<svg class="w-4 h-4 text-green-400 inline-block ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
@@ -474,7 +474,8 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             </button>
             
             <div id="scanner-container" class="hidden mb-6 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
-                <div id="reader" class="w-full rounded-xl overflow-hidden mb-2 bg-black"></div>
+                <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra da 15-20 cm di distanza</p>
+                <div id="reader" class="w-full rounded-xl overflow-hidden mb-3 bg-black"></div>
                 <button id="close-scanner-btn" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla Scansione</button>
             </div>
 
@@ -618,7 +619,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
     }
 }
 
-// --- RENDER DETTAGLIO PASTO (AGGIORNATO CON INGREDIENTI) ---
+// --- RENDER DETTAGLIO PASTO (CON INGREDIENTI) ---
 export function renderMealDetails(container, meal, onBack) {
     const dateObj = new Date(meal.data);
     const dateStr = dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
