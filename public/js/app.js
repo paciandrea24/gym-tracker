@@ -1,9 +1,12 @@
-import * as storage from './storage.js?v=9';
-import * as ui from './ui.js?v=9';
-import { debounce } from './utils.js?v=9';
+import * as storage from './storage.js?v=11';
+import * as ui from './ui.js?v=11';
+import { debounce } from './utils.js?v=11';
 
 const appContainer = document.getElementById('app');
 
+// ==========================================
+// STATO APPLICATIVO GLOBALE
+// ==========================================
 let currentAppModule = 'gym';
 let currentRoutineId = null;
 let currentTab = 'scheda';
@@ -14,13 +17,20 @@ let currentRecognition = null;
 let finalTranscript = "";
 let currentNutriTab = 'oggi';
 let currentMealsData = [];
-let html5QrCode = null;
+let html5QrCode = null; // Variabile globale per lo scanner
 
-function init() { setupNavigation(); loadCurrentModule(); }
+// ==========================================
+// INIZIALIZZAZIONE E NAVIGAZIONE
+// ==========================================
+function init() {
+    setupNavigation();
+    loadCurrentModule();
+}
 
 function setupNavigation() {
     const navGym = document.getElementById('nav-gym');
     const navNutri = document.getElementById('nav-nutri');
+
     if (navGym) navGym.addEventListener('click', () => switchModule('gym'));
     if (navNutri) navNutri.addEventListener('click', () => switchModule('nutrition'));
 }
@@ -29,60 +39,109 @@ function switchModule(module) {
     currentAppModule = module;
     const navGym = document.getElementById('nav-gym');
     const navNutri = document.getElementById('nav-nutri');
+
     if (navGym && navNutri) {
         navGym.classList.toggle('text-gray-900', module === 'gym');
         navGym.classList.toggle('text-gray-400', module !== 'gym');
         navNutri.classList.toggle('text-gray-900', module === 'nutrition');
         navNutri.classList.toggle('text-gray-400', module !== 'nutrition');
     }
+
     loadCurrentModule();
 }
 
 function loadCurrentModule() {
     if (currentAppModule === 'gym') {
         const activeSession = storage.getActiveSession();
-        if (activeSession) { currentRoutineId = activeSession.routineId; showActiveSession(); }
-        else { showRoutinesList(); }
+        if (activeSession) {
+            currentRoutineId = activeSession.routineId;
+            showActiveSession();
+        } else {
+            showRoutinesList();
+        }
     } else if (currentAppModule === 'nutrition') {
         showNutritionDashboard();
     }
 }
 
-// --- NUTRIZIONE ---
+// ==========================================
+// MODULO 1: NUTRIZIONE
+// ==========================================
+
 async function showNutritionDashboard() {
-    appContainer.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento...</p></div>`;
+    appContainer.innerHTML = `
+        <div class="flex items-center justify-center min-h-screen">
+            <p class="text-gray-500 font-bold animate-pulse">Caricamento dati dal server...</p>
+        </div>
+    `;
+
     try {
         const url = currentNutriTab === 'oggi' ? '/api/today-meals' : '/api/history';
         const response = await fetch(url);
-        if (!response.ok) throw new Error("Errore server");
+        if (!response.ok) throw new Error("Errore del server");
+
         const mealsData = await response.json();
         currentMealsData = mealsData;
         const goals = storage.getNutritionGoals();
-        ui.renderNutritionDashboard(appContainer, mealsData, goals, currentNutriTab, (tab) => { currentNutriTab = tab; showNutritionDashboard(); }, handleMicRecord, handleManualMealClick, handleDeleteMeal, handleEditGoals, handleMealClick, handleScanClick, handleCloseScanner);
-    } catch (error) { appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`; }
+
+        ui.renderNutritionDashboard(
+            appContainer, mealsData, goals, currentNutriTab,
+            (tab) => { currentNutriTab = tab; showNutritionDashboard(); },
+            handleMicRecord,
+            handleManualMealClick,
+            handleDeleteMeal,
+            handleEditGoals,
+            handleMealClick,
+            handleScanClick,     // Funzione apertura scanner
+            handleCloseScanner   // Funzione chiusura scanner
+        );
+
+    } catch (error) {
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`;
+    }
 }
 
 function handleMealClick(mealId) {
     try {
         const meal = currentMealsData.find(m => String(m._id) === String(mealId));
-        if (meal) ui.renderMealDetails(appContainer, meal, showNutritionDashboard);
-    } catch (e) { alert("Errore: " + e.message); }
+        if (!meal) {
+            alert("Errore: Pasto non trovato nei dati in memoria.");
+            return;
+        }
+        ui.renderMealDetails(appContainer, meal, showNutritionDashboard);
+    } catch (error) {
+        alert("Errore durante l'apertura del pasto: " + error.message);
+    }
 }
 
 function handleManualMealClick() {
     ui.renderManualMealForm(appContainer, async (mealData) => {
         appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio in corso...</div>`;
+
+        // Creiamo l'array con un singolo ingrediente
         mealData.ingredienti = [{
-            nome: mealData.alimenti, calorie: mealData.calorie, proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi
+            nome: mealData.alimenti,
+            calorie: mealData.calorie,
+            proteine: mealData.proteine,
+            carboidrati: mealData.carboidrati,
+            grassi: mealData.grassi
         }];
+
         try {
-            const response = await fetch('/api/meals', { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mealData) });
-            if (response.ok) showNutritionDashboard(); else alert("Errore nel salvataggio");
-        } catch (e) { alert("Errore di connessione"); }
+            const response = await fetch('/api/meals', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(mealData)
+            });
+            if (response.ok) showNutritionDashboard();
+            else alert("Errore nel salvataggio");
+        } catch (e) {
+            alert("Errore di connessione");
+        }
     }, showNutritionDashboard);
 }
 
-// --- LOGICA DELLO SCANNER (HACK PER IPHONE MULTI-LENTE) ---
+// --- LOGICA DELLO SCANNER LIVE (HACK IPHONE LENTE CORRETTA) ---
 async function handleScanClick() {
     document.getElementById('action-buttons').classList.add('hidden');
     document.getElementById('scanner-container').classList.remove('hidden');
@@ -92,38 +151,38 @@ async function handleScanClick() {
     }
 
     try {
-        // 1. Chiediamo prima i permessi hardware per mappare le fotocamere fisiche
+        // 1. Legge tutte le fotocamere dell'iPhone
         const devices = await Html5Qrcode.getCameras();
 
         if (devices && devices.length > 0) {
-            // 2. Cerchiamo la lente corretta. Evitiamo "ultrawide" che su iPhone non mette a fuoco
-            let selectedCameraId = devices[0].id; // Fallback alla prima
+            let selectedCameraId = devices[0].id;
 
+            // 2. Cerchiamo la fotocamera posteriore evitando la lente "Ultrawide" che sfoca
             for (let i = 0; i < devices.length; i++) {
                 let label = devices[i].label.toLowerCase();
-                // Selezioniamo la posteriore
                 if (label.includes("back") || label.includes("posteriore") || label.includes("environment")) {
                     selectedCameraId = devices[i].id;
-                    // Se troviamo una posteriore che NON è ultra-grandangolare, la blocchiamo
                     if (!label.includes("ultrawide") && !label.includes("ultra wide")) {
                         break;
                     }
                 }
             }
 
-            // 3. Avviamo lo scanner forzando l'ID della fotocamera giusta
+            // 3. Avviamo la videocamera live
             await html5QrCode.start(
-                selectedCameraId, // Usiamo l'ID esplicito invece del generico "environment"
+                selectedCameraId,
                 {
                     fps: 10,
-                    qrbox: { width: 250, height: 150 }, // Il rettangolo aiuta l'iPhone a calcolare la messa a fuoco
+                    qrbox: { width: 250, height: 150 }, // Rettangolo per aiutare la messa a fuoco
                     disableFlip: false
                 },
                 async (decodedText) => {
                     await handleCloseScanner();
                     fetchProductFromBarcode(decodedText);
                 },
-                (errorMessage) => { /* Ignora log di ricerca */ }
+                (errorMessage) => {
+                    // Ignora log in background durante la messa a fuoco
+                }
             );
         } else {
             alert("Nessuna fotocamera rilevata dal browser.");
@@ -137,7 +196,7 @@ async function handleScanClick() {
 
 async function handleCloseScanner() {
     if (html5QrCode) {
-        try { await html5QrCode.stop(); } catch (e) { /* Già fermo */ }
+        try { await html5QrCode.stop(); } catch (e) { }
     }
     const container = document.getElementById('scanner-container');
     const actionBtns = document.getElementById('action-buttons');
@@ -146,7 +205,7 @@ async function handleCloseScanner() {
 }
 
 async function fetchProductFromBarcode(barcode) {
-    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-blue-600">Ricerca prodotto nel database mondiale...</div>`;
+    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-blue-600">Codice rilevato! Ricerca nel database...</div>`;
     try {
         const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
         const data = await res.json();
@@ -163,7 +222,7 @@ async function fetchProductFromBarcode(barcode) {
 
             openPreFilledManualMeal(name, cal, pro, carbo, fat);
         } else {
-            alert("Spiacente, prodotto non trovato nel database.");
+            alert("Spiacente, prodotto non trovato nel database mondiale.");
             showNutritionDashboard();
         }
     } catch (e) {
@@ -197,38 +256,109 @@ function openPreFilledManualMeal(name, cal, pro, carbo, fat) {
 async function handleMicRecord() {
     const micBtn = document.getElementById('mic-btn');
     const originalBtnHtml = `<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg> REGISTRA VOCE`;
-    if (isRecording && currentRecognition) { currentRecognition.stop(); return; }
+
+    if (isRecording && currentRecognition) {
+        currentRecognition.stop();
+        return;
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return alert("Riconoscimento vocale non supportato.");
+    if (!SpeechRecognition) {
+        alert("Il riconoscimento vocale non è supportato.");
+        return;
+    }
 
     currentRecognition = new SpeechRecognition();
-    currentRecognition.lang = 'it-IT'; currentRecognition.continuous = true;
-    finalTranscript = ""; isRecording = true;
-    micBtn.innerHTML = "⏹️ Ascoltando... Clicca per terminare"; micBtn.classList.add("animate-pulse", "bg-red-600");
+    currentRecognition.lang = 'it-IT';
+    currentRecognition.continuous = true;
+    currentRecognition.interimResults = false;
+
+    finalTranscript = "";
+    isRecording = true;
+
+    micBtn.innerHTML = "⏹️ Ascoltando... Clicca per terminare";
+    micBtn.classList.add("animate-pulse", "bg-red-600");
+
     currentRecognition.start();
-    currentRecognition.onresult = (event) => { for (let i = event.resultIndex; i < event.results.length; ++i) if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + " "; };
+
+    currentRecognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + " ";
+        }
+    };
+
     currentRecognition.onend = async () => {
         isRecording = false;
-        if (!finalTranscript.trim()) { micBtn.innerHTML = originalBtnHtml; micBtn.classList.remove("animate-pulse", "bg-red-600"); return; }
-        micBtn.innerHTML = "⏳ Analisi in corso..."; micBtn.classList.replace("bg-red-600", "bg-orange-500");
+
+        if (!finalTranscript.trim()) {
+            micBtn.innerHTML = originalBtnHtml;
+            micBtn.classList.remove("animate-pulse", "bg-red-600", "bg-orange-500");
+            return;
+        }
+
+        micBtn.innerHTML = "⏳ Analisi in corso...";
+        micBtn.classList.remove("animate-pulse", "bg-red-600");
+        micBtn.classList.add("bg-orange-500");
+
         try {
-            const response = await fetch(`/api/analyze-meal`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: finalTranscript }) });
+            const response = await fetch(`/api/analyze-meal`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: finalTranscript })
+            });
+
+            if (!response.ok) throw new Error("Errore col Server");
+
             const data = await response.json();
-            if (data.success) showNutritionDashboard(); else throw new Error(data.error);
-        } catch (error) { alert("Errore: " + error.message); micBtn.innerHTML = originalBtnHtml; micBtn.classList.remove("bg-orange-500"); }
+
+            if (data.success) {
+                showNutritionDashboard();
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (error) {
+            alert("Errore: " + error.message);
+            micBtn.innerHTML = originalBtnHtml;
+            micBtn.classList.remove("bg-orange-500");
+        }
+    };
+
+    currentRecognition.onerror = (event) => {
+        if (event.error !== 'aborted') alert("Errore microfono: " + event.error);
+        isRecording = false;
+        micBtn.innerHTML = originalBtnHtml;
+        micBtn.classList.remove("animate-pulse", "bg-red-600", "bg-orange-500");
     };
 }
 
 async function handleDeleteMeal(mealId) {
-    if (!window.confirm("Eliminare pasto?")) return;
-    try { await fetch(`/api/meals/${mealId}`, { method: "DELETE" }); showNutritionDashboard(); } catch (e) { alert("Errore"); }
+    if (!window.confirm("Vuoi eliminare questo pasto?")) return;
+    try {
+        const response = await fetch(`/api/meals/${mealId}`, { method: "DELETE" });
+        if (response.ok) showNutritionDashboard();
+        else alert("Errore durante l'eliminazione");
+    } catch (error) {
+        alert("Impossibile connettersi al server");
+    }
 }
 
 function handleEditGoals() {
-    ui.renderEditGoalsForm(appContainer, storage.getNutritionGoals(), (newGoals) => { storage.saveNutritionGoals(newGoals); showNutritionDashboard(); }, showNutritionDashboard);
+    const currentGoals = storage.getNutritionGoals();
+    ui.renderEditGoalsForm(
+        appContainer,
+        currentGoals,
+        (newGoals) => {
+            storage.saveNutritionGoals(newGoals);
+            showNutritionDashboard();
+        },
+        showNutritionDashboard
+    );
 }
 
-// --- PALESTRA ---
+// ==========================================
+// MODULO 2: PALESTRA
+// ==========================================
+
 async function showRoutinesList() {
     appContainer.innerHTML = `<div class="flex justify-center items-center min-h-screen"><p class="animate-pulse">Caricamento...</p></div>`;
     const routines = await storage.getRoutines();
@@ -237,44 +367,70 @@ async function showRoutinesList() {
 
 async function handleCreateRoutine() {
     const name = window.prompt("Nome scheda:", "Nuova Scheda");
-    if (name && name.trim() !== "") { await storage.createRoutine(name.trim()); showRoutinesList(); }
+    if (name && name.trim() !== "") {
+        await storage.createRoutine(name.trim());
+        showRoutinesList();
+    }
 }
 
 async function handleEditRoutineName(routineId, oldName) {
     const newName = window.prompt("Modifica nome:", oldName);
-    if (newName && newName.trim() !== "") { await storage.editRoutineName(routineId, newName.trim()); showRoutinesList(); }
+    if (newName && newName.trim() !== "") {
+        await storage.editRoutineName(routineId, newName.trim());
+        showRoutinesList();
+    }
 }
 
 async function handleDeleteRoutine(routineId) {
-    if (window.confirm("Eliminare scheda?")) { await storage.deleteRoutine(routineId); showRoutinesList(); }
+    if (window.confirm("Eliminare scheda?")) {
+        await storage.deleteRoutine(routineId);
+        showRoutinesList();
+    }
 }
 
-function handleOpenRoutine(routineId) { currentRoutineId = routineId; currentTab = 'scheda'; showDashboard(); }
+function handleOpenRoutine(routineId) {
+    currentRoutineId = routineId;
+    currentTab = 'scheda';
+    showDashboard();
+}
 
 async function showDashboard() {
     appContainer.innerHTML = `<div class="flex justify-center items-center min-h-screen"><p class="animate-pulse">Caricamento...</p></div>`;
     const routine = await storage.getRoutine(currentRoutineId);
     if (!routine) return showRoutinesList();
+
     const history = await storage.getHistoryForRoutine(currentRoutineId);
-    ui.renderDashboard(appContainer, routine, history, currentTab, handleTabSwitch, handleStartSession, showRoutineBuilder, handleDeleteExercise, handleShowExerciseStats, showRoutinesList);
+    ui.renderDashboard(
+        appContainer, routine, history, currentTab,
+        handleTabSwitch, handleStartSession, showRoutineBuilder,
+        handleDeleteExercise, handleShowExerciseStats, showRoutinesList
+    );
 }
 
-function handleTabSwitch(tab) { currentTab = tab; showDashboard(); }
+function handleTabSwitch(tab) {
+    currentTab = tab;
+    showDashboard();
+}
 
 async function handleDeleteExercise(exerciseId) {
-    if (window.confirm("Eliminare esercizio?")) { await storage.removeExerciseFromRoutine(currentRoutineId, exerciseId); showDashboard(); }
+    if (window.confirm("Eliminare esercizio?")) {
+        await storage.removeExerciseFromRoutine(currentRoutineId, exerciseId);
+        showDashboard();
+    }
 }
 
 function showRoutineBuilder() {
     ui.renderRoutineBuilder(appContainer, async (newExercise) => {
         appContainer.innerHTML = `<p class="text-center mt-20 animate-pulse">Salvataggio...</p>`;
-        await storage.addExerciseToRoutine(currentRoutineId, newExercise); showDashboard();
+        await storage.addExerciseToRoutine(currentRoutineId, newExercise);
+        showDashboard();
     }, showDashboard);
 }
 
 async function handleStartSession() {
     const routine = await storage.getRoutine(currentRoutineId);
-    storage.startSession(currentRoutineId, routine.exercises.map(ex => ex.id));
+    const exerciseIds = routine.exercises.map(ex => ex.id);
+    storage.startSession(currentRoutineId, exerciseIds);
     showActiveSession();
 }
 
@@ -286,47 +442,92 @@ async function showActiveSession() {
 
 async function handleEndSession() {
     const session = storage.getActiveSession();
-    if (session && session.todo.length > 0 && !window.confirm("Terminare in anticipo?")) return;
+    if (session && session.todo.length > 0) {
+        if (!window.confirm("Terminare in anticipo?")) return;
+    }
     appContainer.innerHTML = `<p class="text-center mt-20 animate-pulse">Salvataggio nel Database...</p>`;
     await storage.endActiveSession();
-    currentTab = 'storico'; showDashboard();
+    currentTab = 'storico';
+    showDashboard();
 }
 
 async function handleOpenExercise(exerciseId) {
     const routine = await storage.getRoutine(currentRoutineId);
     currentExercise = routine.exercises.find(ex => ex.id === exerciseId);
+
     const draft = storage.getDraft(exerciseId);
     const lastSession = await storage.getLastSession(currentRoutineId, exerciseId);
 
-    currentSessionData = Array.from({ length: currentExercise.targetSets }, (_, i) =>
-        draft?.[i] ? { ...draft[i] } : lastSession?.sets[i] ? { ...lastSession.sets[i] } : { kg: currentExercise.baseKg || '', reps: currentExercise.targetReps }
-    );
+    currentSessionData = [];
+    for (let i = 0; i < currentExercise.targetSets; i++) {
+        if (draft && draft[i]) {
+            currentSessionData.push({ ...draft[i] });
+        } else if (lastSession && lastSession.sets[i]) {
+            currentSessionData.push({ ...lastSession.sets[i] });
+        } else {
+            currentSessionData.push({
+                kg: currentExercise.baseKg !== 0 ? currentExercise.baseKg : '',
+                reps: currentExercise.targetReps
+            });
+        }
+    }
 
-    ui.renderActiveExercise(appContainer, currentExercise, lastSession, currentSessionData, handleInput, handleCompleteExercise, showActiveSession);
+    ui.renderActiveExercise(
+        appContainer, currentExercise, lastSession, currentSessionData,
+        handleInput, handleCompleteExercise, showActiveSession
+    );
 }
 
-const finalizeSetData = debounce((idx) => { storage.saveDraft(currentExercise.id, currentSessionData); ui.updateFeedback(idx, 'Salvato ✓'); }, 500);
+const finalizeSetData = debounce((idx) => {
+    storage.saveDraft(currentExercise.id, currentSessionData);
+    ui.updateFeedback(idx, 'Salvato ✓');
+}, 500);
 
-function handleInput(idx, field, value) { currentSessionData[idx][field] = value; ui.updateFeedback(idx, 'Salvataggio...'); finalizeSetData(idx); }
+function handleInput(idx, field, value) {
+    currentSessionData[idx][field] = value;
+    ui.updateFeedback(idx, 'Salvataggio...');
+    finalizeSetData(idx);
+}
 
-function handleCompleteExercise() { storage.completeExerciseInSession(currentExercise, currentSessionData); storage.clearDraft(); currentExercise = null; currentSessionData = []; showActiveSession(); }
+function handleCompleteExercise() {
+    storage.completeExerciseInSession(currentExercise, currentSessionData);
+    storage.clearDraft();
+    currentExercise = null;
+    currentSessionData = [];
+    showActiveSession();
+}
 
 async function handleShowExerciseStats(exerciseId, exerciseName) {
     const history = await storage.getHistoryForRoutine(currentRoutineId);
-    const sessionsWithEx = history.filter(session => session.exercises.some(e => e.exerciseId === exerciseId)).sort((a, b) => a.endTime - b.endTime);
-    if (sessionsWithEx.length === 0) return alert("Dati insufficienti.");
+    const sessionsWithEx = history
+        .filter(session => session.exercises.some(e => e.exerciseId === exerciseId))
+        .sort((a, b) => a.endTime - b.endTime);
 
-    const labels = [], maxWeights = [], totalVolumes = [];
+    if (sessionsWithEx.length === 0) return alert("Dati insufficienti per il grafico.");
+
+    const labels = [];
+    const maxWeights = [];
+    const totalVolumes = [];
+
     sessionsWithEx.forEach(session => {
-        labels.push(new Date(session.endTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+        const dateStr = new Date(session.endTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
         const exData = session.exercises.find(e => e.exerciseId === exerciseId);
-        let maxKg = 0, vol = 0;
+
+        labels.push(dateStr);
+
+        let maxKg = 0;
+        let vol = 0;
         exData.sets.forEach(set => {
-            const kg = parseFloat(set.kg) || 0, reps = parseInt(set.reps) || 0;
-            if (kg > maxKg) maxKg = kg; vol += (kg > 0 ? kg * reps : reps);
+            const kg = parseFloat(set.kg) || 0;
+            const reps = parseInt(set.reps) || 0;
+            if (kg > maxKg) maxKg = kg;
+            vol += (kg > 0 ? kg * reps : reps);
         });
-        maxWeights.push(maxKg); totalVolumes.push(vol);
+
+        maxWeights.push(maxKg);
+        totalVolumes.push(vol);
     });
+
     ui.renderExerciseStats(appContainer, exerciseName, labels, maxWeights, totalVolumes, showDashboard);
 }
 
