@@ -397,6 +397,35 @@ app.get('/api/trigger-notifications', async (req, res) => {
     }
 });
 
+// --- SCHEMA E API ACQUA ---
+const WaterSchema = new mongoose.Schema({
+    userId: { type: String, default: 'admin' },
+    date: { type: String, required: true }, // Formato YYYY-MM-DD
+    glasses: { type: Number, default: 0 }
+});
+const Water = mongoose.model('Water', WaterSchema);
+
+app.get('/api/water', async (req, res) => {
+    try {
+        const todayStr = getItalyDateStr(0);
+        let record = await Water.findOne({ userId: 'admin', date: todayStr });
+        res.json({ glasses: record ? record.glasses : 0 });
+    } catch (e) { res.status(500).json({ glasses: 0 }); }
+});
+
+app.post('/api/water', async (req, res) => {
+    try {
+        const { glasses } = req.body;
+        const todayStr = getItalyDateStr(0);
+        await Water.findOneAndUpdate(
+            { userId: 'admin', date: todayStr },
+            { glasses: glasses },
+            { upsert: true, returnDocument: 'after' }
+        );
+        res.json({ success: true, glasses });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
 app.use((req, res, next) => {
     if (!req.path.startsWith('/api')) return res.sendFile(path.join(__dirname, '../public/index.html'));
     next();

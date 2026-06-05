@@ -7,7 +7,7 @@ const appContainer = document.getElementById('app');
 // ==========================================
 // STATO APPLICATIVO GLOBALE
 // ==========================================
-let currentAppModule = 'gym';
+let currentAppModule = 'home';
 let currentRoutineId = null;
 let currentTab = 'scheda';
 let currentExercise = null;
@@ -36,44 +36,79 @@ function init() {
 }
 
 function setupNavigation() {
+    const navHome = document.getElementById('nav-home');
     const navGym = document.getElementById('nav-gym');
     const navNutri = document.getElementById('nav-nutri');
 
+    if (navHome) navHome.addEventListener('click', () => switchModule('home'));
     if (navGym) navGym.addEventListener('click', () => switchModule('gym'));
     if (navNutri) {
         navNutri.addEventListener('click', () => switchModule('nutrition'));
-        // Doppio click per iscriversi alle notifiche!
         navNutri.addEventListener('dblclick', requestPushPermission);
     }
 }
 
 function switchModule(module) {
     currentAppModule = module;
+    const navHome = document.getElementById('nav-home');
     const navGym = document.getElementById('nav-gym');
     const navNutri = document.getElementById('nav-nutri');
 
-    if (navGym && navNutri) {
-        navGym.classList.toggle('text-gray-900', module === 'gym');
-        navGym.classList.toggle('text-gray-400', module !== 'gym');
-        navNutri.classList.toggle('text-gray-900', module === 'nutrition');
-        navNutri.classList.toggle('text-gray-400', module !== 'nutrition');
+    if (navHome && navGym && navNutri) {
+        navHome.className = `flex flex-col items-center w-[70px] transition-colors ${module === 'home' ? 'text-[#4F46E5]' : 'text-gray-400 hover:text-gray-600'}`;
+        navGym.className = `flex flex-col items-center w-[70px] transition-colors ${module === 'gym' ? 'text-[#4F46E5]' : 'text-gray-400 hover:text-gray-600'}`;
+        navNutri.className = `flex flex-col items-center w-[70px] transition-colors ${module === 'nutrition' ? 'text-[#4F46E5]' : 'text-gray-400 hover:text-gray-600'}`;
     }
 
     loadCurrentModule();
 }
 
 function loadCurrentModule() {
-    if (currentAppModule === 'gym') {
+    if (currentAppModule === 'home') {
+        showHomeDashboard();
+    } else if (currentAppModule === 'gym') {
         const activeSession = storage.getActiveSession();
-        if (activeSession) {
-            currentRoutineId = activeSession.routineId;
-            showActiveSession();
-        } else {
-            showRoutinesList();
-        }
+        if (activeSession) { currentRoutineId = activeSession.routineId; showActiveSession(); }
+        else { showRoutinesList(); }
     } else if (currentAppModule === 'nutrition') {
         showNutritionDashboard();
     }
+}
+
+async function showHomeDashboard() {
+    appContainer.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento Riepilogo...</p></div>`;
+    try {
+        const [statsRes, waterRes, mealsRes] = await Promise.all([
+            fetch('/api/streak'), fetch('/api/water'), fetch('/api/today-meals')
+        ]);
+
+        const stats = await statsRes.json();
+        const waterData = await waterRes.json();
+        const mealsData = await mealsRes.json();
+        const goals = storage.getNutritionGoals();
+
+        let consumedCal = 0;
+        mealsData.forEach(m => consumedCal += Number(m.calorie) || 0);
+
+        ui.renderHomeDashboard(
+            appContainer, stats, waterData.glasses, consumedCal, goals.calorie,
+            () => showStreakModal(), // Click Fiamma
+            () => switchModule('nutrition'), // Click Calorie (Ti porta a Nutrizione)
+            (newAmount) => handleUpdateWater(newAmount), // Click acqua
+            () => switchModule('gym'), // Inizia Allenamento
+            () => { switchModule('nutrition'); handleManualMealClick(); } // Aggiungi Pasto
+        );
+    } catch (e) { appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione al server.</div>`; }
+}
+
+async function handleUpdateWater(newAmount) {
+    try {
+        await fetch('/api/water', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ glasses: newAmount })
+        });
+        showHomeDashboard(); // Ricarica la vista istantaneamente
+    } catch (e) { console.error("Errore salvataggio acqua", e); }
 }
 
 // ==========================================
@@ -81,26 +116,67 @@ function loadCurrentModule() {
 // ==========================================
 
 async function showNutritionDashboard() {
-    appContainer.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento dati...</p></div>`;
+    appContainer.innerHTML = `
+        <div class="flex items-center justify-center min-h-screen">
+            <p class="text-gray-500 font-bold animate-pulse">Caricamento dati dal server...</p>
+        </div>
+    `;
+
     try {
         const url = currentNutriTab === 'oggi' ? '/api/today-meals' : '/api/history';
+        const [response, favsResponse] = await Promise.all([fetch(url), fetch('/api/favorites')]);
+        if (!response.ok) throw new Error("Errore del server");
 
-        // Scarichiamo in parallelo i pasti e i preferiti
-        const [mealsRes, favsRes] = await Promise.all([fetch(url), fetch('/api/favorites')]);
-        if (!mealsRes.ok) throw new Error("Errore del server");
-
-        currentMealsData = await mealsRes.json();
-        currentFavorites = await favsRes.json();
+        const mealsData = await response.json();
+        currentMealsData = mealsData;
+        currentFavorites = await favsResponse.json();
         const goals = storage.getNutritionGoals();
 
         ui.renderNutritionDashboard(
-            appContainer, currentMealsData, goals, currentNutriTab, currentFavorites,
+            appContainer, mealsData, goals, currentNutriTab, currentFavorites,
             (tab) => { currentNutriTab = tab; showNutritionDashboard(); },
-            handleMicRecord, handleManualMealClick, handleDeleteMeal, handleEditGoals,
-            handleMealClick, handleScanClick, handleCloseScanner,
-            handleAddFavorite // <-- NUOVA FUNZIONE
+            handleMicRecord,
+            handleManualMealClick,
+            handleDeleteMeal,
+            handleEditGoals,
+            handleMealClick,
+            handleScanClick,
+            handleCloseScanner,
+            handlePreviewFavorite // <--- ORA CHIAMA L'ANTEPRIMA INVECE CHE AGGIUNGERE DIRETTAMENTE
         );
-    } catch (error) { appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`; }
+
+    } catch (error) {
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`;
+    }
+}
+
+// Apre la modale e aspetta la conferma
+// Apre la modale e gestisce Aggiunta o Rimozione dai Preferiti
+function handlePreviewFavorite(favId) {
+    const favMeal = currentFavorites.find(m => String(m._id) === String(favId));
+    if (!favMeal) return;
+
+    ui.renderFavoritePreviewModal(
+        favMeal,
+        // 1. Azione di CONFERMA (Aggiungi a oggi)
+        () => handleAddFavorite(favId),
+
+        // 2. Azione di RIMOZIONE (Togli dai preferiti)
+        async () => {
+            try {
+                const res = await fetch(`/api/meals/${favId}/favorite`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isFavorite: false }) // Togliamo lo status di preferito!
+                });
+                if (res.ok) {
+                    // Aggiorniamo la pagina Nutrizione per far ricaricare il carosello "Pasti Rapidi"
+                    showNutritionDashboard();
+                } else {
+                    alert("Errore durante la rimozione dai preferiti.");
+                }
+            } catch (e) { alert("Errore di connessione."); }
+        }
+    );
 }
 
 function handleMealClick(mealId) {

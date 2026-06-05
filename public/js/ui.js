@@ -1,5 +1,97 @@
 import { formatDate } from './utils.js?v=11';
 
+// --- RENDER HOME DASHBOARD (RIEPILOGO) ---
+// --- RENDER HOME DASHBOARD (RIEPILOGO) ---
+export function renderHomeDashboard(container, stats, waterGlasses, consumedCal, goalCal, onFlameClick, onCalorieClick, onWaterUpdate, onStartWorkout, onAddManualMeal) {
+    const dateOpts = { weekday: 'long', day: 'numeric', month: 'long' };
+    let dateStr = new Date().toLocaleDateString('it-IT', dateOpts);
+    dateStr = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+
+    const remainingCal = Math.max(0, goalCal - consumedCal);
+
+    let dropsHtml = '';
+    for (let i = 1; i <= 8; i++) {
+        const isFull = i <= waterGlasses;
+        dropsHtml += `<svg data-index="${i}" class="water-drop-btn w-7 h-7 cursor-pointer active:scale-90 transition-transform ${isFull ? 'text-[#60A5FA]' : 'text-gray-200'}" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2c-5.33 5.58-8 9.24-8 12.83A8.04 8.04 0 0012 22a8.04 8.04 0 008-7.17C20 11.24 17.33 7.58 12 2z"/></svg>`;
+    }
+
+    container.innerHTML = `
+        <header class="pt-12 pb-2 px-6 sticky top-0 z-10 bg-[#f9fafb]/90 backdrop-blur-md">
+            <h1 class="text-[28px] font-black text-gray-900 tracking-tight">Ciao Andrea! 👋</h1>
+            <p class="text-sm font-medium text-gray-400 mt-0.5">${dateStr}</p>
+        </header>
+
+        <main class="p-5 space-y-5 pb-24 safe-pb">
+            <div class="grid grid-cols-2 gap-4">
+                <div id="home-flame-card" class="bg-white p-5 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center text-center cursor-pointer active:scale-95 transition-transform">
+                    <span class="font-bold text-gray-800 text-sm mb-3 flex items-center gap-1">Fiamma <span class="text-lg">🔥</span></span>
+                    <div class="text-[40px] mb-2 drop-shadow-md ${stats.activeToday ? 'animate-bounce' : 'grayscale opacity-50'}">🔥</div>
+                    <p class="text-sm font-bold text-gray-900">${stats.currentStreak} Giorni Attivi</p>
+                    <p class="text-[11px] font-medium text-gray-400 mt-1">Record: ${stats.longestStreak} gg</p>
+                </div>
+                
+                <div id="home-calorie-card" class="bg-white p-5 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center text-center cursor-pointer active:scale-95 transition-transform">
+                    <span class="font-bold text-gray-800 text-sm mb-3 flex items-center gap-1">Calorie <span class="text-yellow-400 text-lg">⚡</span></span>
+                    <div class="w-14 h-14 rounded-full border-[4px] border-gray-100 border-t-gray-800 flex items-center justify-center mb-2">
+                        <svg class="w-5 h-5 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <p class="text-sm font-bold text-gray-900">${Number(consumedCal).toFixed(0)} <span class="text-xs font-normal text-gray-500">/ ${goalCal}</span></p>
+                    <p class="text-[11px] font-medium text-gray-400 mt-1">${Number(remainingCal).toFixed(0)} rimaste</p>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="font-bold text-gray-800 flex items-center gap-1.5 text-sm">
+                        Idratazione <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2c-5.33 5.58-8 9.24-8 12.83A8.04 8.04 0 0012 22a8.04 8.04 0 008-7.17C20 11.24 17.33 7.58 12 2z"/></svg>
+                    </span>
+                    <span class="text-[11px] font-bold text-gray-500">${waterGlasses * 250} ml / 2000 ml</span>
+                </div>
+                
+                <div class="flex justify-between items-center px-1 mb-4">
+                    ${dropsHtml}
+                </div>
+                
+                <div class="flex justify-between px-2">
+                    <button id="water-minus-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-1.5 rounded-lg font-bold text-sm transition-colors active:scale-90">-</button>
+                    <button id="water-plus-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-1.5 rounded-lg font-bold text-sm transition-colors active:scale-90">+</button>
+                </div>
+            </div>
+
+            <div class="space-y-3 pt-2">
+                <h3 class="text-[13px] font-bold text-gray-800 ml-1">Quick Actions</h3>
+                
+                <button id="home-start-workout-btn" class="w-full bg-black text-white font-bold text-[15px] py-4 rounded-[18px] shadow-[0_8px_20px_rgb(0,0,0,0.15)] flex justify-center items-center gap-2 transition-transform active:scale-95">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Inizia Allenamento
+                </button>
+                
+                <button id="home-add-meal-btn" class="w-full bg-[#f3f4f6] text-gray-800 font-bold text-[15px] py-4 rounded-[18px] flex justify-center items-center gap-2 transition-transform active:scale-95">
+                    <svg class="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.898 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                    Aggiungi Pasto
+                </button>
+            </div>
+        </main>
+    `;
+
+    document.getElementById('home-flame-card').addEventListener('click', onFlameClick);
+    document.getElementById('home-calorie-card').addEventListener('click', onCalorieClick); // NUOVO
+    document.getElementById('home-start-workout-btn').addEventListener('click', onStartWorkout);
+    document.getElementById('home-add-meal-btn').addEventListener('click', onAddManualMeal);
+
+    container.querySelectorAll('.water-drop-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.currentTarget.dataset.index, 10);
+            let newTotal = index;
+            if (index === waterGlasses) newTotal = index - 1;
+            onWaterUpdate(newTotal);
+        });
+    });
+
+    document.getElementById('water-minus-btn').addEventListener('click', () => { if (waterGlasses > 0) onWaterUpdate(waterGlasses - 1); });
+    document.getElementById('water-plus-btn').addEventListener('click', () => { if (waterGlasses < 8) onWaterUpdate(waterGlasses + 1); });
+}
+
 // --- RENDER LISTA SCHEDE (HOME) ---
 export function renderRoutinesList(container, routines, onOpenRoutine, onCreateRoutine, onEditRoutineName, onDeleteRoutine) {
     container.innerHTML = `
@@ -917,7 +1009,7 @@ export function renderStreakModal(stats) {
 
     modal.innerHTML = `
         <div class="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl transform scale-95 transition-transform duration-300 relative border border-gray-100">
-            <button id="close-streak-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
+            <button id="close-streak-btn" class="absolute top-4 right-4 z-50 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
             
@@ -964,4 +1056,87 @@ export function renderStreakModal(stats) {
 
     document.getElementById('close-streak-btn').addEventListener('click', closeModal);
     document.getElementById('awesome-btn').addEventListener('click', closeModal);
+}
+
+// --- RENDER MODALE ANTEPRIMA PREFERITO ---
+export function renderFavoritePreviewModal(favMeal, onConfirm, onUnfavorite) {
+    const modalId = 'fav-preview-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = "fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
+
+    modal.innerHTML = `
+        <div class="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl transform scale-95 transition-transform duration-300 relative border border-gray-100">
+            
+            <button id="remove-fav-btn" class="absolute top-4 left-4 z-50 text-yellow-500 hover:text-yellow-600 bg-yellow-50 p-2 rounded-full active:scale-90 transition-transform">
+                <svg class="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.898 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
+            </button>
+
+            <button id="close-fav-preview" class="absolute top-4 right-4 z-50 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <div class="mt-2 mb-6 text-center">
+                <span class="text-[10px] font-bold bg-blue-100 text-blue-600 px-2 py-1 rounded uppercase tracking-wider">${favMeal.pasto}</span>
+                <h2 class="text-2xl font-black text-gray-900 mt-3 leading-tight">${favMeal.alimenti}</h2>
+            </div>
+            
+            <div class="space-y-4 mb-8">
+                <div class="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <span class="text-xs font-bold text-gray-500 uppercase">Calorie</span>
+                    <span class="text-xl font-black text-gray-900">${Number(favMeal.calorie).toFixed(1)} kcal</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="bg-blue-50 p-2 rounded-xl flex flex-col items-center border border-blue-100">
+                        <p class="text-[10px] font-bold text-blue-500 uppercase">Pro</p>
+                        <p class="text-sm font-black text-blue-700">${Number(favMeal.proteine).toFixed(1)}g</p>
+                    </div>
+                    <div class="bg-green-50 p-2 rounded-xl flex flex-col items-center border border-green-100">
+                        <p class="text-[10px] font-bold text-green-500 uppercase">Car</p>
+                        <p class="text-sm font-black text-green-700">${Number(favMeal.carboidrati).toFixed(1)}g</p>
+                    </div>
+                    <div class="bg-yellow-50 p-2 rounded-xl flex flex-col items-center border border-yellow-100">
+                        <p class="text-[10px] font-bold text-yellow-600 uppercase">Fat</p>
+                        <p class="text-sm font-black text-yellow-700">${Number(favMeal.grassi).toFixed(1)}g</p>
+                    </div>
+                </div>
+            </div>
+
+            <button id="confirm-fav-btn" class="w-full bg-blue-600 text-white font-black text-[15px] py-4 rounded-[18px] shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Aggiungi a Oggi
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('scale-95');
+    });
+
+    const closeModal = () => {
+        modal.classList.add('opacity-0');
+        modal.querySelector('div').classList.add('scale-95');
+        setTimeout(() => modal.remove(), 300);
+    };
+
+    document.getElementById('close-fav-preview').addEventListener('click', closeModal);
+
+    document.getElementById('confirm-fav-btn').addEventListener('click', () => {
+        closeModal();
+        onConfirm();
+    });
+
+    // Evento per la rimozione del preferito
+    document.getElementById('remove-fav-btn').addEventListener('click', () => {
+        if (window.confirm("Vuoi davvero rimuovere questo pasto dai Preferiti?")) {
+            closeModal();
+            onUnfavorite();
+        }
+    });
 }
