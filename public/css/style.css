@@ -22,22 +22,19 @@ input[type="number"] {
    ========================================== */
 
 html, body {
-    position: fixed;
-    top: 0; 
-    left: 0; 
-    right: 0; 
-    bottom: 0;
+    /* Rimossa la "position: fixed" che sollevava la navbar dal fondo reale */
     width: 100%; 
-    height: 100%;
+    height: 100dvh; /* Utilizziamo dvh (dynamic viewport height) per adattarsi all'UI del browser */
     overflow: hidden;
     overscroll-behavior: none;
     touch-action: pan-x pan-y;
     background-color: #f9fafb;
+    margin: 0;
 }
 
 #app {
     width: 100%; 
-    height: 100%;
+    height: 100dvh;
     overflow-y: auto; 
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -48,7 +45,7 @@ html, body {
     display: none;
 }
 
-/* NAVBAR INFALLIBILE PER iOS */
+/* NAVBAR INFALLIBILE PER iOS E ANDROID */
 .ios-bottom-nav {
     position: fixed;
     bottom: 0;
@@ -65,7 +62,10 @@ html, body {
     display: flex;
     justify-content: space-around;
     align-items: center;
+    
+    /* Spaziatura simmetrica abbassata */
     padding-top: 12px;
-    /* La magia matematica: aggiunge l'area di iOS + 8px di respiro ai bottoni */
-    padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 8px); 
+    /* Usa un fallback di 0px, aggiungendo 12px simmetrici per bilanciare il top.
+       Se sei su iPhone, aggiungerà automaticamente lo spazio in più necessario per la barra di scorrimento (Home Indicator) */
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); 
 }
