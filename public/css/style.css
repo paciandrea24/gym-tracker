@@ -45,28 +45,3 @@ html, body {
     display: none;
 }
 
-/* NAVBAR INFALLIBILE PER iOS E ANDROID */
-.ios-bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    margin: 0 auto;
-    width: 100%;
-    max-width: 28rem; /* Corrisponde al max-w-md di Tailwind */
-    background-color: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-top: 1px solid #e5e7eb;
-    z-index: 9999;
-    display: flex;
-    justify-content: space-around;
-    
-    /* Centra i bottoni verticalmente nell'area calcolata */
-    align-items: center; 
-    
-    /* IL TRUCCO: Fissiamo un'area utile di 60px e riempiamo solo l'area di sistema in basso */
-    height: calc(60px + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    padding-top: 0px; 
-}
