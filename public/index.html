@@ -26,38 +26,41 @@
     <div id="app" class="max-w-md mx-auto bg-gray-50 min-h-screen shadow-2xl relative overflow-x-hidden pb-20">
     </div>
 
-    <nav class="fixed bottom-0 left-0 right-0 z-[9999] w-full max-w-md mx-auto bg-white/95 backdrop-blur-xl border-t border-gray-200 flex justify-around items-center"
-        style="padding-bottom: env(safe-area-inset-bottom); height: calc(54px + env(safe-area-inset-bottom));">
+    <nav class="fixed bottom-0 left-0 right-0 z-[9999] w-full max-w-md mx-auto bg-white/95 backdrop-blur-xl border-t border-gray-200"
+        style="padding-bottom: env(safe-area-inset-bottom);">
 
-        <button id="nav-home"
-            class="flex flex-col items-center justify-end pb-1 w-full h-full text-[#4F46E5] transition-colors">
-            <svg class="w-6 h-6 mb-0.5" fill="currentColor" viewBox="0 0 24 24">
-                <path
-                    d="M11.47 3.84a.75.75 0 011.06 0l8.99 9a.75.75 0 11-1.06 1.06l-1.21-1.22V20.5a1.5 1.5 0 01-1.5 1.5h-4.5v-5.25a.75.75 0 00-.75-.75h-1.5a.75.75 0 00-.75.75v5.25h-4.5a1.5 1.5 0 01-1.5-1.5v-7.82l-1.21 1.22a.75.75 0 11-1.06-1.06l8.99-9z">
-                </path>
-            </svg>
-            <span class="text-[10px] font-bold leading-none">Riepilogo</span>
-        </button>
+        <div class="flex justify-around items-center h-[55px] px-2">
 
-        <button id="nav-gym"
-            class="flex flex-col items-center justify-end pb-1 w-full h-full text-gray-400 hover:text-gray-600 transition-colors">
-            <svg class="w-6 h-6 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3">
-                </path>
-            </svg>
-            <span class="text-[10px] font-bold leading-none">Palestra</span>
-        </button>
+            <button id="nav-home"
+                class="flex flex-col items-center justify-center w-[70px] h-full text-[#4F46E5] transition-colors">
+                <svg class="w-6 h-6 mb-0.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path
+                        d="M11.47 3.84a.75.75 0 011.06 0l8.99 9a.75.75 0 11-1.06 1.06l-1.21-1.22V20.5a1.5 1.5 0 01-1.5 1.5h-4.5v-5.25a.75.75 0 00-.75-.75h-1.5a.75.75 0 00-.75.75v5.25h-4.5a1.5 1.5 0 01-1.5-1.5v-7.82l-1.21 1.22a.75.75 0 11-1.06-1.06l8.99-9z">
+                    </path>
+                </svg>
+                <span class="text-[10px] font-bold leading-none">Riepilogo</span>
+            </button>
 
-        <button id="nav-nutri"
-            class="flex flex-col items-center justify-end pb-1 w-full h-full text-gray-400 hover:text-gray-600 transition-colors">
-            <svg class="w-6 h-6 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
-            </svg>
-            <span class="text-[10px] font-bold leading-none">Nutrizione</span>
-        </button>
+            <button id="nav-gym"
+                class="flex flex-col items-center justify-center w-[70px] h-full text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-6 h-6 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3">
+                    </path>
+                </svg>
+                <span class="text-[10px] font-bold leading-none">Palestra</span>
+            </button>
 
+            <button id="nav-nutri"
+                class="flex flex-col items-center justify-center w-[70px] h-full text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-6 h-6 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
+                </svg>
+                <span class="text-[10px] font-bold leading-none">Nutrizione</span>
+            </button>
+
+        </div>
     </nav>
 
     <script type="module" src="./js/app.js?v=20"></script>
