@@ -9,7 +9,7 @@ export function renderRoutinesList(container, routines, onOpenRoutine, onCreateR
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             </button>
         </header>
-        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
             ${routines.length === 0 ? `
                 <div class="text-center py-10">
                     <p class="text-gray-500 font-medium">Nessuna scheda presente.</p>
@@ -162,7 +162,7 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                 <button id="tab-storico" class="flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${currentTab === 'storico' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}">Storico</button>
             </div>
         </header>
-        <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
             ${contentHtml}
         </main>
     `;
@@ -198,7 +198,7 @@ export function renderActiveSession(container, session, routine, onExerciseClick
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
             </div>
         </header>
-        <main class="p-4 space-y-4 pb-32 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-4 pb-32 safe-pb bg-gray-50">
             ${todoIds.length === 0 ? `
                 <div class="text-center py-10">
                     <div class="text-6xl mb-4">🏆</div>
@@ -242,7 +242,7 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">Nuovo Esercizio</h1>
         </header>
-        <main class="p-4 space-y-4 bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-4 bg-gray-50">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Nome Esercizio</label>
@@ -355,7 +355,7 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">${exercise.name}</h1>
         </header>
-        <main class="p-4 pb-32 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 pb-32 safe-pb bg-gray-50">
             ${lastSessionHtml}
             <div class="space-y-4">
                 ${currentSessionData.map((set, idx) => {
@@ -679,7 +679,7 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite) {
                 <svg class="w-6 h-6" fill="${meal.isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.898 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
             </button>
         </header>
-        <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50">
             
             <div class="bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-100">
                 <div class="flex items-center justify-between mb-4">
@@ -731,7 +731,7 @@ export function renderManualMealForm(container, onSave, onCancel) {
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">Pasto Manuale</h1>
         </header>
-        <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb min-h-screen">
+        <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Pasto (es. Colazione)</label>
@@ -811,7 +811,7 @@ export function renderExerciseStats(container, exerciseName, labels, weightData,
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">Progresso</h1>
         </header>
-        <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50 min-h-screen">
+        <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50">
             <h2 class="text-2xl font-black text-gray-900 px-1 mb-2">${exerciseName}</h2>
             
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -856,7 +856,7 @@ export function renderEditGoalsForm(container, currentGoals, onSave, onCancel) {
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">Obiettivi Nutrizionali</h1>
         </header>
-        <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb min-h-screen">
+        <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Calorie Giornaliere</label>

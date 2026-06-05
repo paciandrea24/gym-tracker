@@ -16,3 +16,33 @@ input[type="number"] {
 * {
     -webkit-tap-highlight-color: transparent;
 }
+
+/* ==========================================
+   BLOCCO SCROLL GLOBALE (EFFETTO APP NATIVA)
+   ========================================== */
+
+html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden; /* Congela la pagina esterna */
+    overscroll-behavior: none; /* Disattiva il rimbalzo elastico di iOS */
+    touch-action: pan-x pan-y;
+}
+
+#app {
+    height: 100dvh; /* dynamic viewport height */
+    width: 100%;
+    overflow-y: auto; /* Consente lo scorrimento solo qui dentro se necessario */
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; /* Rende lo scroll fluido su iOS */
+    overscroll-behavior-y: contain; /* Impedisce il rimbalzo */
+}
+
+/* Nascondi la scrollbar per #app */
+#app::-webkit-scrollbar {
+    display: none; /* Chrome, Safari e Opera */
+}
+#app {
+    -ms-overflow-style: none;  /* IE e Edge */
+    scrollbar-width: none;  /* Firefox */
+}
