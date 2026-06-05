@@ -1,7 +1,6 @@
 import { formatDate } from './utils.js?v=11';
 
 // --- RENDER HOME DASHBOARD (RIEPILOGO) ---
-// --- RENDER HOME DASHBOARD (RIEPILOGO) ---
 export function renderHomeDashboard(container, stats, waterGlasses, consumedCal, goalCal, onFlameClick, onCalorieClick, onWaterUpdate, onStartWorkout, onAddManualMeal) {
     const dateOpts = { weekday: 'long', day: 'numeric', month: 'long' };
     let dateStr = new Date().toLocaleDateString('it-IT', dateOpts);
@@ -21,22 +20,22 @@ export function renderHomeDashboard(container, stats, waterGlasses, consumedCal,
             <p class="text-sm font-medium text-gray-400 mt-0.5">${dateStr}</p>
         </header>
 
-        <main class="p-5 space-y-5 pb-24 safe-pb">
+        <main class="p-5 space-y-5 pb-24 bg-[#f9fafb]">
             <div class="grid grid-cols-2 gap-4">
-                <div id="home-flame-card" class="bg-white p-5 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center text-center cursor-pointer active:scale-95 transition-transform">
-                    <span class="font-bold text-gray-800 text-sm mb-3 flex items-center gap-1">Fiamma <span class="text-lg">🔥</span></span>
-                    <div class="text-[40px] mb-2 drop-shadow-md ${stats.activeToday ? 'animate-bounce' : 'grayscale opacity-50'}">🔥</div>
-                    <p class="text-sm font-bold text-gray-900">${stats.currentStreak} Giorni Attivi</p>
-                    <p class="text-[11px] font-medium text-gray-400 mt-1">Record: ${stats.longestStreak} gg</p>
+                <div id="home-flame-card" class="bg-white p-4 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center text-center aspect-square cursor-pointer active:scale-95 transition-transform">
+                    <span class="font-bold text-gray-800 text-xs mb-1 flex items-center gap-1">Fiamma <span class="text-sm">🔥</span></span>
+                    <div class="text-[40px] mb-1 drop-shadow-md ${stats.activeToday ? 'animate-bounce' : 'grayscale opacity-50'}">🔥</div>
+                    <p class="text-[13px] font-bold text-gray-900 leading-tight">${stats.currentStreak} Giorni</p>
+                    <p class="text-[10px] font-medium text-gray-400 mt-0.5">Record: ${stats.longestStreak} gg</p>
                 </div>
                 
-                <div id="home-calorie-card" class="bg-white p-5 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center text-center cursor-pointer active:scale-95 transition-transform">
-                    <span class="font-bold text-gray-800 text-sm mb-3 flex items-center gap-1">Calorie <span class="text-yellow-400 text-lg">⚡</span></span>
-                    <div class="w-14 h-14 rounded-full border-[4px] border-gray-100 border-t-gray-800 flex items-center justify-center mb-2">
-                        <svg class="w-5 h-5 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <div id="home-calorie-card" class="bg-white p-4 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center text-center aspect-square cursor-pointer active:scale-95 transition-transform">
+                    <span class="font-bold text-gray-800 text-xs mb-1 flex items-center gap-1">Calorie <span class="text-yellow-400 text-sm">⚡</span></span>
+                    <div class="w-12 h-12 rounded-full border-[3px] border-gray-100 border-t-gray-800 flex items-center justify-center mb-1">
+                        <svg class="w-4 h-4 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                     </div>
-                    <p class="text-sm font-bold text-gray-900">${Number(consumedCal).toFixed(0)} <span class="text-xs font-normal text-gray-500">/ ${goalCal}</span></p>
-                    <p class="text-[11px] font-medium text-gray-400 mt-1">${Number(remainingCal).toFixed(0)} rimaste</p>
+                    <p class="text-[13px] font-bold text-gray-900 leading-tight">${Number(consumedCal).toFixed(0)} <span class="text-[10px] font-normal text-gray-500">/ ${goalCal}</span></p>
+                    <p class="text-[10px] font-medium text-gray-400 mt-0.5">${Number(remainingCal).toFixed(0)} rimaste</p>
                 </div>
             </div>
 
@@ -59,7 +58,7 @@ export function renderHomeDashboard(container, stats, waterGlasses, consumedCal,
             </div>
 
             <div class="space-y-3 pt-2">
-                <h3 class="text-[13px] font-bold text-gray-800 ml-1">Quick Actions</h3>
+                <h3 class="text-[13px] font-bold text-gray-800 ml-1">Azioni Rapide</h3>
                 
                 <button id="home-start-workout-btn" class="w-full bg-black text-white font-bold text-[15px] py-4 rounded-[18px] shadow-[0_8px_20px_rgb(0,0,0,0.15)] flex justify-center items-center gap-2 transition-transform active:scale-95">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -75,7 +74,7 @@ export function renderHomeDashboard(container, stats, waterGlasses, consumedCal,
     `;
 
     document.getElementById('home-flame-card').addEventListener('click', onFlameClick);
-    document.getElementById('home-calorie-card').addEventListener('click', onCalorieClick); // NUOVO
+    document.getElementById('home-calorie-card').addEventListener('click', onCalorieClick);
     document.getElementById('home-start-workout-btn').addEventListener('click', onStartWorkout);
     document.getElementById('home-add-meal-btn').addEventListener('click', onAddManualMeal);
 
