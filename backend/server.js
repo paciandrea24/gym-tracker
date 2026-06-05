@@ -29,6 +29,7 @@ const IngredientSchema = new mongoose.Schema({
 const MealSchema = new mongoose.Schema({
     pasto: String, alimenti: String, calorie: Number, proteine: Number, grassi: Number, carboidrati: Number,
     ingredienti: [IngredientSchema], // Novità: Array degli ingredienti
+    isFavorite: { type: Boolean, default: false },
     data: { type: Date, default: Date.now }
 });
 const Meal = mongoose.model('Meal', MealSchema);
@@ -46,13 +47,14 @@ const History = mongoose.model('History', HistorySchema);
 
 // --- MODELLO DATABASE PER LA FIAMMA (STREAK) ---
 const StreakSchema = new mongoose.Schema({
-    userId: { type: String, default: 'admin' }, // Essendo l'app tua, usiamo un utente fisso
+    userId: { type: String, default: 'admin' },
     currentStreak: { type: Number, default: 0 },
-    lastActiveDate: { type: String, default: '' } // Salveremo la data nel formato YYYY-MM-DD
+    lastActiveDate: { type: String, default: '' },
+    longestStreak: { type: Number, default: 0 }, // NUOVO: Record Personale
+    totalDaysActive: { type: Number, default: 0 } // NUOVO: Giorni totali di utilizzo
 });
 const Streak = mongoose.model('Streak', StreakSchema);
 
-// Funzione di supporto per avere sempre la data italiana (evita bug di fuso orario sul server)
 function getItalyDateStr(offsetDays = 0) {
     const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
     d.setDate(d.getDate() + offsetDays);
@@ -67,7 +69,7 @@ app.get('/api/streak', async (req, res) => {
 
         let streak = await Streak.findOne({ userId: 'admin' });
         if (!streak) {
-            return res.json({ currentStreak: 0, activeToday: false });
+            return res.json({ currentStreak: 0, activeToday: false, longestStreak: 0, totalDaysActive: 0 });
         }
 
         let activeToday = (streak.lastActiveDate === todayStr);
@@ -78,13 +80,18 @@ app.get('/api/streak', async (req, res) => {
             current = 0;
         }
 
-        res.json({ currentStreak: current, activeToday });
+        res.json({
+            currentStreak: current,
+            activeToday,
+            longestStreak: streak.longestStreak,
+            totalDaysActive: streak.totalDaysActive
+        });
     } catch (e) {
         res.status(500).json({ error: "Errore streak" });
     }
 });
 
-// --- API: INFIAMMA (TRIGGER QUANDO SALVI PASTO/ALLENAMENTO) ---
+// --- API: INFIAMMA (TRIGGER) E AGGIORNA STATISTICHE ---
 app.post('/api/streak/trigger', async (req, res) => {
     try {
         const todayStr = getItalyDateStr(0);
@@ -92,29 +99,35 @@ app.post('/api/streak/trigger', async (req, res) => {
 
         let streak = await Streak.findOne({ userId: 'admin' });
 
-        // Se non esiste, lo crea al giorno 1
         if (!streak) {
-            streak = new Streak({ userId: 'admin', currentStreak: 1, lastActiveDate: todayStr });
+            streak = new Streak({
+                userId: 'admin', currentStreak: 1, lastActiveDate: todayStr,
+                longestStreak: 1, totalDaysActive: 1
+            });
             await streak.save();
-            return res.json({ currentStreak: 1, activeToday: true });
+            return res.json({ currentStreak: 1, activeToday: true, longestStreak: 1, totalDaysActive: 1 });
         }
 
-        // Se è già attivo oggi, non fa nulla (evita che la fiamma salga di 2 in un giorno)
         if (streak.lastActiveDate === todayStr) {
-            return res.json({ currentStreak: streak.currentStreak, activeToday: true });
+            return res.json({ currentStreak: streak.currentStreak, activeToday: true, longestStreak: streak.longestStreak, totalDaysActive: streak.totalDaysActive });
         }
 
-        // Se l'ultima volta è stata ieri, aumenta di 1! Altrimenti, riparte da 1.
         if (streak.lastActiveDate === yesterdayStr) {
             streak.currentStreak += 1;
         } else {
             streak.currentStreak = 1;
         }
 
+        // AGGIORNAMENTO RECORD E GIORNI TOTALI
+        streak.totalDaysActive += 1;
+        if (streak.currentStreak > streak.longestStreak) {
+            streak.longestStreak = streak.currentStreak;
+        }
+
         streak.lastActiveDate = todayStr;
         await streak.save();
 
-        res.json({ currentStreak: streak.currentStreak, activeToday: true });
+        res.json({ currentStreak: streak.currentStreak, activeToday: true, longestStreak: streak.longestStreak, totalDaysActive: streak.totalDaysActive });
     } catch (e) {
         res.status(500).json({ error: "Errore salvataggio streak" });
     }
@@ -216,6 +229,38 @@ app.get('/api/today-meals', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
+// --- API PREFERITI (CAROSELLO) ---
+app.put('/api/meals/:id/favorite', async (req, res) => {
+    try {
+        const { isFavorite } = req.body;
+        const meal = await Meal.findByIdAndUpdate(req.params.id, { isFavorite }, { returnDocument: 'after' });
+        res.json({ success: true, meal });
+    } catch (error) {
+        res.status(500).json({ success: false });
+    }
+});
+
+app.get('/api/favorites', async (req, res) => {
+    try {
+        // Cerca i pasti preferiti, dal più recente
+        const favs = await Meal.find({ isFavorite: true }).sort({ data: -1 });
+
+        // Rimuove i doppioni: se hai salvato 2 volte "Caffè", te lo mostra 1 sola volta nel carosello
+        const uniqueFavs = [];
+        const seen = new Set();
+        for (let f of favs) {
+            const nomeLower = f.alimenti.toLowerCase();
+            if (!seen.has(nomeLower)) {
+                seen.add(nomeLower);
+                uniqueFavs.push(f);
+            }
+        }
+        res.json(uniqueFavs);
+    } catch (error) {
+        res.status(500).json([]);
+    }
+});
+
 app.delete('/api/meals/:id', async (req, res) => {
     try {
         await Meal.findByIdAndDelete(req.params.id);
@@ -236,8 +281,9 @@ app.delete('/api/meals/:id', async (req, res) => {
 
             // Se la fiamma era stata attivata oggi, facciamo "Rollback" (Marcia indietro)
             if (streak && streak.lastActiveDate === todayStr) {
-                streak.currentStreak = Math.max(0, streak.currentStreak - 1); // Abbassa di 1 (senza andare sotto zero)
-                streak.lastActiveDate = getItalyDateStr(-1); // Riportiamo l'ultimo giorno attivo a ieri
+                streak.currentStreak = Math.max(0, streak.currentStreak - 1);
+                streak.totalDaysActive = Math.max(0, streak.totalDaysActive - 1); // <-- AGGIUNGI QUESTA RIGA
+                streak.lastActiveDate = getItalyDateStr(-1);
                 await streak.save();
             }
         }
@@ -258,7 +304,7 @@ app.get('/api/history', async (req, res) => {
 
 // --- API PALESTRA (Novità Cloud) ---
 app.get('/api/gym/routines', async (req, res) => {
-    try { const routines = await Routine.find(); res.json(routines); } catch (e) { res.status(500).json([]); }
+    try { const routines = await Routine.findOneAndUpdate({ id: r.id }, r, { upsert: true, returnDocument: 'after' }); } catch (e) { res.status(500).json([]); }
 });
 
 app.post('/api/gym/routines', async (req, res) => {

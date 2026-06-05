@@ -17,6 +17,7 @@ let currentRecognition = null;
 let finalTranscript = "";
 let currentNutriTab = 'oggi';
 let currentMealsData = [];
+let currentFavorites = [];
 let codeReader = null;
 
 // ==========================================
@@ -26,6 +27,12 @@ function init() {
     setupNavigation();
     loadCurrentModule();
     fetchStreak();
+
+    // Aggiungiamo il click listener al container della fiamma
+    const streakContainer = document.getElementById('streak-container');
+    if (streakContainer) {
+        streakContainer.addEventListener('click', showStreakModal);
+    }
 }
 
 function setupNavigation() {
@@ -74,49 +81,72 @@ function loadCurrentModule() {
 // ==========================================
 
 async function showNutritionDashboard() {
-    appContainer.innerHTML = `
-        <div class="flex items-center justify-center min-h-screen">
-            <p class="text-gray-500 font-bold animate-pulse">Caricamento dati dal server...</p>
-        </div>
-    `;
-
+    appContainer.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento dati...</p></div>`;
     try {
         const url = currentNutriTab === 'oggi' ? '/api/today-meals' : '/api/history';
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Errore del server");
 
-        const mealsData = await response.json();
-        currentMealsData = mealsData;
+        // Scarichiamo in parallelo i pasti e i preferiti
+        const [mealsRes, favsRes] = await Promise.all([fetch(url), fetch('/api/favorites')]);
+        if (!mealsRes.ok) throw new Error("Errore del server");
+
+        currentMealsData = await mealsRes.json();
+        currentFavorites = await favsRes.json();
         const goals = storage.getNutritionGoals();
 
         ui.renderNutritionDashboard(
-            appContainer, mealsData, goals, currentNutriTab,
+            appContainer, currentMealsData, goals, currentNutriTab, currentFavorites,
             (tab) => { currentNutriTab = tab; showNutritionDashboard(); },
-            handleMicRecord,
-            handleManualMealClick,
-            handleDeleteMeal,
-            handleEditGoals,
-            handleMealClick,
-            handleScanClick,     // Funzione apertura scanner
-            handleCloseScanner   // Funzione chiusura scanner
+            handleMicRecord, handleManualMealClick, handleDeleteMeal, handleEditGoals,
+            handleMealClick, handleScanClick, handleCloseScanner,
+            handleAddFavorite // <-- NUOVA FUNZIONE
         );
-
-    } catch (error) {
-        appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`;
-    }
+    } catch (error) { appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`; }
 }
 
 function handleMealClick(mealId) {
+    const meal = currentMealsData.find(m => String(m._id) === String(mealId));
+    if (meal) ui.renderMealDetails(appContainer, meal, showNutritionDashboard, handleToggleFavorite);
+}
+
+async function handleToggleFavorite(mealId, newStatus) {
     try {
-        const meal = currentMealsData.find(m => String(m._id) === String(mealId));
-        if (!meal) {
-            alert("Errore: Pasto non trovato nei dati in memoria.");
-            return;
+        const res = await fetch(`/api/meals/${mealId}/favorite`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isFavorite: newStatus })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            // Aggiorna in memoria e ricarica la vista dettaglio
+            const mealIndex = currentMealsData.findIndex(m => String(m._id) === String(mealId));
+            if (mealIndex > -1) currentMealsData[mealIndex] = data.meal;
+            handleMealClick(mealId);
         }
-        ui.renderMealDetails(appContainer, meal, showNutritionDashboard);
-    } catch (error) {
-        alert("Errore durante l'apertura del pasto: " + error.message);
-    }
+    } catch (e) { alert("Errore salvataggio preferito."); }
+}
+
+async function handleAddFavorite(favId) {
+    const favMeal = currentFavorites.find(m => String(m._id) === String(favId));
+    if (!favMeal) return;
+
+    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Aggiunta pasto rapido...</div>`;
+
+    // Crea un nuovo pasto copiando i dati del preferito
+    const newMealData = {
+        pasto: favMeal.pasto, alimenti: favMeal.alimenti, calorie: favMeal.calorie,
+        proteine: favMeal.proteine, carboidrati: favMeal.carboidrati, grassi: favMeal.grassi,
+        ingredienti: favMeal.ingredienti
+    };
+
+    try {
+        const response = await fetch('/api/meals', {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newMealData)
+        });
+        if (response.ok) {
+            showNutritionDashboard();
+            triggerStreak();
+        } else alert("Errore nel salvataggio");
+    } catch (e) { alert("Errore di connessione"); }
 }
 
 function handleManualMealClick() {
@@ -648,6 +678,16 @@ function updateStreakUI(count, activeToday, playAnimation = false) {
         countEl.classList.add('text-gray-400');
         container.classList.remove('border-orange-200', 'bg-orange-50');
         container.classList.add('bg-gray-50', 'border-gray-100');
+    }
+}
+
+export async function showStreakModal() {
+    try {
+        const res = await fetch('/api/streak');
+        const stats = await res.json();
+        ui.renderStreakModal(stats);
+    } catch (e) {
+        console.error("Impossibile caricare le statistiche", e);
     }
 }
 

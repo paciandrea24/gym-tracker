@@ -431,8 +431,8 @@ export function updateFeedback(setId, status) {
     else statusEl.className = 'text-xs text-gray-400 font-medium transition-colors';
 }
 
-// --- RENDER NUTRIZIONE (LIVE SCANNER) ---
-export function renderNutritionDashboard(container, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner) {
+// --- RENDER NUTRIZIONE (LIVE SCANNER E CAROSELLO) ---
+export function renderNutritionDashboard(container, mealsData, goals, currentTab, favorites, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAddFavoriteClick) {
     let contentHtml = '';
     const checkIcon = `<svg class="w-4 h-4 text-green-400 inline-block ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
 
@@ -487,6 +487,24 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg> Scannerizza
                 </button>
             </div>
+
+            ${favorites && favorites.length > 0 ? `
+            <div class="mb-5">
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1">
+                    <svg class="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.898 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                    Pasti Rapidi
+                </h2>
+                <div class="flex overflow-x-auto space-x-3 pb-2 -mx-4 px-4 snap-x">
+                    ${favorites.map(fav => `
+                        <button data-fav-id="${fav._id}" class="fav-meal-btn snap-start shrink-0 bg-white border border-yellow-200 shadow-sm p-3 rounded-2xl text-left min-w-[140px] max-w-[160px] active:scale-95 transition-transform">
+                            <h4 class="font-bold text-gray-800 truncate">${fav.alimenti}</h4>
+                            <p class="text-[10px] bg-gray-100 text-gray-600 inline-block px-2 py-0.5 rounded mt-1">${fav.pasto}</p>
+                            <p class="text-xs font-black text-gray-900 mt-1">${Number(fav.calorie).toFixed(1)} kcal</p>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
 
             <div class="flex justify-between items-end mb-3">
                 <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Pasti di oggi</h2>
@@ -617,11 +635,15 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
         container.querySelectorAll('.meal-row').forEach(row => {
             row.addEventListener('click', () => onMealClick(row.dataset.id));
         });
+
+        container.querySelectorAll('.fav-meal-btn').forEach(btn => {
+            btn.addEventListener('click', () => onAddFavoriteClick(btn.dataset.favId));
+        });
     }
 }
 
-// --- RENDER DETTAGLIO PASTO (CON INGREDIENTI) ---
-export function renderMealDetails(container, meal, onBack) {
+// --- RENDER DETTAGLIO PASTO (CON INGREDIENTI E PREFERITI) ---
+export function renderMealDetails(container, meal, onBack, onToggleFavorite) {
     const dateObj = new Date(meal.data);
     const dateStr = dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
     const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
@@ -646,11 +668,16 @@ export function renderMealDetails(container, meal, onBack) {
     }
 
     container.innerHTML = `
-        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
-            <button id="back-meal-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
+            <div class="flex items-center">
+                <button id="back-meal-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <h1 class="text-xl font-bold text-gray-900 truncate">Dettagli Pasto</h1>
+            </div>
+            <button id="toggle-fav-btn" data-is-fav="${meal.isFavorite ? 'true' : 'false'}" class="p-2 rounded-full ${meal.isFavorite ? 'text-yellow-500 bg-yellow-50' : 'text-gray-400 bg-gray-100'} active:scale-95 transition-all">
+                <svg class="w-6 h-6" fill="${meal.isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.898 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
             </button>
-            <h1 class="text-xl font-bold text-gray-900 truncate">Dettagli Pasto</h1>
         </header>
         <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50 min-h-screen">
             
@@ -689,6 +716,10 @@ export function renderMealDetails(container, meal, onBack) {
     `;
 
     document.getElementById('back-meal-btn').addEventListener('click', onBack);
+    document.getElementById('toggle-fav-btn').addEventListener('click', (e) => {
+        const isFav = e.currentTarget.dataset.isFav === 'true';
+        onToggleFavorite(meal._id, !isFav); // Inverte lo stato inviando l'opposto di quello attuale
+    });
 }
 
 // --- RENDER FORM PASTO MANUALE ---
@@ -868,4 +899,69 @@ export function renderEditGoalsForm(container, currentGoals, onSave, onCancel) {
             alert("Inserisci valori validi superiori a zero.");
         }
     });
+}
+
+// --- RENDER MODALE STATISTICHE FIAMMA ---
+export function renderStreakModal(stats) {
+    const modalId = 'streak-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = "fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
+
+    const message = stats.activeToday
+        ? "Sei on fire! 🔥 Non spezzare la catena!"
+        : "Accendi la fiamma oggi! Registra un pasto o un allenamento.";
+
+    modal.innerHTML = `
+        <div class="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl transform scale-95 transition-transform duration-300 relative border border-gray-100">
+            <button id="close-streak-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <div class="text-center mb-8 mt-4">
+                <div class="text-7xl mb-4 ${stats.activeToday ? 'animate-bounce drop-shadow-md' : 'grayscale opacity-50'}">🔥</div>
+                <h2 class="text-2xl font-black text-gray-900 tracking-tight">La Tua Costanza</h2>
+                <p class="text-sm font-medium text-gray-500 mt-2 px-4 leading-relaxed">${message}</p>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="bg-orange-50 border border-orange-100 p-4 rounded-2xl flex justify-between items-center shadow-sm">
+                    <span class="font-bold text-orange-800">Fiamma Attuale</span>
+                    <span class="text-2xl font-black text-orange-600">${stats.currentStreak} <span class="text-sm font-bold text-orange-400">gg</span></span>
+                </div>
+                <div class="bg-gray-50 border border-gray-100 p-4 rounded-2xl flex justify-between items-center shadow-sm">
+                    <span class="font-bold text-gray-700">Record Personale</span>
+                    <span class="text-xl font-black text-gray-900">🏆 ${stats.longestStreak} <span class="text-sm font-bold text-gray-400">gg</span></span>
+                </div>
+                <div class="bg-gray-50 border border-gray-100 p-4 rounded-2xl flex justify-between items-center shadow-sm">
+                    <span class="font-bold text-gray-700">Giorni Totali</span>
+                    <span class="text-xl font-black text-gray-900">📅 ${stats.totalDaysActive} <span class="text-sm font-bold text-gray-400">gg</span></span>
+                </div>
+            </div>
+            
+            <button id="awesome-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg mt-8 active:scale-95 transition-transform">
+                Continua Così!
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Animazione di entrata
+    requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('scale-95');
+    });
+
+    const closeModal = () => {
+        modal.classList.add('opacity-0');
+        modal.querySelector('div').classList.add('scale-95');
+        setTimeout(() => modal.remove(), 300);
+    };
+
+    document.getElementById('close-streak-btn').addEventListener('click', closeModal);
+    document.getElementById('awesome-btn').addEventListener('click', closeModal);
 }
