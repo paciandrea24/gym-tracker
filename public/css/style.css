@@ -61,11 +61,12 @@ html, body {
     z-index: 9999;
     display: flex;
     justify-content: space-around;
-    align-items: center;
     
-    /* Spaziatura simmetrica abbassata */
-    padding-top: 12px;
-    /* Usa un fallback di 0px, aggiungendo 12px simmetrici per bilanciare il top.
-       Se sei su iPhone, aggiungerà automaticamente lo spazio in più necessario per la barra di scorrimento (Home Indicator) */
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); 
+    /* Centra i bottoni verticalmente nell'area calcolata */
+    align-items: center; 
+    
+    /* IL TRUCCO: Fissiamo un'area utile di 60px e riempiamo solo l'area di sistema in basso */
+    height: calc(60px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-top: 0px; 
 }
