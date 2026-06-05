@@ -304,13 +304,15 @@ app.get('/api/history', async (req, res) => {
 
 // --- API PALESTRA (Novità Cloud) ---
 app.get('/api/gym/routines', async (req, res) => {
-    try { const routines = await Routine.findOneAndUpdate({ id: r.id }, r, { upsert: true, returnDocument: 'after' }); } catch (e) { res.status(500).json([]); }
+    // QUI ERA L'ERRORE: Ora legge di nuovo correttamente tutte le schede con .find()
+    try { const routines = await Routine.find(); res.json(routines); } catch (e) { res.status(500).json([]); }
 });
 
 app.post('/api/gym/routines', async (req, res) => {
     try {
         const r = req.body;
-        await Routine.findOneAndUpdate({ id: r.id }, r, { upsert: true, new: true });
+        // QUI VA LA CORREZIONE DI MONGOOSE (returnDocument: 'after' al posto di new: true)
+        await Routine.findOneAndUpdate({ id: r.id }, r, { upsert: true, returnDocument: 'after' });
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false }); }
 });
