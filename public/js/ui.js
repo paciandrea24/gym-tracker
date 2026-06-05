@@ -1,4 +1,4 @@
-import { formatDate } from './utils.js?v=11';
+import { formatDate } from './utils.js?v=20';
 
 // --- RENDER HOME DASHBOARD (RIEPILOGO) ---
 export function renderHomeDashboard(container, stats, waterGlasses, consumedCal, goalCal, onFlameClick, onCalorieClick, onWaterUpdate, onStartWorkout, onAddManualMeal) {
