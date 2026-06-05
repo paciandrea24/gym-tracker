@@ -24,7 +24,7 @@ export function renderHomeDashboard(container, stats, waterGlasses, consumedCal,
             <div class="grid grid-cols-2 gap-4">
                 <div id="home-flame-card" class="bg-white p-4 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center text-center aspect-square cursor-pointer active:scale-95 transition-transform">
                     <span class="font-bold text-gray-800 text-xs mb-1 flex items-center gap-1">Fiamma <span class="text-sm">🔥</span></span>
-                    <div class="text-[40px] mb-1 drop-shadow-md ${stats.activeToday ? 'animate-bounce' : 'grayscale opacity-50'}">🔥</div>
+                    <div class="text-[40px] mb-1 drop-shadow-md ${stats.activeToday ? '' : 'grayscale opacity-50'}">🔥</div>
                     <p class="text-[13px] font-bold text-gray-900 leading-tight">${stats.currentStreak} Giorni</p>
                     <p class="text-[10px] font-medium text-gray-400 mt-0.5">Record: ${stats.longestStreak} gg</p>
                 </div>
