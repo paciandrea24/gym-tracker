@@ -145,7 +145,8 @@ async function showNutritionDashboard() {
             handleMealClick,
             () => handleScanClick(), // Chiamata senza ID per creare un nuovo pasto
             handleCloseScanner,
-            handlePreviewFavorite
+            handlePreviewFavorite,
+            handleAskAI
         );
 
         // 2. ORA che l'HTML è presente nella pagina, agganciamo il listener al nuovo bottone dei preferiti
@@ -952,6 +953,66 @@ function handleEditSet(idx) {
         appContainer, currentExercise, currentLastSession, currentSessionData,
         handleInput, handleCompleteExercise, showActiveSession, handleSaveSet, handleEditSet
     );
+}
+
+// --- GESTIONE NUTRIZIONISTA AI ---
+function handleAskAI() {
+    ui.renderAIModal(async (question, callbackResults) => {
+
+        // Calcoliamo i macro consumati OGGI per passarli a Gemini
+        const goals = storage.getNutritionGoals();
+        let consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
+        const todayStr = new Date().toDateString();
+
+        currentMealsData.forEach(meal => {
+            if (new Date(meal.data).toDateString() === todayStr) {
+                consumate.calorie += Number(meal.calorie) || 0;
+                consumate.proteine += Number(meal.proteine) || 0;
+                consumate.carbo += Number(meal.carboidrati) || 0;
+                consumate.grassi += Number(meal.grassi) || 0;
+            }
+        });
+
+        try {
+            const response = await fetch('/api/recommend-meal', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question, goals, consumate })
+            });
+
+            const data = await response.json();
+            if (data.success && data.recommendations) {
+                // Passa l'array dei 3 pasti alla UI
+                callbackResults(data.recommendations);
+            } else {
+                alert(data.error || "Impossibile elaborare i consigli. Riprova.");
+                showNutritionDashboard(); // Chiude e resetta
+            }
+        } catch (error) {
+            alert("Errore di connessione al server.");
+            showNutritionDashboard();
+        }
+
+    }, async (mealDataToSave) => {
+        // Callback attivata quando l'utente preme "Salva nel Diario" su una card
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio pasto in corso...</div>`;
+        try {
+            const response = await fetch('/api/meals', {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(mealDataToSave)
+            });
+            if (response.ok) {
+                showNutritionDashboard();
+                triggerStreak();
+            } else {
+                alert("Errore nel salvataggio del pasto.");
+                showNutritionDashboard();
+            }
+        } catch (e) {
+            alert("Errore di connessione");
+            showNutritionDashboard();
+        }
+    });
 }
 
 document.addEventListener('DOMContentLoaded', init);

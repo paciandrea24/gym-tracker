@@ -545,7 +545,7 @@ export function updateFeedback(setId, status) {
 }
 
 // --- RENDER NUTRIZIONE (LIVE SCANNER E CAROSELLO) ---
-export function renderNutritionDashboard(container, mealsData, goals, currentTab, favorites, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAddFavoriteClick) {
+export function renderNutritionDashboard(container, mealsData, goals, currentTab, favorites, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAddFavoriteClick, onAskAI) {
     let contentHtml = '';
     const checkIcon = `<svg class="w-4 h-4 text-green-400 inline-block ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
 
@@ -588,10 +588,16 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                 </div>
             </div>
 
-            <button id="mic-btn" class="w-full bg-gray-900 text-white font-black text-xl py-4 rounded-2xl shadow-xl active:scale-95 transition-transform flex justify-center items-center gap-2 mb-3">
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                REGISTRA VOCE
-            </button>
+            <div class="flex gap-3 mb-3">
+                <button id="mic-btn" class="flex-1 bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    VOCE
+                </button>
+                <button id="ask-ai-btn" class="flex-1 bg-indigo-600 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(79,70,229,0.25)] active:scale-95 transition-transform flex justify-center items-center gap-2">
+                    <span class="text-lg leading-none">✨</span>
+                    CHIEDI ALL'IA
+                </button>
+            </div>
             
             <div id="scanner-container" class="hidden mb-6 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
                 <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra il codice a barre</p>
@@ -725,6 +731,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
 
     if (currentTab === 'oggi') {
         document.getElementById('mic-btn').addEventListener('click', onMicClick);
+        document.getElementById('ask-ai-btn').addEventListener('click', onAskAI);
         document.getElementById('manual-meal-btn').addEventListener('click', onManualClick);
 
         document.getElementById('scan-btn').addEventListener('click', onScanClick);
@@ -1205,4 +1212,173 @@ export function renderFavoritesPage(container, favorites, onBack, onAddFavoriteC
     `;
     document.getElementById('back-fav-btn').addEventListener('click', onBack);
     container.querySelectorAll('.fav-meal-btn').forEach(btn => btn.addEventListener('click', () => onAddFavoriteClick(btn.dataset.favId)));
+}
+
+// --- RENDER MODALE NUTRIZIONISTA AI (CAROSELLO + VARIANTI) ---
+export function renderAIModal(onAsk, onSaveMeal) {
+    const modalId = 'ai-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = "fixed inset-0 z-[100] flex items-end justify-center bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
+
+    modal.innerHTML = `
+        <div class="bg-white w-full max-w-md rounded-t-[2rem] p-6 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col h-[90vh]">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-black text-gray-900 flex items-center gap-2">
+                    <span class="text-indigo-600 text-2xl">✨</span> Nutrizionista AI
+                </h2>
+                <button id="close-ai-modal" class="text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div id="ai-content-area" class="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                <div id="ai-selection-view">
+                    <p class="text-[15px] font-bold text-gray-700 mb-4">Per quale pasto ti serve un consiglio?</p>
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Colazione">Colazione</button>
+                        <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Pranzo">Pranzo</button>
+                        <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Cena">Cena</button>
+                        <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Spuntino">Spuntino</button>
+                    </div>
+                    
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Ingrediente base (opzionale)</label>
+                    <input type="text" id="ai-extra-input" placeholder="Es. Voglio usare le uova..." class="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-[15px] font-bold focus:ring-2 focus:ring-indigo-600 outline-none transition-all mb-6">
+                </div>
+
+                <div id="ai-loading-view" class="hidden flex-col items-center justify-center py-10 h-full">
+                    <div class="text-5xl mb-6 animate-bounce">🤔</div>
+                    <p class="text-gray-500 font-bold animate-pulse text-center leading-relaxed">Sto incastrando i tuoi macro<br>e spulciando il tuo storico...</p>
+                </div>
+
+                <div id="ai-results-view" class="hidden h-full flex-col">
+                    <p class="text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-3 flex items-center justify-between">
+                        Opzioni Trovate <span>Scorri <span class="text-lg leading-none">↔</span></span>
+                    </p>
+                    <div id="ai-carousel" class="flex overflow-x-auto space-x-4 pb-4 -mx-6 px-6 snap-x [&::-webkit-scrollbar]:hidden">
+                        </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('div').classList.remove('translate-y-full');
+    });
+
+    const closeModal = () => {
+        modal.classList.add('opacity-0');
+        modal.querySelector('div').classList.add('translate-y-full');
+        setTimeout(() => modal.remove(), 300);
+    };
+
+    document.getElementById('close-ai-modal').addEventListener('click', closeModal);
+
+    // Logica dei bottoni per lanciare la richiesta
+    let selectedType = null;
+    modal.querySelectorAll('.ai-meal-type-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            selectedType = e.currentTarget.dataset.type;
+            const extra = document.getElementById('ai-extra-input').value.trim();
+            const question = `Pasto: ${selectedType}. ${extra ? 'Voglio usare per forza: ' + extra : ''}`;
+
+            document.getElementById('ai-selection-view').classList.add('hidden');
+            document.getElementById('ai-loading-view').classList.remove('hidden', 'flex-col');
+            document.getElementById('ai-loading-view').classList.add('flex', 'flex-col');
+
+            onAsk(question, (recommendations) => {
+                document.getElementById('ai-loading-view').classList.add('hidden');
+                document.getElementById('ai-results-view').classList.remove('hidden', 'flex-col');
+                document.getElementById('ai-results-view').classList.add('flex', 'flex-col');
+                renderCarousel(recommendations, selectedType);
+            });
+        });
+    });
+
+    // Funzione che renderizza le Card nel Carosello
+    function renderCarousel(recommendations, tipoPasto) {
+        const carousel = document.getElementById('ai-carousel');
+        carousel.innerHTML = '';
+
+        // Teniamo traccia dello stato di ogni card (Principale o Variante)
+        let currentViews = recommendations.map(() => 'main');
+
+        recommendations.forEach((rec, idx) => {
+            const card = document.createElement('div');
+            card.className = "snap-center shrink-0 w-[88%] bg-white border border-gray-100 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] p-5 flex flex-col relative";
+
+            const renderCardContent = (viewState) => {
+                const data = viewState === 'main' ? rec : rec.variante;
+                const bgColor = viewState === 'main' ? 'bg-indigo-50 text-indigo-700' : 'bg-orange-50 text-orange-700';
+                const toggleText = viewState === 'main' ? '🔄 Variante' : '🔙 Originale';
+
+                return `
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="text-[10px] font-black ${bgColor} px-2.5 py-1.5 rounded-lg uppercase tracking-wider">${viewState === 'main' ? 'Opzione ' + (idx + 1) : 'Variante ' + (idx + 1)}</span>
+                        <button class="toggle-variant-btn text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-xl active:scale-95 transition-transform">${toggleText}</button>
+                    </div>
+                    
+                    <h3 class="text-xl font-black text-gray-900 leading-tight mb-2">${data.nomePasto}</h3>
+                    <p class="text-[13px] font-medium text-gray-500 mb-5 leading-relaxed">${data.messaggio}</p>
+
+                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-2xl border border-gray-100 mb-5">
+                        <div class="text-center"><p class="text-[10px] font-bold text-gray-400 uppercase">Kcal</p><p class="font-black text-gray-900">${data.totaleCalorie}</p></div>
+                        <div class="text-center"><p class="text-[10px] font-bold text-blue-400 uppercase">Pro</p><p class="font-black text-blue-700">${data.totaleProteine}g</p></div>
+                        <div class="text-center"><p class="text-[10px] font-bold text-green-500 uppercase">Car</p><p class="font-black text-green-700">${data.totaleCarbo}g</p></div>
+                        <div class="text-center"><p class="text-[10px] font-bold text-yellow-600 uppercase">Fat</p><p class="font-black text-yellow-700">${data.totaleGrassi}g</p></div>
+                    </div>
+
+                    <div class="flex-1 mb-6">
+                        <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 border-b border-gray-100 pb-2">Ingredienti</p>
+                        <ul class="space-y-2">
+                            ${data.ingredienti.map(ing => `
+                                <li class="flex justify-between items-center text-[13px]">
+                                    <span class="font-medium text-gray-700 truncate pr-2">${ing.nome}</span>
+                                    <span class="font-bold text-gray-900">${ing.calorie} <span class="text-[10px] font-normal text-gray-400">kcal</span></span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+
+                    <button class="save-ai-meal-btn w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-md active:scale-95 transition-transform flex justify-center items-center gap-2 mt-auto">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Salva nel Diario
+                    </button>
+                `;
+            };
+
+            card.innerHTML = renderCardContent(currentViews[idx]);
+
+            // Listener per il click sui bottoni di QUESTA specifica card
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.toggle-variant-btn')) {
+                    currentViews[idx] = currentViews[idx] === 'main' ? 'variant' : 'main';
+                    card.innerHTML = renderCardContent(currentViews[idx]);
+                } else if (e.target.closest('.save-ai-meal-btn')) {
+                    const dataToSave = currentViews[idx] === 'main' ? rec : rec.variante;
+
+                    const finalMeal = {
+                        pasto: tipoPasto,
+                        alimenti: dataToSave.nomePasto,
+                        calorie: dataToSave.totaleCalorie,
+                        proteine: dataToSave.totaleProteine,
+                        carboidrati: dataToSave.totaleCarbo,
+                        grassi: dataToSave.totaleGrassi,
+                        ingredienti: dataToSave.ingredienti
+                    };
+
+                    onSaveMeal(finalMeal);
+                    closeModal();
+                }
+            });
+
+            carousel.appendChild(card);
+        });
+    }
 }

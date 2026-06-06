@@ -267,6 +267,82 @@ app.get('/api/today-meals', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
+// --- API: CONSIGLIERE NUTRIZIONALE BASATO SUI GUSTI (OPZIONE B) ---
+app.post('/api/recommend-meal', async (req, res) => {
+    try {
+        const { question, goals, consumate } = req.body;
+
+        // 1. Recupera gli ultimi 50 pasti per estrapolare la lista dei cibi abituali (i tuoi gusti)
+        const recentMeals = await Meal.find().sort({ data: -1 }).limit(50);
+        const ingredientiAbituali = [...new Set(recentMeals.map(m => m.alimenti))].join(', ');
+
+        // 2. Calcolo dei macro rimanenti (aiutiamo l'IA facendole noi la matematica base)
+        const rimanenti = {
+            calorie: Math.max(0, goals.calorie - consumate.calorie),
+            proteine: Math.max(0, goals.proteine - consumate.proteine),
+            carbo: Math.max(0, goals.carbo - consumate.carbo),
+            grassi: Math.max(0, goals.grassi - consumate.grassi)
+        };
+
+        const model = genAI.getGenerativeModel({
+            model: "gemini-3.5-flash",
+            generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const prompt = `Sei il mio nutrizionista personale AI. L'app è usata solo da me.
+        I miei OBIETTIVI RIMANENTI per la giornata di oggi sono circa: ${rimanenti.calorie.toFixed(0)} kcal, ${rimanenti.proteine.toFixed(0)}g Proteine, ${rimanenti.carbo.toFixed(0)}g Carbo, ${rimanenti.grassi.toFixed(0)}g Grassi.
+        
+        I miei GUSTI (cibi che mangio abitualmente): ${ingredientiAbituali || 'Usa cibi comuni, sani e semplici'}.
+        
+        La mia richiesta: "${question}"
+        
+        REGOLE FONDAMENTALI:
+        1. Genera esattamente 3 opzioni di pasto principali, ben distinte tra loro (es. una a base di carne, una di pesce/uova, una vegetariana o abbinamento diverso).
+        2. I pasti devono rispettare il più possibile i macro RIMANENTI senza sforare troppo in eccesso.
+        3. Per ogni pasto principale, genera 1 "variante" diretta (es: cambia la fonte proteica o la fonte di carboidrati, mantenendo i macro totali molto simili).
+        4. Sii realistico e umano con le porzioni (es. un pasto non deve avere 400g di pollo per raggiungere le proteine, se i macro rimanenti sono troppi proponi un pasto normale e usa il "messaggio" per consigliarmi di fare uno spuntino extra dopo).
+        
+        Restituisci SOLO un array JSON con questa esatta struttura:
+        [
+          {
+            "nomePasto": "Nome del pasto 1",
+            "totaleCalorie": 0,
+            "totaleProteine": 0,
+            "totaleCarbo": 0,
+            "totaleGrassi": 0,
+            "messaggio": "Breve frase motivazionale o consiglio su questo pasto.",
+            "ingredienti": [
+              { "nome": "Ingrediente 1 (quantità in g)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
+            ],
+            "variante": {
+              "nomePasto": "Variante del pasto 1",
+              "totaleCalorie": 0,
+              "totaleProteine": 0,
+              "totaleCarbo": 0,
+              "totaleGrassi": 0,
+              "messaggio": "Motivo per scegliere questa variante (es. più veloce, senza carne, ecc.).",
+              "ingredienti": [
+                { "nome": "Ingrediente alternativo (quantità)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
+              ]
+            }
+          }
+        ]`;
+
+        const result = await model.generateContent(prompt);
+        let jsonText = result.response.text();
+
+        // Pulizia preventiva (nel caso Gemini aggiunga formattazione markdown per errore)
+        jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+        const recommendations = JSON.parse(jsonText);
+
+        res.json({ success: true, recommendations });
+    } catch (error) {
+        console.error("Errore AI Recommender:", error);
+        res.status(500).json({ success: false, error: "Impossibile generare consigli in questo momento." });
+    }
+});
+
 // --- API PREFERITI (CAROSELLO) ---
 app.put('/api/meals/:id/favorite', async (req, res) => {
     try {
