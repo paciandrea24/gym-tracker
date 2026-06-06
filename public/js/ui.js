@@ -403,15 +403,15 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
 }
 
 // --- HELPER INPUT CONTROLLI +/- ---
-function generateAdjustableInput(idx, field, value, step, label) {
+function generateAdjustableInput(idx, field, value, step, label, isCompleted = false) {
     return `
         <div class="flex-1">
             <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">${label}</label>
-            <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-gray-900 transition-shadow">
+            <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden transition-shadow ${isCompleted ? 'opacity-50 pointer-events-none' : 'focus-within:ring-2 focus-within:ring-gray-900'}">
                 <button class="adjust-btn p-3 text-gray-500 hover:bg-gray-100 active:bg-gray-200" data-action="minus" data-idx="${idx}" data-field="${field}" data-step="${step}">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"></path></svg>
                 </button>
-                <input type="number" inputmode="decimal" data-idx="${idx}" data-field="${field}" value="${value}" placeholder="0" class="set-input w-full text-center text-xl font-bold bg-transparent outline-none appearance-none m-0 p-0">
+                <input type="number" inputmode="decimal" data-idx="${idx}" data-field="${field}" value="${value}" placeholder="0" class="set-input w-full text-center text-xl font-bold bg-transparent outline-none appearance-none m-0 p-0" ${isCompleted ? 'disabled' : ''}>
                 <button class="adjust-btn p-3 text-gray-500 hover:bg-gray-100 active:bg-gray-200" data-action="plus" data-idx="${idx}" data-field="${field}" data-step="${step}">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
                 </button>
@@ -421,7 +421,7 @@ function generateAdjustableInput(idx, field, value, step, label) {
 }
 
 // --- RENDER ESERCIZIO ATTIVO ---
-export function renderActiveExercise(container, exercise, lastSession, currentSessionData, onInput, onComplete, onBack) {
+export function renderActiveExercise(container, exercise, lastSession, currentSessionData, onInput, onComplete, onBack, onSaveSet, onEditSet) {
     let lastSessionHtml = '';
 
     if (lastSession) {
@@ -450,28 +450,27 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             ${lastSessionHtml}
             <div class="space-y-4">
                 ${currentSessionData.map((set, idx) => {
+        const isCompleted = set.completed;
+        const setStatus = isCompleted ? 'Salvata ✓' : 'Pronto';
         let inputHtml = '';
-        if (exercise.type === 'cardio') {
-            inputHtml = generateAdjustableInput(idx, 'reps', set.reps, 1, 'Minuti');
-        } else if (exercise.type === 'corpo-libero') {
-            inputHtml = generateAdjustableInput(idx, 'reps', set.reps, 1, 'Ripetizioni');
-        } else {
-            inputHtml = `
-                            <div class="flex space-x-4">
-                                ${generateAdjustableInput(idx, 'kg', set.kg, 1.25, 'Kg')}
-                                ${generateAdjustableInput(idx, 'reps', set.reps, 1, 'Reps')}
-                            </div>
-                        `;
+        if (exercise.type === 'cardio') inputHtml = generateAdjustableInput(idx, 'reps', set.reps, 1, 'Minuti', isCompleted);
+        else if (exercise.type === 'corpo-libero') inputHtml = generateAdjustableInput(idx, 'reps', set.reps, 1, 'Ripetizioni', isCompleted);
+        else {
+            inputHtml = `<div class="flex space-x-4">${generateAdjustableInput(idx, 'kg', set.kg, 1.25, 'Kg', isCompleted)}${generateAdjustableInput(idx, 'reps', set.reps, 1, 'Reps', isCompleted)}</div>`;
         }
         return `
-                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border ${isCompleted ? 'border-green-200 bg-green-50/30' : 'border-gray-100'}">
                         <div class="flex justify-between items-center mb-4">
                             <h4 class="font-bold text-gray-800">${exercise.type === 'cardio' ? 'Obiettivo' : 'Serie ' + (idx + 1)}</h4>
-                            <span id="status-${idx}" class="text-xs text-gray-400 font-medium transition-colors">Pronto</span>
+                            <span id="status-${idx}" class="text-xs ${isCompleted ? 'text-green-600' : 'text-gray-400'} font-bold transition-colors">${setStatus}</span>
                         </div>
                         ${inputHtml}
-                    </div>
-                    `;
+                        ${!isCompleted ? `
+                            <button class="save-set-btn w-full mt-5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 rounded-xl active:scale-95 transition-transform" data-idx="${idx}">Salva Serie</button>
+                        ` : `
+                            <button class="edit-set-btn w-full mt-5 bg-white border border-gray-200 text-gray-500 font-bold py-2.5 rounded-xl active:scale-95 transition-transform" data-idx="${idx}">Modifica Serie</button>
+                        `}
+                    </div>`;
     }).join('')}
             </div>
         </main>
@@ -479,7 +478,7 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
         <div class="fixed bottom-[76px] left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto safe-pb z-20">
             <button id="complete-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                Segna come Fatto
+                Termina Esercizio
             </button>
         </div>
     `;
@@ -511,7 +510,30 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             onInput(idx, field, currentValue);
         });
     });
+
+    container.querySelectorAll('.adjust-btn').forEach(btn => { /* Lasciala identica */
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(btn.dataset.idx, 10);
+            const field = btn.dataset.field;
+            const step = parseFloat(btn.dataset.step);
+            const action = btn.dataset.action;
+
+            const inputElement = container.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
+            let currentValue = parseFloat(inputElement.value) || 0;
+
+            if (action === 'plus') currentValue += step;
+            else if (action === 'minus') currentValue = Math.max(0, currentValue - step);
+
+            currentValue = parseFloat(currentValue.toFixed(2));
+            inputElement.value = currentValue;
+            onInput(idx, field, currentValue);
+        });
+    });
+
+    container.querySelectorAll('.save-set-btn').forEach(btn => btn.addEventListener('click', (e) => onSaveSet(parseInt(e.currentTarget.dataset.idx, 10))));
+    container.querySelectorAll('.edit-set-btn').forEach(btn => btn.addEventListener('click', (e) => onEditSet(parseInt(e.currentTarget.dataset.idx, 10))));
 }
+
 
 export function updateFeedback(setId, status) {
     const statusEl = document.getElementById(`status-${setId}`);
@@ -575,27 +597,13 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                     ➕ Manuale
                 </button>
                 <button id="scan-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg> Scannerizza
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg> Scanner
+                </button>
+                <button id="favorites-page-btn" class="flex-1 bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                    ⭐ Preferiti
                 </button>
             </div>
 
-            ${favorites && favorites.length > 0 ? `
-            <div class="mb-5">
-                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1">
-                    <svg class="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.898 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                    Pasti Rapidi
-                </h2>
-                <div class="flex overflow-x-auto space-x-3 pb-2 -mx-4 px-4 snap-x">
-                    ${favorites.map(fav => `
-                        <button data-fav-id="${fav._id}" class="fav-meal-btn snap-start shrink-0 bg-white border border-yellow-200 shadow-sm p-3 rounded-2xl text-left min-w-[140px] max-w-[160px] active:scale-95 transition-transform">
-                            <h4 class="font-bold text-gray-800 truncate">${fav.alimenti}</h4>
-                            <p class="text-[10px] bg-gray-100 text-gray-600 inline-block px-2 py-0.5 rounded mt-1">${fav.pasto}</p>
-                            <p class="text-xs font-black text-gray-900 mt-1">${Number(fav.calorie).toFixed(1)} kcal</p>
-                        </button>
-                    `).join('')}
-                </div>
-            </div>
-            ` : ''}
 
             <div class="flex justify-between items-end mb-3">
                 <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Pasti di oggi</h2>
@@ -734,7 +742,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
 }
 
 // --- RENDER DETTAGLIO PASTO (CON INGREDIENTI E PREFERITI) ---
-export function renderMealDetails(container, meal, onBack, onToggleFavorite) {
+export function renderMealDetails(container, meal, onBack, onToggleFavorite, onAddVoice, onAddScan, onCloseScanner, onRemoveIngredient, onAddManual) {
     const dateObj = new Date(meal.data);
     const dateStr = dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
     const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
@@ -743,15 +751,20 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite) {
     if (meal.ingredienti && meal.ingredienti.length > 0) {
         ingredientsHtml = `
             <div class="pt-6 border-t border-gray-100">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Ingredienti Ricavati</h3>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Ingredienti</h3>
                 <div class="space-y-3">
-                    ${meal.ingredienti.map(ing => `
+                    ${meal.ingredienti.map((ing, idx) => `
                         <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
-                            <div>
-                                <h4 class="text-sm font-bold text-gray-800">${ing.nome}</h4>
+                            <div class="flex-1 truncate pr-2">
+                                <h4 class="text-sm font-bold text-gray-800 truncate">${ing.nome}</h4>
                                 <p class="text-[10px] font-bold text-gray-500 mt-1">${Number(ing.proteine).toFixed(1)}g P • ${Number(ing.carboidrati).toFixed(1)}g C • ${Number(ing.grassi).toFixed(1)}g G</p>
                             </div>
-                            <span class="font-bold text-gray-900 text-sm">${Number(ing.calorie).toFixed(1)} kcal</span>
+                            <div class="flex items-center flex-shrink-0">
+                                <span class="font-bold text-gray-900 text-sm">${Number(ing.calorie).toFixed(1)} kcal</span>
+                                <button data-idx="${idx}" class="remove-ing-btn ml-3 p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-110 transition-transform">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
@@ -777,7 +790,19 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite) {
                     <span class="text-xs font-bold bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-wider">${meal.pasto}</span>
                     <span class="text-xs text-gray-400 font-medium">${dateStr} - ${timeStr}</span>
                 </div>
-                <h2 class="text-2xl font-black text-gray-900 mb-8 leading-tight">${meal.alimenti}</h2>
+                <h2 class="text-2xl font-black text-gray-900 leading-tight">${meal.alimenti}</h2>
+                
+                <div id="action-buttons" class="flex space-x-2 my-5">
+                    <button id="add-voice-meal-btn" class="flex-1 bg-gray-900 text-white font-bold text-xs py-3 rounded-xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-1">🎙️ Voce</button>
+                    <button id="add-scan-meal-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">📸 Scan</button>
+                    <button id="add-manual-meal-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">➕ Manuale</button>
+                </div>
+
+                <div id="scanner-container" class="hidden mb-6 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
+                    <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra il codice a barre</p>
+                    <video id="reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[250px]" autoplay playsinline></video>
+                    <button id="close-scanner-btn" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla Scansione</button>
+                </div>
                 
                 <div class="space-y-6">
                     <div class="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
@@ -809,7 +834,15 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite) {
     document.getElementById('back-meal-btn').addEventListener('click', onBack);
     document.getElementById('toggle-fav-btn').addEventListener('click', (e) => {
         const isFav = e.currentTarget.dataset.isFav === 'true';
-        onToggleFavorite(meal._id, !isFav); // Inverte lo stato inviando l'opposto di quello attuale
+        onToggleFavorite(meal._id, !isFav);
+    });
+    document.getElementById('add-voice-meal-btn').addEventListener('click', onAddVoice);
+    document.getElementById('add-scan-meal-btn').addEventListener('click', onAddScan);
+    document.getElementById('add-manual-meal-btn').addEventListener('click', onAddManual); // <-- Nuovo Listener
+    document.getElementById('close-scanner-btn').addEventListener('click', onCloseScanner);
+
+    container.querySelectorAll('.remove-ing-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => onRemoveIngredient(parseInt(e.currentTarget.dataset.idx, 10)));
     });
 }
 
@@ -1138,4 +1171,32 @@ export function renderFavoritePreviewModal(favMeal, onConfirm, onUnfavorite) {
             onUnfavorite();
         }
     });
+}
+
+export function renderFavoritesPage(container, favorites, onBack, onAddFavoriteClick) {
+    container.innerHTML = `
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
+            <button id="back-fav-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <h1 class="text-xl font-bold text-gray-900 truncate">I Miei Preferiti</h1>
+        </header>
+        <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb min-h-screen">
+            ${favorites.length === 0 ? `
+                <div class="text-center py-10 text-gray-500 font-medium">Nessun pasto preferito salvato.</div>
+            ` : favorites.map(fav => `
+                <button data-fav-id="${fav._id}" class="fav-meal-btn w-full bg-white border border-yellow-200 shadow-sm p-4 rounded-2xl text-left active:scale-95 transition-transform flex justify-between items-center">
+                    <div>
+                        <h4 class="font-bold text-gray-800 text-lg">${fav.alimenti}</h4>
+                        <p class="text-[10px] bg-gray-100 text-gray-600 inline-block px-2 py-0.5 rounded mt-1">${fav.pasto}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-black text-gray-900">${Number(fav.calorie).toFixed(1)} kcal</p>
+                    </div>
+                </button>
+            `).join('')}
+        </main>
+    `;
+    document.getElementById('back-fav-btn').addEventListener('click', onBack);
+    container.querySelectorAll('.fav-meal-btn').forEach(btn => btn.addEventListener('click', () => onAddFavoriteClick(btn.dataset.favId)));
 }

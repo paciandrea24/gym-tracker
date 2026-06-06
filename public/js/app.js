@@ -19,6 +19,8 @@ let currentNutriTab = 'oggi';
 let currentMealsData = [];
 let currentFavorites = [];
 let codeReader = null;
+let activeScannerTargetMealId = null;
+let currentLastSession = null;
 
 // ==========================================
 // INIZIALIZZAZIONE E NAVIGAZIONE
@@ -132,22 +134,34 @@ async function showNutritionDashboard() {
         currentFavorites = await favsResponse.json();
         const goals = storage.getNutritionGoals();
 
+        // 1. Renderizziamo l'interfaccia principale (inserisce l'HTML nel container)
         ui.renderNutritionDashboard(
             appContainer, mealsData, goals, currentNutriTab, currentFavorites,
             (tab) => { currentNutriTab = tab; showNutritionDashboard(); },
-            handleMicRecord,
+            () => handleMicRecord(), // Chiamata senza ID per creare un nuovo pasto
             handleManualMealClick,
             handleDeleteMeal,
             handleEditGoals,
             handleMealClick,
-            handleScanClick,
+            () => handleScanClick(), // Chiamata senza ID per creare un nuovo pasto
             handleCloseScanner,
-            handlePreviewFavorite // <--- ORA CHIAMA L'ANTEPRIMA INVECE CHE AGGIUNGERE DIRETTAMENTE
+            handlePreviewFavorite
         );
+
+        // 2. ORA che l'HTML è presente nella pagina, agganciamo il listener al nuovo bottone dei preferiti
+        const favoritesPageBtn = document.getElementById('favorites-page-btn');
+        if (favoritesPageBtn) {
+            favoritesPageBtn.addEventListener('click', showFavoritesPage);
+        }
 
     } catch (error) {
         appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`;
     }
+}
+
+// Nuova funzione da aggiungere sotto a showNutritionDashboard
+function showFavoritesPage() {
+    ui.renderFavoritesPage(appContainer, currentFavorites, showNutritionDashboard, handlePreviewFavorite);
 }
 
 // Apre la modale e aspetta la conferma
@@ -179,9 +193,68 @@ function handlePreviewFavorite(favId) {
     );
 }
 
+// Aggiorna handleMealClick per supportare le nuove callback
 function handleMealClick(mealId) {
     const meal = currentMealsData.find(m => String(m._id) === String(mealId));
-    if (meal) ui.renderMealDetails(appContainer, meal, showNutritionDashboard, handleToggleFavorite);
+    if (meal) {
+        ui.renderMealDetails(
+            appContainer,
+            meal,
+            showNutritionDashboard,
+            handleToggleFavorite,
+            () => handleMicRecord(mealId),
+            () => handleScanClick(mealId),
+            handleCloseScanner,
+            (ingIdx) => handleRemoveIngredient(mealId, ingIdx),
+            () => handleManualMealClick(mealId) // <-- Passiamo l'ID al form manuale per l'aggiunta rapida
+        );
+    }
+}
+
+// NUOVA FUNZIONE: Elimina un ingrediente specifico ricalcolando i macronutrienti
+async function handleRemoveIngredient(mealId, ingIdx) {
+    if (!window.confirm("Vuoi rimuovere questo alimento dal pasto?")) return;
+
+    const meal = currentMealsData.find(m => String(m._id) === String(mealId));
+    if (!meal) return;
+
+    const ingToRemove = meal.ingredienti[ingIdx];
+    if (!ingToRemove) return;
+
+    // Sottrae i macronutrienti stando attento a non scendere sotto zero
+    meal.calorie = Math.max(0, parseFloat((meal.calorie - ingToRemove.calorie).toFixed(1)));
+    meal.proteine = Math.max(0, parseFloat((meal.proteine - ingToRemove.proteine).toFixed(1)));
+    meal.carboidrati = Math.max(0, parseFloat((meal.carboidrati - ingToRemove.carboidrati).toFixed(1)));
+    meal.grassi = Math.max(0, parseFloat((meal.grassi - ingToRemove.grassi).toFixed(1)));
+
+    // Rimuove l'ingrediente dall'array
+    meal.ingredienti.splice(ingIdx, 1);
+
+    // Rigenera il "Titolo" del pasto unendo tutti gli ingredienti rimasti.
+    meal.alimenti = meal.ingredienti.map(i => i.nome).join(', ') || "Pasto Vuoto";
+
+    try {
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Aggiornamento in corso...</div>`;
+        const response = await fetch(`/api/meals/${mealId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(meal)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const idx = currentMealsData.findIndex(m => String(m._id) === String(mealId));
+            if (idx > -1) currentMealsData[idx] = data.meal;
+            // Ricarica la vista e mostra il pasto aggiornato!
+            handleMealClick(mealId);
+        } else {
+            alert("Errore durante la rimozione dell'ingrediente");
+            handleMealClick(mealId);
+        }
+    } catch (e) {
+        alert("Errore di connessione");
+        handleMealClick(mealId);
+    }
 }
 
 async function handleToggleFavorite(mealId, newStatus) {
@@ -225,11 +298,11 @@ async function handleAddFavorite(favId) {
     } catch (e) { alert("Errore di connessione"); }
 }
 
-function handleManualMealClick() {
+async function handleManualMealClick(targetMealId = null) {
     ui.renderManualMealForm(appContainer, async (mealData) => {
         appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio in corso...</div>`;
 
-        // Creiamo l'array con un singolo ingrediente
+        // Creiamo l'array strutturato con il singolo ingrediente
         mealData.ingredienti = [{
             nome: mealData.alimenti,
             calorie: mealData.calorie,
@@ -239,40 +312,94 @@ function handleManualMealClick() {
         }];
 
         try {
-            const response = await fetch('/api/meals', {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(mealData)
-            });
-            if (response.ok) {
-                showNutritionDashboard();
-                triggerStreak();
+            // CASO A: Stiamo aggiungendo cose ad un pasto esistente
+            if (targetMealId) {
+                const existingMeal = currentMealsData.find(m => String(m._id) === String(targetMealId));
+                if (!existingMeal) return;
+
+                const updatedMeal = { ...existingMeal };
+                // Somma algebrica dei valori e formattazione decimale
+                updatedMeal.calorie = parseFloat((updatedMeal.calorie + mealData.calorie).toFixed(1));
+                updatedMeal.proteine = parseFloat((updatedMeal.proteine + mealData.proteine).toFixed(1));
+                updatedMeal.carboidrati = parseFloat((updatedMeal.carboidrati + mealData.carboidrati).toFixed(1));
+                updatedMeal.grassi = parseFloat((updatedMeal.grassi + mealData.grassi).toFixed(1));
+                updatedMeal.alimenti += ", " + mealData.alimenti;
+                updatedMeal.ingredienti.push(mealData.ingredienti[0]);
+
+                const response = await fetch(`/api/meals/${targetMealId}`, {
+                    method: 'PUT',
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(updatedMeal)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const idx = currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
+                    if (idx > -1) currentMealsData[idx] = data.meal;
+
+                    // Ritorna direttamente alla vista dei dettagli del pasto aggiornato
+                    handleMealClick(targetMealId);
+                } else {
+                    alert("Errore durante l'aggiunta al pasto");
+                    handleMealClick(targetMealId);
+                }
             }
-            else alert("Errore nel salvataggio");
+            // CASO B: Comportamento standard (Crea un intero nuovo pasto nella dashboard)
+            else {
+                const response = await fetch('/api/meals', {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(mealData)
+                });
+                if (response.ok) {
+                    showNutritionDashboard();
+                    triggerStreak();
+                } else {
+                    alert("Errore nel salvataggio");
+                }
+            }
         } catch (e) {
             alert("Errore di connessione");
+            if (targetMealId) handleMealClick(targetMealId);
+            else showNutritionDashboard();
         }
-    }, showNutritionDashboard);
+    }, () => {
+        // Se l'utente clicca Annulla/Indietro nel form manuale
+        if (targetMealId) handleMealClick(targetMealId);
+        else showNutritionDashboard();
+    });
+
+    // Se stiamo modificando un pasto esistente, compiliamo automaticamente la categoria (es. Pranzo) nel form
+    if (targetMealId) {
+        const existingMeal = currentMealsData.find(m => String(m._id) === String(targetMealId));
+        if (existingMeal) {
+            const mPastoInput = document.getElementById('m-pasto');
+            if (mPastoInput) {
+                mPastoInput.value = existingMeal.pasto;
+                mPastoInput.disabled = true; // Impedisce di cambiare la categoria durante un'espansione
+            }
+        }
+    }
 }
 
 // --- LOGICA DELLO SCANNER LIVE CON ZXING ---
-async function handleScanClick() {
-    document.getElementById('action-buttons').classList.add('hidden');
+async function handleScanClick(targetMealId = null) {
+    // Salviamo l'ID del pasto (o null) nella variabile globale dell'app per farla recuperare poi ai form di salvataggio
+    activeScannerTargetMealId = typeof targetMealId === 'string' ? targetMealId : null;
+
+    document.getElementById('action-buttons')?.classList.add('hidden');
     document.getElementById('scanner-container').classList.remove('hidden');
 
-    // Inizializza ZXing se non esiste
     if (!codeReader) {
         codeReader = new ZXing.BrowserMultiFormatReader();
     }
 
     try {
-        // 1. Legge tutte le fotocamere del dispositivo
         const videoInputDevices = await codeReader.listVideoInputDevices();
 
         if (videoInputDevices && videoInputDevices.length > 0) {
             let selectedDeviceId = videoInputDevices[0].deviceId;
 
-            // 2. Cerchiamo la fotocamera posteriore evitando l'ultrawide
             for (let i = 0; i < videoInputDevices.length; i++) {
                 let label = videoInputDevices[i].label.toLowerCase();
                 if (label.includes("back") || label.includes("posteriore") || label.includes("environment")) {
@@ -283,16 +410,12 @@ async function handleScanClick() {
                 }
             }
 
-            // 3. Avviamo la scansione agganciandola al tag <video>
             codeReader.decodeFromVideoDevice(selectedDeviceId, 'reader-video', (result, err) => {
                 if (result) {
-                    // Codice a barre trovato!
                     const barcode = result.getText();
                     handleCloseScanner();
                     fetchProductFromBarcode(barcode);
                 }
-
-                // Ignoriamo gli errori NotFound (avvengono ogni millisecondo in cui non c'è un codice nell'inquadratura)
                 if (err && !(err instanceof ZXing.NotFoundException)) {
                     console.error("Errore scanner:", err);
                 }
@@ -359,7 +482,7 @@ async function fetchProductFromBarcode(barcode) {
             const carbo = n['carbohydrates_100g'] || 0;
             const fat = n['fat_100g'] || 0;
 
-            openPreFilledManualMeal(name, cal, pro, carbo, fat);
+            openPreFilledManualMeal(name, cal, pro, carbo, fat, activeScannerTargetMealId);
         } else {
             alert("Spiacente, prodotto non trovato nel database mondiale.");
             showNutritionDashboard();
@@ -370,20 +493,38 @@ async function fetchProductFromBarcode(barcode) {
     }
 }
 
-function openPreFilledManualMeal(name, cal, pro, carbo, fat) {
+function openPreFilledManualMeal(name, cal, pro, carbo, fat, targetMealId = null) {
     ui.renderManualMealForm(appContainer, async (mealData) => {
         appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio in corso...</div>`;
-        mealData.ingredienti = [{
-            nome: mealData.alimenti, calorie: mealData.calorie, proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi
-        }];
+        mealData.ingredienti = [{ nome: mealData.alimenti, calorie: mealData.calorie, proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi }];
+
         try {
-            const response = await fetch('/api/meals', { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mealData) });
-            if (response.ok) {
-                showNutritionDashboard();
-                triggerStreak();
-            } else alert("Errore nel salvataggio");
+            if (targetMealId) {
+                const existingMeal = currentMealsData.find(m => String(m._id) === String(targetMealId));
+                const updatedMeal = { ...existingMeal };
+                updatedMeal.calorie = parseFloat((updatedMeal.calorie + mealData.calorie).toFixed(1));
+                updatedMeal.proteine = parseFloat((updatedMeal.proteine + mealData.proteine).toFixed(1));
+                updatedMeal.carboidrati = parseFloat((updatedMeal.carboidrati + mealData.carboidrati).toFixed(1));
+                updatedMeal.grassi = parseFloat((updatedMeal.grassi + mealData.grassi).toFixed(1));
+                updatedMeal.alimenti += ", " + mealData.alimenti;
+                updatedMeal.ingredienti.push(mealData.ingredienti[0]);
+
+                const response = await fetch(`/api/meals/${targetMealId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedMeal) });
+                if (response.ok) {
+                    const data = await response.json();
+                    const idx = currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
+                    if (idx > -1) currentMealsData[idx] = data.meal;
+                    handleMealClick(targetMealId);
+                }
+            } else {
+                const response = await fetch('/api/meals', { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mealData) });
+                if (response.ok) { showNutritionDashboard(); triggerStreak(); }
+            }
         } catch (e) { alert("Errore di connessione"); }
-    }, showNutritionDashboard);
+    }, () => {
+        if (targetMealId) handleMealClick(targetMealId);
+        else showNutritionDashboard();
+    });
 
     document.getElementById('m-alimenti').value = name;
     document.getElementById('m-cal-100').value = cal;
@@ -395,9 +536,13 @@ function openPreFilledManualMeal(name, cal, pro, carbo, fat) {
 }
 
 
-async function handleMicRecord() {
-    const micBtn = document.getElementById('mic-btn');
-    const originalBtnHtml = `<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg> REGISTRA VOCE`;
+async function handleMicRecord(targetMealId = null) {
+    // Se c'è un targetMealId usiamo il bottone interno alla card dei dettagli, altrimenti quello principale
+    const btnId = targetMealId ? 'add-voice-meal-btn' : 'mic-btn';
+    const micBtn = document.getElementById(btnId);
+    if (!micBtn) return;
+
+    const originalBtnHtml = micBtn.innerHTML;
 
     if (isRecording && currentRecognition) {
         currentRecognition.stop();
@@ -446,7 +591,8 @@ async function handleMicRecord() {
             const response = await fetch(`/api/analyze-meal`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: finalTranscript })
+                // Inviamo anche il mealId (sarà null se stiamo creando un nuovo pasto)
+                body: JSON.stringify({ text: finalTranscript, mealId: targetMealId })
             });
 
             if (!response.ok) throw new Error("Errore col Server");
@@ -454,7 +600,18 @@ async function handleMicRecord() {
             const data = await response.json();
 
             if (data.success) {
-                showNutritionDashboard();
+                if (targetMealId) {
+                    // Aggiorniamo il pasto modificato all'interno del nostro stato locale
+                    const idx = currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
+                    if (idx > -1) currentMealsData[idx] = data.meal;
+
+                    // Ricarichiamo la schermata dei dettagli del pasto in cui ci troviamo, mostrando i nuovi cibi inseriti
+                    handleMealClick(targetMealId);
+                } else {
+                    // Comportamento standard: aggiorna la dashboard nutrizione principale
+                    showNutritionDashboard();
+                    triggerStreak();
+                }
             } else {
                 throw new Error(data.error);
             }
@@ -599,28 +756,36 @@ async function handleEndSession() {
 
 async function handleOpenExercise(exerciseId) {
     const routine = await storage.getRoutine(currentRoutineId);
-    currentExercise = routine.exercises.find(ex => ex.id === exerciseId);
+
+    // Assicuriamoci che gli ID vengano sempre confrontati come stringhe per evitare i "null"
+    currentExercise = routine.exercises.find(ex => String(ex.id) === String(exerciseId));
+
+    if (!currentExercise) {
+        console.error("Esercizio non trovato nella scheda:", exerciseId);
+        return;
+    }
 
     const draft = storage.getDraft(exerciseId);
-    const lastSession = await storage.getLastSession(currentRoutineId, exerciseId);
+    currentLastSession = await storage.getLastSession(currentRoutineId, exerciseId);
 
     currentSessionData = [];
     for (let i = 0; i < currentExercise.targetSets; i++) {
         if (draft && draft[i]) {
-            currentSessionData.push({ ...draft[i] });
-        } else if (lastSession && lastSession.sets[i]) {
-            currentSessionData.push({ ...lastSession.sets[i] });
+            currentSessionData.push({ ...draft[i], completed: draft[i].completed || false });
+        } else if (currentLastSession && currentLastSession.sets[i]) {
+            currentSessionData.push({ ...currentLastSession.sets[i], completed: false });
         } else {
             currentSessionData.push({
                 kg: currentExercise.baseKg !== 0 ? currentExercise.baseKg : '',
-                reps: currentExercise.targetReps
+                reps: currentExercise.targetReps,
+                completed: false
             });
         }
     }
 
     ui.renderActiveExercise(
-        appContainer, currentExercise, lastSession, currentSessionData,
-        handleInput, handleCompleteExercise, showActiveSession
+        appContainer, currentExercise, currentLastSession, currentSessionData,
+        handleInput, handleCompleteExercise, showActiveSession, handleSaveSet, handleEditSet
     );
 }
 
@@ -765,6 +930,28 @@ export async function showStreakModal() {
     } catch (e) {
         console.error("Impossibile caricare le statistiche", e);
     }
+}
+
+function handleSaveSet(idx) {
+    currentSessionData[idx].completed = true;
+    storage.saveDraft(currentExercise.id, currentSessionData);
+
+    // --> FUTURO HOOK DEL TIMER DI RECUPERO: console.log("Start timer");
+
+    ui.renderActiveExercise(
+        appContainer, currentExercise, currentLastSession, currentSessionData,
+        handleInput, handleCompleteExercise, showActiveSession, handleSaveSet, handleEditSet
+    );
+}
+
+function handleEditSet(idx) {
+    currentSessionData[idx].completed = false;
+    storage.saveDraft(currentExercise.id, currentSessionData);
+
+    ui.renderActiveExercise(
+        appContainer, currentExercise, currentLastSession, currentSessionData,
+        handleInput, handleCompleteExercise, showActiveSession, handleSaveSet, handleEditSet
+    );
 }
 
 document.addEventListener('DOMContentLoaded', init);

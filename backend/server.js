@@ -154,7 +154,8 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.post('/api/analyze-meal', async (req, res) => {
     try {
-        const { text } = req.body;
+        // Aggiungiamo mealId per capire se è un'aggiunta
+        const { text, mealId } = req.body;
         console.log("🗣️ Testo ricevuto dall'app:", text);
 
         const model = genAI.getGenerativeModel({
@@ -200,10 +201,37 @@ app.post('/api/analyze-meal', async (req, res) => {
         jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
 
         const mealData = JSON.parse(jsonText);
-        const newMeal = new Meal(mealData);
-        await newMeal.save();
 
-        res.json({ success: true, meal: newMeal });
+        // SE C'È UN MEAL ID -> AGGIORNO IL PASTO ESISTENTE
+        if (mealId) {
+            const existingMeal = await Meal.findById(mealId);
+            if (!existingMeal) throw new Error("Pasto non trovato");
+
+            existingMeal.calorie = parseFloat((existingMeal.calorie + mealData.calorie).toFixed(1));
+            existingMeal.proteine = parseFloat((existingMeal.proteine + mealData.proteine).toFixed(1));
+            existingMeal.carboidrati = parseFloat((existingMeal.carboidrati + mealData.carboidrati).toFixed(1));
+            existingMeal.grassi = parseFloat((existingMeal.grassi + mealData.grassi).toFixed(1));
+
+            if (mealData.ingredienti && mealData.ingredienti.length > 0) {
+                existingMeal.ingredienti.push(...mealData.ingredienti);
+            } else {
+                existingMeal.ingredienti.push({
+                    nome: mealData.alimenti,
+                    calorie: mealData.calorie, proteine: mealData.proteine,
+                    carboidrati: mealData.carboidrati, grassi: mealData.grassi
+                });
+            }
+            existingMeal.alimenti += ", " + mealData.alimenti;
+
+            await existingMeal.save();
+            return res.json({ success: true, meal: existingMeal });
+        }
+        // ALTRIMENTI -> CREO UN NUOVO PASTO (Comportamento Originale)
+        else {
+            const newMeal = new Meal(mealData);
+            await newMeal.save();
+            res.json({ success: true, meal: newMeal });
+        }
     } catch (error) {
         console.error("❌ ERRORE API GEMINI:", error.message);
         res.status(500).json({ success: false, error: error.message });
@@ -217,6 +245,16 @@ app.post('/api/meals', async (req, res) => {
         res.json({ success: true, meal: newMeal });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// NUOVA ROTTA: Aggiorna un pasto esistente (usata per Scanner e inserimenti manuali in pasto esistente)
+app.put('/api/meals/:id', async (req, res) => {
+    try {
+        const meal = await Meal.findByIdAndUpdate(req.params.id, req.body, { new: true, returnDocument: 'after' });
+        res.json({ success: true, meal });
+    } catch (error) {
+        res.status(500).json({ success: false });
     }
 });
 
