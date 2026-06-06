@@ -957,7 +957,14 @@ function handleEditSet(idx) {
 
 // --- GESTIONE NUTRIZIONISTA AI ---
 function handleAskAI() {
+    // Leggiamo se c'è un'ultima generazione salvata localmente
+    const cached = JSON.parse(localStorage.getItem('cachedAIRecommendations')) || null;
+
     ui.renderAIModal(async (question, callbackResults) => {
+
+        // Estraiamo il tipoPasto dalla stringa (es: "Pasto: Cena.") per catalogare il salvataggio cache
+        const match = question.match(/Pasto:\s*(\w+)/);
+        const currentType = match ? match[1] : 'Pasto';
 
         // Calcoliamo i macro consumati OGGI per passarli a Gemini
         const goals = storage.getNutritionGoals();
@@ -982,11 +989,17 @@ function handleAskAI() {
 
             const data = await response.json();
             if (data.success && data.recommendations) {
+                // Salviamo nel localStorage per consentire il ripristino immediato a costo zero
+                localStorage.setItem('cachedAIRecommendations', JSON.stringify({
+                    type: currentType,
+                    recommendations: data.recommendations
+                }));
+
                 // Passa l'array dei 3 pasti alla UI
                 callbackResults(data.recommendations);
             } else {
                 alert(data.error || "Impossibile elaborare i consigli. Riprova.");
-                showNutritionDashboard(); // Chiude e resetta
+                showNutritionDashboard();
             }
         } catch (error) {
             alert("Errore di connessione al server.");
@@ -994,7 +1007,8 @@ function handleAskAI() {
         }
 
     }, async (mealDataToSave) => {
-        // Callback attivata quando l'utente preme "Salva nel Diario" su una card
+        // Quando salvi con successo un pasto consigliato dall'IA, svuotiamo la cache 
+        // così la prossima volta eviti di riproporre cose vecchie a obiettivi già parzialmente completati
         appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio pasto in corso...</div>`;
         try {
             const response = await fetch('/api/meals', {
@@ -1002,6 +1016,7 @@ function handleAskAI() {
                 body: JSON.stringify(mealDataToSave)
             });
             if (response.ok) {
+                localStorage.removeItem('cachedAIRecommendations'); // Reset cache a pasto registrato
                 showNutritionDashboard();
                 triggerStreak();
             } else {
@@ -1012,7 +1027,7 @@ function handleAskAI() {
             alert("Errore di connessione");
             showNutritionDashboard();
         }
-    });
+    }, cached); // <-- Passiamo la cache letta come terzo parametro
 }
 
 document.addEventListener('DOMContentLoaded', init);

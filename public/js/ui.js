@@ -1215,7 +1215,7 @@ export function renderFavoritesPage(container, favorites, onBack, onAddFavoriteC
 }
 
 // --- RENDER MODALE NUTRIZIONISTA AI (CAROSELLO + VARIANTI) ---
-export function renderAIModal(onAsk, onSaveMeal) {
+export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
     const modalId = 'ai-modal';
     let modal = document.getElementById(modalId);
     if (modal) modal.remove();
@@ -1238,7 +1238,7 @@ export function renderAIModal(onAsk, onSaveMeal) {
             <div id="ai-content-area" class="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
                 <div id="ai-selection-view">
                     <p class="text-[15px] font-bold text-gray-700 mb-4">Per quale pasto ti serve un consiglio?</p>
-                    <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-5">
                         <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Colazione">Colazione</button>
                         <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Pranzo">Pranzo</button>
                         <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Cena">Cena</button>
@@ -1246,7 +1246,15 @@ export function renderAIModal(onAsk, onSaveMeal) {
                     </div>
                     
                     <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Ingrediente base (opzionale)</label>
-                    <input type="text" id="ai-extra-input" placeholder="Es. Voglio usare le uova..." class="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-[15px] font-bold focus:ring-2 focus:ring-indigo-600 outline-none transition-all mb-6">
+                    <input type="text" id="ai-extra-input" placeholder="Es. Voglio usare le uova..." class="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-[15px] font-bold focus:ring-2 focus:ring-indigo-600 outline-none transition-all mb-4">
+                    
+                    ${cachedData ? `
+                    <div class="mt-2 pt-4 border-t border-gray-100">
+                        <button id="restore-ai-btn" class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-100 font-black py-4 rounded-2xl text-[14px] flex justify-center items-center gap-2 transition-all active:scale-95 shadow-sm">
+                            📋 Recupera Ultima Proposta (${cachedData.type})
+                        </button>
+                    </div>
+                    ` : ''}
                 </div>
 
                 <div id="ai-loading-view" class="hidden flex-col items-center justify-center py-10 h-full">
@@ -1280,7 +1288,18 @@ export function renderAIModal(onAsk, onSaveMeal) {
 
     document.getElementById('close-ai-modal').addEventListener('click', closeModal);
 
-    // Logica dei bottoni per lanciare la richiesta
+    // Se esiste la cache, attiva il listener di ripristino istantaneo
+    if (cachedData && document.getElementById('restore-ai-btn')) {
+        document.getElementById('restore-ai-btn').addEventListener('click', () => {
+            document.getElementById('ai-selection-view').classList.add('hidden');
+            document.getElementById('ai-loading-view').classList.add('hidden');
+            document.getElementById('ai-results-view').classList.remove('hidden', 'flex-col');
+            document.getElementById('ai-results-view').classList.add('flex', 'flex-col');
+            renderCarousel(cachedData.recommendations, cachedData.type);
+        });
+    }
+
+    // Logica dei bottoni per lanciare la richiesta standard
     let selectedType = null;
     modal.querySelectorAll('.ai-meal-type-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -1301,17 +1320,15 @@ export function renderAIModal(onAsk, onSaveMeal) {
         });
     });
 
-    // Funzione che renderizza le Card nel Carosello
     function renderCarousel(recommendations, tipoPasto) {
         const carousel = document.getElementById('ai-carousel');
         carousel.innerHTML = '';
 
-        // Teniamo traccia dello stato di ogni card (Principale o Variante)
         let currentViews = recommendations.map(() => 'main');
 
         recommendations.forEach((rec, idx) => {
             const card = document.createElement('div');
-            card.className = "snap-center shrink-0 w-[88%] bg-white border border-gray-100 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] p-5 flex flex-col relative";
+            card.className = "snap-center shrink-0 w-[88%] bg-white border border-gray-100 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] p-5 flex flex-col relative h-[560px]";
 
             const renderCardContent = (viewState) => {
                 const data = viewState === 'main' ? rec : rec.variante;
@@ -1319,34 +1336,34 @@ export function renderAIModal(onAsk, onSaveMeal) {
                 const toggleText = viewState === 'main' ? '🔄 Variante' : '🔙 Originale';
 
                 return `
-                    <div class="flex justify-between items-start mb-4">
+                    <div class="flex justify-between items-center mb-3 flex-shrink-0">
                         <span class="text-[10px] font-black ${bgColor} px-2.5 py-1.5 rounded-lg uppercase tracking-wider">${viewState === 'main' ? 'Opzione ' + (idx + 1) : 'Variante ' + (idx + 1)}</span>
                         <button class="toggle-variant-btn text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-xl active:scale-95 transition-transform">${toggleText}</button>
                     </div>
                     
-                    <h3 class="text-xl font-black text-gray-900 leading-tight mb-2">${data.nomePasto}</h3>
-                    <p class="text-[13px] font-medium text-gray-500 mb-5 leading-relaxed">${data.messaggio}</p>
+                    <h3 class="text-lg font-black text-gray-900 leading-tight mb-1 flex-shrink-0 truncate">${data.nomePasto}</h3>
+                    <p class="text-[12px] font-medium text-gray-400 mb-3 leading-tight flex-shrink-0 truncate">${data.messaggio}</p>
 
-                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-2xl border border-gray-100 mb-5">
-                        <div class="text-center"><p class="text-[10px] font-bold text-gray-400 uppercase">Kcal</p><p class="font-black text-gray-900">${data.totaleCalorie}</p></div>
-                        <div class="text-center"><p class="text-[10px] font-bold text-blue-400 uppercase">Pro</p><p class="font-black text-blue-700">${data.totaleProteine}g</p></div>
-                        <div class="text-center"><p class="text-[10px] font-bold text-green-500 uppercase">Car</p><p class="font-black text-green-700">${data.totaleCarbo}g</p></div>
-                        <div class="text-center"><p class="text-[10px] font-bold text-yellow-600 uppercase">Fat</p><p class="font-black text-yellow-700">${data.totaleGrassi}g</p></div>
+                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-2xl border border-gray-100 mb-4 flex-shrink-0">
+                        <div class="text-center"><p class="text-[9px] font-bold text-gray-400 uppercase">Kcal</p><p class="font-black text-gray-900 text-sm">${data.totaleCalorie}</p></div>
+                        <div class="text-center"><p class="text-[9px] font-bold text-blue-400 uppercase">Pro</p><p class="font-black text-blue-700 text-sm">${data.totaleProteine}g</p></div>
+                        <div class="text-center"><p class="text-[9px] font-bold text-green-500 uppercase">Car</p><p class="font-black text-green-700 text-sm">${data.totaleCarbo}g</p></div>
+                        <div class="text-center"><p class="text-[9px] font-bold text-yellow-600 uppercase">Fat</p><p class="font-black text-yellow-700 text-sm">${data.totaleGrassi}g</p></div>
                     </div>
 
-                    <div class="flex-1 mb-6">
-                        <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 border-b border-gray-100 pb-2">Ingredienti</p>
-                        <ul class="space-y-2">
+                    <div class="flex-1 overflow-hidden flex flex-col mb-4 min-h-0">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-gray-100 pb-1 flex-shrink-0">Ingredienti</p>
+                        <ul class="space-y-2 overflow-y-auto pr-1 flex-1">
                             ${data.ingredienti.map(ing => `
                                 <li class="flex justify-between items-center text-[13px]">
                                     <span class="font-medium text-gray-700 truncate pr-2">${ing.nome}</span>
-                                    <span class="font-bold text-gray-900">${ing.calorie} <span class="text-[10px] font-normal text-gray-400">kcal</span></span>
+                                    <span class="font-bold text-gray-900 flex-shrink-0">${ing.calorie} <span class="text-[10px] font-normal text-gray-400">kcal</span></span>
                                 </li>
                             `).join('')}
                         </ul>
                     </div>
 
-                    <button class="save-ai-meal-btn w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-md active:scale-95 transition-transform flex justify-center items-center gap-2 mt-auto">
+                    <button class="save-ai-meal-btn w-full bg-gray-900 text-white font-black text-[15px] py-3.5 rounded-2xl shadow-md active:scale-95 transition-transform flex justify-center items-center gap-2 flex-shrink-0 mt-auto">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                         Salva nel Diario
                     </button>
@@ -1355,7 +1372,6 @@ export function renderAIModal(onAsk, onSaveMeal) {
 
             card.innerHTML = renderCardContent(currentViews[idx]);
 
-            // Listener per il click sui bottoni di QUESTA specifica card
             card.addEventListener('click', (e) => {
                 if (e.target.closest('.toggle-variant-btn')) {
                     currentViews[idx] = currentViews[idx] === 'main' ? 'variant' : 'main';
