@@ -558,12 +558,19 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             consumate.grassi += Number(meal.grassi) || 0;
         });
 
+        // Calcoliamo le calorie rimaste per il badge
         let calorieRimaste = Number(goals.calorie) - consumate.calorie;
+        let rimasteText = calorieRimaste >= 0 ? `${Number(calorieRimaste).toFixed(0)} kcal rimaste` : `${Math.abs(Number(calorieRimaste)).toFixed(0)} kcal oltre`;
+        let badgeColor = calorieRimaste >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400';
 
         contentHtml = `
             <div class="bg-gray-900 text-white p-5 rounded-2xl shadow-xl mb-6">
-                <p class="text-sm text-gray-400 font-bold uppercase tracking-wider mb-1">Calorie Rimaste</p>
-                <h2 class="text-4xl font-black">${Number(calorieRimaste).toFixed(1)} <span class="text-lg font-normal text-gray-400">/ ${goals.calorie}</span></h2>
+                <div class="flex justify-between items-center mb-1">
+                    <p class="text-sm text-gray-400 font-bold uppercase tracking-wider">Calorie Assunte</p>
+                    <span class="text-[10px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wide ${badgeColor}">${rimasteText}</span>
+                </div>
+                
+                <h2 class="text-4xl font-black">${Number(consumate.calorie).toFixed(1)} <span class="text-lg font-normal text-gray-400">/ ${goals.calorie}</span></h2>
                 
                 <div class="flex justify-between mt-6 gap-2">
                     <div class="flex-1 bg-white/10 p-2 rounded-xl text-center">
@@ -603,7 +610,6 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                     ⭐ Preferiti
                 </button>
             </div>
-
 
             <div class="flex justify-between items-end mb-3">
                 <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Pasti di oggi</h2>
