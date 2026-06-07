@@ -61,6 +61,16 @@ function getItalyDateStr(offsetDays = 0) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+// Calcola la mezzanotte odierna in Italia convertendola nel corretto momento UTC per MongoDB
+function getItalyMidnight() {
+    const todayStr = new Date().toLocaleDateString("fr-CA", { timeZone: "Europe/Rome" }); // Ritorna sempre "YYYY-MM-DD" italiano
+    const midnightUTC = new Date(`${todayStr}T00:00:00Z`);
+    const now = new Date();
+    const romaDateObj = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Rome" }));
+    const offsetInMs = romaDateObj.getTime() - now.getTime();
+    return new Date(midnightUTC.getTime() - offsetInMs);
+}
+
 // --- API: OTTIENI LO STATO DELLA FIAMMA ---
 app.get('/api/streak', async (req, res) => {
     try {
@@ -260,9 +270,8 @@ app.put('/api/meals/:id', async (req, res) => {
 
 app.get('/api/today-meals', async (req, res) => {
     try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const meals = await Meal.find({ data: { $gte: today } });
+        const todayMidnight = getItalyMidnight(); // <--- Usa la mezzanotte italiana
+        const meals = await Meal.find({ data: { $gte: todayMidnight } });
         res.json(meals);
     } catch (error) { res.status(500).json({ success: false }); }
 });
@@ -380,13 +389,12 @@ app.delete('/api/meals/:id', async (req, res) => {
         await Meal.findByIdAndDelete(req.params.id);
 
         // --- GESTIONE RIMOZIONE FIAMMA (EDGE CASE) ---
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
+        const todayMidnight = getItalyMidnight(); // <--- Sostituisci il vecchio startOfDay con questo
 
         // Controlla se sono rimasti altri pasti loggati oggi
-        const pastiRimanentiOggi = await Meal.countDocuments({ data: { $gte: startOfDay } });
+        const pastiRimanentiOggi = await Meal.countDocuments({ data: { $gte: todayMidnight } });
         // Controlla se c'è almeno un allenamento oggi (endTime è un timestamp numerico)
-        const workoutOggi = await History.countDocuments({ endTime: { $gte: startOfDay.getTime() } });
+        const workoutOggi = await History.countDocuments({ endTime: { $gte: todayMidnight.getTime() } });
 
         // Se non ci sono più pasti e non ci sono allenamenti oggi...
         if (pastiRimanentiOggi === 0 && workoutOggi === 0) {

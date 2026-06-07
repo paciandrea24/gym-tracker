@@ -313,7 +313,7 @@ export function renderActiveSession(container, session, routine, onExerciseClick
     }).join('')}
         </main>
         
-        <div class="fixed bottom-[76px] left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto safe-pb z-20">
+        <div class="fixed left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto z-20" style="bottom: calc(55px + env(safe-area-inset-bottom));">
             <button id="end-session-btn" class="w-full ${todoIds.length === 0 ? 'bg-gray-900 text-white' : 'bg-white text-red-500 border border-red-200'} font-bold text-lg py-4 rounded-2xl shadow-sm active:scale-95 transition-transform">
                 ${todoIds.length === 0 ? 'Salva nel Database' : 'Termina in anticipo'}
             </button>
@@ -475,7 +475,7 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
             </div>
         </main>
         
-        <div class="fixed bottom-[76px] left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto safe-pb z-20">
+        <div class="fixed left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto z-20" style="bottom: calc(55px + env(safe-area-inset-bottom));">
             <button id="complete-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 Termina Esercizio
@@ -1087,6 +1087,9 @@ export function renderStreakModal(stats) {
 
     document.body.appendChild(modal);
 
+    // 1. AGGIUNGI QUESTA RIGA PER BLOCCARE LO SCROLL:
+    document.body.style.overflow = 'hidden';
+
     // Animazione di entrata
     requestAnimationFrame(() => {
         modal.classList.remove('opacity-0');
@@ -1095,8 +1098,14 @@ export function renderStreakModal(stats) {
 
     const closeModal = () => {
         modal.classList.add('opacity-0');
-        modal.querySelector('div').classList.add('scale-95');
-        setTimeout(() => modal.remove(), 300);
+        modal.querySelector('div').classList.add('scale-95'); // (o translate-y-full a seconda della modale)
+        setTimeout(() => {
+            modal.remove();
+
+            // 2. AGGIUNGI QUESTA RIGA PER RIPRISTINARLO:
+            document.body.style.overflow = '';
+
+        }, 300);
     };
 
     document.getElementById('close-streak-btn').addEventListener('click', closeModal);
@@ -1159,6 +1168,9 @@ export function renderFavoritePreviewModal(favMeal, onConfirm, onUnfavorite) {
 
     document.body.appendChild(modal);
 
+    // 1. AGGIUNGI QUESTA RIGA PER BLOCCARE LO SCROLL:
+    document.body.style.overflow = 'hidden';
+
     requestAnimationFrame(() => {
         modal.classList.remove('opacity-0');
         modal.querySelector('div').classList.remove('scale-95');
@@ -1166,8 +1178,14 @@ export function renderFavoritePreviewModal(favMeal, onConfirm, onUnfavorite) {
 
     const closeModal = () => {
         modal.classList.add('opacity-0');
-        modal.querySelector('div').classList.add('scale-95');
-        setTimeout(() => modal.remove(), 300);
+        modal.querySelector('div').classList.add('scale-95'); // (o translate-y-full a seconda della modale)
+        setTimeout(() => {
+            modal.remove();
+
+            // 2. AGGIUNGI QUESTA RIGA PER RIPRISTINARLO:
+            document.body.style.overflow = '';
+
+        }, 300);
     };
 
     document.getElementById('close-fav-preview').addEventListener('click', closeModal);
@@ -1226,7 +1244,7 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
 
     modal.innerHTML = `
         <div class="bg-white w-full max-w-md rounded-t-[2rem] p-6 shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col h-[90vh]">
-            <div class="flex justify-between items-center mb-6">
+            <div class="flex justify-between items-center mb-6 flex-shrink-0">
                 <h2 class="text-xl font-black text-gray-900 flex items-center gap-2">
                     <span class="text-indigo-600 text-2xl">✨</span> Nutrizionista AI
                 </h2>
@@ -1235,26 +1253,37 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
                 </button>
             </div>
             
-            <div id="ai-content-area" class="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+            <div id="ai-content-area" class="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden pb-10">
+                
                 <div id="ai-selection-view">
-                    <p class="text-[15px] font-bold text-gray-700 mb-4">Per quale pasto ti serve un consiglio?</p>
-                    <div class="grid grid-cols-2 gap-3 mb-5">
-                        <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Colazione">Colazione</button>
-                        <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Pranzo">Pranzo</button>
-                        <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Cena">Cena</button>
-                        <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Spuntino">Spuntino</button>
-                    </div>
-                    
-                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Ingrediente base (opzionale)</label>
-                    <input type="text" id="ai-extra-input" placeholder="Es. Voglio usare le uova..." class="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-[15px] font-bold focus:ring-2 focus:ring-indigo-600 outline-none transition-all mb-4">
-                    
                     ${cachedData ? `
-                    <div class="mt-2 pt-4 border-t border-gray-100">
-                        <button id="restore-ai-btn" class="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-100 font-black py-4 rounded-2xl text-[14px] flex justify-center items-center gap-2 transition-all active:scale-95 shadow-sm">
-                            📋 Recupera Ultima Proposta (${cachedData.type})
+                    <div id="ai-cache-banner" class="mb-6 bg-indigo-50 p-5 rounded-3xl border border-indigo-100 flex flex-col items-center text-center shadow-inner">
+                        <span class="text-3xl mb-2">✨</span>
+                        <h3 class="text-lg font-black text-indigo-900 mb-1">Generazione in sospeso</h3>
+                        <p class="text-xs font-medium text-indigo-700 mb-4">Hai già richiesto opzioni per: <b class="uppercase">${cachedData.type}</b>.</p>
+                        
+                        <button id="restore-ai-btn" class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl text-[15px] transition-all active:scale-95 shadow-md mb-3 flex justify-center items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            Riprendi da dove eri
+                        </button>
+                        <button id="clear-ai-cache-btn" class="text-xs font-bold text-indigo-400 hover:text-indigo-600 p-2 active:scale-95 transition-transform">
+                            Scarta e fai una nuova richiesta
                         </button>
                     </div>
                     ` : ''}
+
+                    <div id="ai-new-request-form" class="${cachedData ? 'hidden' : ''}">
+                        <p class="text-[15px] font-bold text-gray-700 mb-4">Per quale pasto ti serve un consiglio?</p>
+                        <div class="grid grid-cols-2 gap-3 mb-5">
+                            <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Colazione">Colazione</button>
+                            <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Pranzo">Pranzo</button>
+                            <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Cena">Cena</button>
+                            <button class="ai-meal-type-btn bg-gray-50 border border-gray-200 rounded-2xl py-4 font-black text-gray-700 active:scale-95 transition-all" data-type="Spuntino">Spuntino</button>
+                        </div>
+                        
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Ingrediente base (opzionale)</label>
+                        <input type="text" id="ai-extra-input" placeholder="Es. Voglio usare le uova..." class="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-[15px] font-bold focus:ring-2 focus:ring-indigo-600 outline-none transition-all mb-4">
+                    </div>
                 </div>
 
                 <div id="ai-loading-view" class="hidden flex-col items-center justify-center py-10 h-full">
@@ -1263,17 +1292,20 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
                 </div>
 
                 <div id="ai-results-view" class="hidden h-full flex-col">
-                    <p class="text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-3 flex items-center justify-between">
+                    <p class="text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-3 flex items-center justify-between flex-shrink-0">
                         Opzioni Trovate <span>Scorri <span class="text-lg leading-none">↔</span></span>
                     </p>
                     <div id="ai-carousel" class="flex overflow-x-auto space-x-4 pb-4 -mx-6 px-6 snap-x [&::-webkit-scrollbar]:hidden">
-                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     `;
 
     document.body.appendChild(modal);
+
+    // BLOCCO LO SCROLL DELLA PAGINA SOTTOSTANTE
+    document.body.style.overflow = 'hidden';
 
     requestAnimationFrame(() => {
         modal.classList.remove('opacity-0');
@@ -1283,12 +1315,16 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
     const closeModal = () => {
         modal.classList.add('opacity-0');
         modal.querySelector('div').classList.add('translate-y-full');
-        setTimeout(() => modal.remove(), 300);
+        setTimeout(() => {
+            modal.remove();
+            // RIPRISTINO LO SCROLL DELLA PAGINA QUANDO CHIUDO
+            document.body.style.overflow = '';
+        }, 300);
     };
 
     document.getElementById('close-ai-modal').addEventListener('click', closeModal);
 
-    // Se esiste la cache, attiva il listener di ripristino istantaneo
+    // Se esiste la cache, gestisce il ripristino o l'eliminazione
     if (cachedData && document.getElementById('restore-ai-btn')) {
         document.getElementById('restore-ai-btn').addEventListener('click', () => {
             document.getElementById('ai-selection-view').classList.add('hidden');
@@ -1296,6 +1332,12 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
             document.getElementById('ai-results-view').classList.remove('hidden', 'flex-col');
             document.getElementById('ai-results-view').classList.add('flex', 'flex-col');
             renderCarousel(cachedData.recommendations, cachedData.type);
+        });
+
+        document.getElementById('clear-ai-cache-btn').addEventListener('click', () => {
+            localStorage.removeItem('cachedAIRecommendations');
+            document.getElementById('ai-cache-banner').classList.add('hidden');
+            document.getElementById('ai-new-request-form').classList.remove('hidden');
         });
     }
 
@@ -1321,6 +1363,7 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
     });
 
     function renderCarousel(recommendations, tipoPasto) {
+        // [IL CODICE DI RENDERCAROUSEL RIMANE IDENTICO A QUELLO CHE HAI GIA']
         const carousel = document.getElementById('ai-carousel');
         carousel.innerHTML = '';
 

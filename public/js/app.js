@@ -21,6 +21,8 @@ let currentFavorites = [];
 let codeReader = null;
 let activeScannerTargetMealId = null;
 let currentLastSession = null;
+let recoveryInterval = null;
+let recoveryRemaining = 0;
 
 // ==========================================
 // INIZIALIZZAZIONE E NAVIGAZIONE
@@ -937,12 +939,90 @@ function handleSaveSet(idx) {
     currentSessionData[idx].completed = true;
     storage.saveDraft(currentExercise.id, currentSessionData);
 
-    // --> FUTURO HOOK DEL TIMER DI RECUPERO: console.log("Start timer");
+    // AVVIO TIMER DI RECUPERO (ignorando il cardio)
+    if (currentExercise && currentExercise.type !== 'cardio') {
+        startRecoveryTimer(90); // Default: 90 secondi (1 minuto e 30)
+    }
 
     ui.renderActiveExercise(
         appContainer, currentExercise, currentLastSession, currentSessionData,
         handleInput, handleCompleteExercise, showActiveSession, handleSaveSet, handleEditSet
     );
+}
+
+// --- LOGICA TIMER DI RECUPERO GLOBALE (FULL-SCREEN) ---
+function startRecoveryTimer(seconds) {
+    if (recoveryInterval) clearInterval(recoveryInterval);
+    recoveryRemaining = seconds;
+
+    let timerEl = document.getElementById('recovery-fullscreen-modal');
+    if (!timerEl) {
+        timerEl = document.createElement('div');
+        timerEl.id = 'recovery-fullscreen-modal';
+        // z-[9999] ci assicura di coprire persino la Navbar in basso.
+        timerEl.className = "fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gray-900/98 backdrop-blur-2xl text-white transition-opacity duration-300 opacity-0";
+
+        timerEl.innerHTML = `
+            <div class="absolute inset-0 bg-gradient-to-b from-blue-900/20 to-transparent pointer-events-none"></div>
+            
+            <h2 class="text-sm font-bold text-blue-400 mb-4 uppercase tracking-widest z-10 flex items-center gap-2">
+                <svg class="w-5 h-5 animate-[spin_3s_linear_infinite]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Recupero
+            </h2>
+            
+            <div class="relative z-10 flex items-center justify-center mb-16">
+                <span id="recovery-time-display" class="text-[110px] sm:text-[130px] font-black font-mono tracking-tighter tabular-nums leading-none drop-shadow-2xl"></span>
+            </div>
+            
+            <button id="close-timer-btn" class="z-10 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold py-5 px-14 rounded-[24px] text-xl transition-all border border-white/10 shadow-lg">
+                Salta Recupero
+            </button>
+        `;
+        document.body.appendChild(timerEl);
+
+        // Blocchiamo lo scroll della pagina in background
+        document.body.style.overflow = 'hidden';
+
+        document.getElementById('close-timer-btn').addEventListener('click', stopRecoveryTimer);
+    }
+
+    updateTimerDisplay();
+
+    // Fade-in
+    requestAnimationFrame(() => {
+        timerEl.classList.remove('opacity-0');
+    });
+
+    // Avvia il countdown
+    recoveryInterval = setInterval(() => {
+        recoveryRemaining--;
+        updateTimerDisplay();
+
+        if (recoveryRemaining <= 0) {
+            stopRecoveryTimer();
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay() {
+    const display = document.getElementById('recovery-time-display');
+    if (!display) return;
+    const m = Math.floor(recoveryRemaining / 60).toString().padStart(2, '0');
+    const s = (recoveryRemaining % 60).toString().padStart(2, '0');
+    display.textContent = `${m}:${s}`;
+}
+
+function stopRecoveryTimer() {
+    if (recoveryInterval) clearInterval(recoveryInterval);
+    const timerEl = document.getElementById('recovery-fullscreen-modal');
+    if (timerEl) {
+        timerEl.classList.add('opacity-0');
+        // Rimuove l'elemento dal DOM dopo il fade-out
+        setTimeout(() => {
+            timerEl.remove();
+            document.body.style.overflow = ''; // Sblocca lo scroll
+        }, 300);
+    }
 }
 
 function handleEditSet(idx) {
@@ -957,8 +1037,22 @@ function handleEditSet(idx) {
 
 // --- GESTIONE NUTRIZIONISTA AI ---
 function handleAskAI() {
-    // Leggiamo se c'è un'ultima generazione salvata localmente
-    const cached = JSON.parse(localStorage.getItem('cachedAIRecommendations')) || null;
+    // Leggiamo l'ultima generazione salvata localmente con controllo della data
+    let cached = null;
+    try {
+        const rawCache = localStorage.getItem('cachedAIRecommendations');
+        if (rawCache) {
+            const parsed = JSON.parse(rawCache);
+            // Se la cache appartiene a OGGI, la carichiamo. Altrimenti la eliminiamo.
+            if (parsed.date === new Date().toDateString()) {
+                cached = parsed;
+            } else {
+                localStorage.removeItem('cachedAIRecommendations');
+            }
+        }
+    } catch (e) {
+        console.warn("Errore lettura cache localStorage:", e);
+    }
 
     ui.renderAIModal(async (question, callbackResults) => {
 
@@ -989,11 +1083,15 @@ function handleAskAI() {
 
             const data = await response.json();
             if (data.success && data.recommendations) {
-                // Salviamo nel localStorage per consentire il ripristino immediato a costo zero
-                localStorage.setItem('cachedAIRecommendations', JSON.stringify({
-                    type: currentType,
-                    recommendations: data.recommendations
-                }));
+                try {
+                    localStorage.setItem('cachedAIRecommendations', JSON.stringify({
+                        type: currentType,
+                        recommendations: data.recommendations,
+                        date: new Date().toDateString() // <--- AGGIUNGI QUESTO: Salva la data di oggi
+                    }));
+                } catch (e) {
+                    console.warn("Il browser mobile ha bloccato il salvataggio in locale:", e);
+                }
 
                 // Passa l'array dei 3 pasti alla UI
                 callbackResults(data.recommendations);
