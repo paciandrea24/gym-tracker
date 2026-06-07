@@ -148,7 +148,8 @@ async function showNutritionDashboard() {
             () => handleScanClick(), // Chiamata senza ID per creare un nuovo pasto
             handleCloseScanner,
             handlePreviewFavorite,
-            handleAskAI
+            handleAskAI,
+            handleDailyHistoryClick
         );
 
         // 2. ORA che l'HTML è presente nella pagina, agganciamo il listener al nuovo bottone dei preferiti
@@ -165,6 +166,29 @@ async function showNutritionDashboard() {
 // Nuova funzione da aggiungere sotto a showNutritionDashboard
 function showFavoritesPage() {
     ui.renderFavoritesPage(appContainer, currentFavorites, showNutritionDashboard, handlePreviewFavorite);
+}
+
+// --- GESTIONE CLICK SULLO STORICO GIORNALIERO ---
+function handleDailyHistoryClick(dateStr) {
+    const goals = storage.getNutritionGoals();
+
+    // Filtriamo solo i pasti che appartengono al giorno cliccato
+    const dayMeals = currentMealsData.filter(m => {
+        const mealDateStr = new Date(m.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+        return mealDateStr === dateStr;
+    });
+
+    // Ricalcoliamo i totali
+    const totals = { cal: 0, pro: 0, carbo: 0, grassi: 0 };
+    dayMeals.forEach(m => {
+        totals.cal += Number(m.calorie) || 0;
+        totals.pro += Number(m.proteine) || 0;
+        totals.carbo += Number(m.carboidrati) || 0;
+        totals.grassi += Number(m.grassi) || 0;
+    });
+
+    // Renderizziamo la nuova view passando showNutritionDashboard per tornare indietro
+    ui.renderDailyNutritionStats(appContainer, dateStr, dayMeals, totals, goals, showNutritionDashboard);
 }
 
 // Apre la modale e aspetta la conferma

@@ -571,7 +571,7 @@ export function updateFeedback(setId, status) {
 }
 
 // --- RENDER NUTRIZIONE (LIVE SCANNER E CAROSELLO) ---
-export function renderNutritionDashboard(container, mealsData, goals, currentTab, favorites, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAddFavoriteClick, onAskAI) {
+export function renderNutritionDashboard(container, mealsData, goals, currentTab, favorites, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAddFavoriteClick, onAskAI, onDailyHistoryClick) {
     let contentHtml = '';
     const checkIcon = `<svg class="w-4 h-4 text-green-400 inline-block ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
 
@@ -690,40 +690,46 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                 <div class="space-y-4">
                     ${Object.keys(grouped).map(dateStr => {
             const day = grouped[dateStr];
+            const calPercent = Math.min(100, (day.totals.cal / goals.calorie) * 100);
             return `
-                            <details class="bg-white rounded-2xl shadow-sm border border-gray-100 group">
-                                <summary class="p-4 font-bold text-gray-800 flex justify-between items-center cursor-pointer outline-none list-none [&::-webkit-details-marker]:hidden">
+                            <div class="daily-history-card bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 cursor-pointer active:scale-95 transition-transform" data-date="${dateStr}">
+                                <div class="flex justify-between items-center mb-4">
                                     <div class="flex items-center gap-3">
-                                        <div class="bg-gray-100 text-gray-900 p-2 rounded-lg">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                                        <div class="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                                         </div>
                                         <div>
-                                            <h3 class="text-base text-gray-900 capitalize">${dateStr}</h3>
-                                            <p class="text-xs text-gray-500 font-medium mt-1">
-                                                ${Number(day.totals.cal).toFixed(1)} kcal • ${Number(day.totals.pro).toFixed(1)}g P • ${Number(day.totals.car).toFixed(1)}g C • ${Number(day.totals.grassi).toFixed(1)}g G
-                                            </p>
+                                            <h3 class="text-base font-bold text-gray-900 capitalize">${dateStr}</h3>
+                                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Vedi Statistiche</p>
                                         </div>
                                     </div>
-                                    <div class="text-gray-400 transition-transform group-open:rotate-180">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    <div class="text-gray-300">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                                     </div>
-                                </summary>
-                                <div class="p-4 border-t border-gray-50 space-y-4 bg-gray-50/50 rounded-b-2xl">
-                                    ${day.meals.map(meal => `
-                                        <div class="p-3 -mx-3 rounded-xl border border-transparent">
-                                            <div class="flex justify-between items-center mb-2">
-                                                <h4 class="text-sm font-bold text-gray-700">${meal.alimenti}</h4>
-                                            </div>
-                                            <div class="space-y-1">
-                                                <div class="flex justify-between items-center text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
-                                                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">${meal.pasto}</span>
-                                                    <span class="font-bold text-gray-900">${Number(meal.calorie).toFixed(1)} kcal</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `).join('')}
                                 </div>
-                            </details>
+                                
+                                <div class="flex justify-between items-end mb-2">
+                                    <span class="text-2xl font-black text-gray-900">${Number(day.totals.cal).toFixed(0)} <span class="text-sm font-bold text-gray-400">/ ${goals.calorie} kcal</span></span>
+                                </div>
+                                <div class="w-full bg-gray-100 rounded-full h-2.5 mb-4 overflow-hidden">
+                                    <div class="bg-indigo-500 h-2.5 rounded-full" style="width: ${calPercent}%"></div>
+                                </div>
+                                
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                        <p class="text-[9px] font-bold text-blue-500 uppercase">Pro</p>
+                                        <p class="text-sm font-black text-gray-800">${Number(day.totals.pro).toFixed(0)}g</p>
+                                    </div>
+                                    <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                        <p class="text-[9px] font-bold text-green-500 uppercase">Car</p>
+                                        <p class="text-sm font-black text-gray-800">${Number(day.totals.car).toFixed(0)}g</p>
+                                    </div>
+                                    <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                        <p class="text-[9px] font-bold text-yellow-500 uppercase">Fat</p>
+                                        <p class="text-sm font-black text-gray-800">${Number(day.totals.grassi).toFixed(0)}g</p>
+                                    </div>
+                                </div>
+                            </div>
                         `;
         }).join('')}
                 </div>
@@ -776,6 +782,10 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
 
         container.querySelectorAll('.fav-meal-btn').forEach(btn => {
             btn.addEventListener('click', () => onAddFavoriteClick(btn.dataset.favId));
+        });
+    } else if (currentTab === 'storico') {
+        container.querySelectorAll('.daily-history-card').forEach(card => {
+            card.addEventListener('click', () => onDailyHistoryClick(card.dataset.date));
         });
     }
 }
@@ -1549,4 +1559,88 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
             carousel.appendChild(card);
         });
     }
+}
+
+// --- RENDER STATISTICHE GIORNALIERE (STORICO) ---
+export function renderDailyNutritionStats(container, dateStr, meals, totals, goals, onBack) {
+    const pPro = Math.min(100, (totals.pro / goals.proteine) * 100);
+    const pCar = Math.min(100, (totals.carbo / goals.carbo) * 100);
+    const pFat = Math.min(100, (totals.grassi / goals.grassi) * 100);
+
+    container.innerHTML = `
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
+            <button id="back-daily-stats-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2 active:scale-90 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <h1 class="text-xl font-bold text-gray-900 truncate capitalize">${dateStr}</h1>
+        </header>
+        <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
+            
+            <div class="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Ripartizione Macronutrienti</h3>
+                <div class="relative h-48 w-full flex justify-center">
+                    <canvas id="macroDonutChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 space-y-4">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Completamento Obiettivi</h3>
+                
+                <div>
+                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-blue-500">Proteine</span><span class="text-gray-600">${totals.pro.toFixed(0)} / ${goals.proteine}g</span></div>
+                    <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-blue-500 h-2 rounded-full" style="width: ${pPro}%"></div></div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-green-500">Carboidrati</span><span class="text-gray-600">${totals.carbo.toFixed(0)} / ${goals.carbo}g</span></div>
+                    <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width: ${pCar}%"></div></div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-yellow-500">Grassi</span><span class="text-gray-600">${totals.grassi.toFixed(0)} / ${goals.grassi}g</span></div>
+                    <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-yellow-500 h-2 rounded-full" style="width: ${pFat}%"></div></div>
+                </div>
+            </div>
+
+            <div class="pt-2">
+                <h3 class="text-xs font-bold text-gray-800 uppercase tracking-widest mb-3 px-1">Diario Pasti</h3>
+                <div class="space-y-3">
+                    ${meals.map(meal => `
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                            <h4 class="text-[15px] font-bold text-gray-800">${meal.alimenti}</h4>
+                            <div class="flex justify-between items-center mt-2">
+                                <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md uppercase tracking-wider">${meal.pasto}</span>
+                                <span class="font-black text-gray-900">${Number(meal.calorie).toFixed(0)} kcal</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+        </main>
+    `;
+
+    document.getElementById('back-daily-stats-btn').addEventListener('click', onBack);
+
+    // Crea il grafico a ciambella usando Chart.js
+    const ctx = document.getElementById('macroDonutChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Proteine (g)', 'Carboidrati (g)', 'Grassi (g)'],
+            datasets: [{
+                data: [totals.pro, totals.carbo, totals.grassi],
+                backgroundColor: ['#3b82f6', '#22c55e', '#eab308'],
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '75%',
+            plugins: {
+                legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10, weight: 'bold' } } },
+                tooltip: { backgroundColor: '#111827', padding: 10 }
+            }
+        }
+    });
 }
