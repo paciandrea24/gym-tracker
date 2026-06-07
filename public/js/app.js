@@ -812,6 +812,12 @@ function handleCompleteExercise() {
 }
 
 async function handleShowExerciseStats(exerciseId, exerciseName) {
+    const routine = await storage.getRoutine(currentRoutineId);
+    // Recuperiamo i parametri dell'esercizio (se è un esercizio vecchio senza parametri, usa x1 e 0kg)
+    const exerciseDef = routine.exercises.find(ex => String(ex.id) === String(exerciseId)) || {};
+    const mult = exerciseDef.weightMultiplier || 1;
+    const barWeight = exerciseDef.barbellWeight || 0;
+
     const history = await storage.getHistoryForRoutine(currentRoutineId);
     const sessionsWithEx = history
         .filter(session => session.exercises.some(e => e.exerciseId === exerciseId))
@@ -821,7 +827,8 @@ async function handleShowExerciseStats(exerciseId, exerciseName) {
 
     const labels = [];
     const maxWeights = [];
-    const totalVolumes = [];
+    const estimated1RMs = [];
+    const bestSets = [];
 
     sessionsWithEx.forEach(session => {
         const dateStr = new Date(session.endTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
@@ -830,19 +837,47 @@ async function handleShowExerciseStats(exerciseId, exerciseName) {
         labels.push(dateStr);
 
         let maxKg = 0;
-        let vol = 0;
+        let sessionMax1RM = 0;
+        let bestSetText = "";
+
         exData.sets.forEach(set => {
-            const kg = parseFloat(set.kg) || 0;
+            const rawKg = parseFloat(set.kg) || 0; // Il peso che logghi nell'app (es. 7.5)
             const reps = parseInt(set.reps) || 0;
-            if (kg > maxKg) maxKg = kg;
-            vol += (kg > 0 ? kg * reps : reps);
+
+            // LA MAGIA: Calcolo del peso totale reale sollevato
+            let realKg = 0;
+            if (rawKg > 0) {
+                realKg = (rawKg * mult) + barWeight;
+            }
+
+            // Formula di Brzycki calcolata sul peso REALE
+            let e1RM = 0;
+            if (realKg > 0 && reps > 0) {
+                e1RM = reps === 1 ? realKg : realKg * (36 / (37 - reps));
+            }
+
+            if (e1RM > sessionMax1RM) {
+                sessionMax1RM = e1RM;
+                bestSetText = `Log: ${rawKg}kg ➡️ Reale: ${realKg}kg x ${reps}`;
+            }
+
+            if (realKg > maxKg) maxKg = realKg;
         });
 
-        maxWeights.push(maxKg);
-        totalVolumes.push(vol);
+        maxWeights.push(parseFloat(maxKg.toFixed(1)));
+        estimated1RMs.push(parseFloat(sessionMax1RM.toFixed(1)));
+        bestSets.push(bestSetText);
     });
 
-    ui.renderExerciseStats(appContainer, exerciseName, labels, maxWeights, totalVolumes, showDashboard);
+    const allTimeMax1RM = estimated1RMs.length > 0 ? Math.max(...estimated1RMs) : 0;
+    const allTimeMaxWeight = maxWeights.length > 0 ? Math.max(...maxWeights) : 0;
+    const totalSessions = labels.length;
+
+    ui.renderExerciseStats(
+        appContainer, exerciseName, labels, estimated1RMs, maxWeights, bestSets,
+        { allTimeMax1RM, allTimeMaxWeight, totalSessions },
+        showDashboard
+    );
 }
 
 // --- FUNZIONE NOTIFICHE PUSH ---
@@ -1127,5 +1162,25 @@ function handleAskAI() {
         }
     }, cached); // <-- Passiamo la cache letta come terzo parametro
 }
+
+// Listener per aggiornare il calcolo peso degli esercizi già esistenti
+window.addEventListener('configExercise', async (e) => {
+    const exerciseId = e.detail;
+    const routine = await storage.getRoutine(currentRoutineId);
+    const ex = routine.exercises.find(e => String(e.id) === String(exerciseId));
+    if (!ex) return;
+
+    const mult = window.prompt(`Calcolo peso per "${ex.name}"\n\nInserisci il moltiplicatore:\n(Scrivi 1 per Manubri/Totale, scrivi 2 se nell'app logghi solo 1 lato del bilanciere)`, ex.weightMultiplier || 1);
+    if (mult === null) return;
+
+    const bar = window.prompt(`Peso del bilanciere vuoto/Tara in Kg (es. 20):`, ex.barbellWeight || 0);
+    if (bar === null) return;
+
+    ex.weightMultiplier = parseFloat(mult) || 1;
+    ex.barbellWeight = parseFloat(bar) || 0;
+
+    await storage.saveRoutine(routine);
+    alert(`Salvato! Da ora in poi i grafici di "${ex.name}" calcoleranno: (Kg x ${ex.weightMultiplier}) + ${ex.barbellWeight}kg.`);
+});
 
 document.addEventListener('DOMContentLoaded', init);

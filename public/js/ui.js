@@ -176,6 +176,9 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                                 </p>
                             </div>
                             <div class="flex items-center space-x-2 pl-3 border-l border-gray-100 flex-shrink-0">
+                                <button data-config-id="${ex.id}" class="config-ex-btn p-2 text-blue-500 hover:text-blue-700 bg-blue-50 rounded-full active:scale-95 transition-transform">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                </button>
                                 <button data-delete-id="${ex.id}" class="delete-btn p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-95 transition-transform">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                 </button>
@@ -266,6 +269,7 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
         document.getElementById('start-session-btn').addEventListener('click', onStartSession);
         document.getElementById('add-ex-btn').addEventListener('click', onAddExerciseClick);
         container.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => onDeleteClick(btn.dataset.deleteId)));
+        container.querySelectorAll('.config-ex-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('configExercise', { detail: btn.dataset.configId })); }));
     } else if (currentTab === 'scheda' && !hasExercises) {
         document.getElementById('add-ex-btn').addEventListener('click', onAddExerciseClick);
     } else if (currentTab === 'storico') {
@@ -333,7 +337,7 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
             </button>
             <h1 class="text-xl font-bold text-gray-900 truncate">Nuovo Esercizio</h1>
         </header>
-        <main class="p-4 space-y-4 bg-gray-50">
+        <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Nome Esercizio</label>
@@ -361,6 +365,23 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
                         <input type="number" id="ex-kg" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
                     </div>
                 </div>
+                
+                <div id="box-equipment" class="space-y-3 pt-4 border-t border-gray-100">
+                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Setup Statistiche e Grafici</p>
+                    <div class="flex space-x-3">
+                        <div class="flex-1">
+                            <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Moltiplicatore</label>
+                            <select id="ex-multiplier" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-bold outline-none">
+                                <option value="1">x1 (Manubri / Totale)</option>
+                                <option value="2">x2 (Loggo un solo lato)</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Bilanciere (Kg)</label>
+                            <input type="number" id="ex-barbell" placeholder="0" value="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-center text-sm font-bold outline-none">
+                        </div>
+                    </div>
+                </div>
             </div>
             <button id="save-ex-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-6">
                 Salva Esercizio
@@ -372,21 +393,14 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
     const boxSets = document.getElementById('box-sets');
     const boxKg = document.getElementById('box-kg');
     const labelReps = document.getElementById('label-reps');
+    const boxEquipment = document.getElementById('box-equipment');
 
     typeSelect.addEventListener('change', (e) => {
-        if (e.target.value === 'cardio') {
-            boxKg.style.display = 'none';
-            boxSets.style.display = 'none';
-            labelReps.textContent = 'Minuti Target';
-        } else if (e.target.value === 'corpo-libero') {
-            boxKg.style.display = 'none';
-            boxSets.style.display = 'block';
-            labelReps.textContent = 'Reps Target';
-        } else {
-            boxKg.style.display = 'block';
-            boxSets.style.display = 'block';
-            labelReps.textContent = 'Reps Target';
-        }
+        const val = e.target.value;
+        boxKg.style.display = val === 'cardio' || val === 'corpo-libero' ? 'none' : 'block';
+        boxSets.style.display = val === 'cardio' ? 'none' : 'block';
+        boxEquipment.style.display = val === 'sala-pesi' ? 'block' : 'none';
+        labelReps.textContent = val === 'cardio' ? 'Minuti Target' : 'Reps Target';
     });
 
     document.getElementById('cancel-btn').addEventListener('click', onCancel);
@@ -397,8 +411,16 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
         const reps = parseInt(document.getElementById('ex-reps').value, 10);
         const kg = parseFloat(document.getElementById('ex-kg').value) || 0;
 
-        if (name && sets && reps) onSave({ id: 'ex-' + Date.now(), name, type, targetSets: sets, targetReps: reps, baseKg: kg });
-        else alert("Compila i campi richiesti.");
+        const mult = parseFloat(document.getElementById('ex-multiplier').value) || 1;
+        const barbell = parseFloat(document.getElementById('ex-barbell').value) || 0;
+
+        if (name && sets && reps) {
+            onSave({
+                id: 'ex-' + Date.now(), name, type, targetSets: sets, targetReps: reps, baseKg: kg,
+                weightMultiplier: type === 'sala-pesi' ? mult : 1,
+                barbellWeight: type === 'sala-pesi' ? barbell : 0
+            });
+        } else alert("Compila i campi richiesti.");
     });
 }
 
@@ -939,48 +961,131 @@ export function renderManualMealForm(container, onSave, onCancel) {
     });
 }
 
-// --- RENDER GRAFICI ---
-export function renderExerciseStats(container, exerciseName, labels, weightData, volumeData, onBack) {
+// --- RENDER GRAFICI E STATISTICHE AVANZATE ---
+export function renderExerciseStats(container, exerciseName, labels, estimated1RMs, maxWeights, bestSets, summary, onBack) {
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
-            <button id="back-stats-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
+            <button id="back-stats-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2 active:scale-90 transition-transform">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
-            <h1 class="text-xl font-bold text-gray-900 truncate">Progresso</h1>
+            <h1 class="text-xl font-bold text-gray-900 truncate">Analisi Esercizio</h1>
         </header>
         <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50">
             <h2 class="text-2xl font-black text-gray-900 px-1 mb-2">${exerciseName}</h2>
             
-            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Peso Massimo (Kg) per Sessione</h3>
-                <canvas id="chartWeight"></canvas>
+            <div class="grid grid-cols-3 gap-3 mb-2">
+                <div class="bg-indigo-50 border border-indigo-100 p-3 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm">
+                    <span class="text-[9px] font-bold text-indigo-500 uppercase tracking-wider mb-1">Max 1RM</span>
+                    <span class="text-xl font-black text-indigo-700">${summary.allTimeMax1RM ? summary.allTimeMax1RM + ' <span class="text-[10px] font-bold">kg</span>' : '-'}</span>
+                </div>
+                <div class="bg-gray-800 border border-gray-900 p-3 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm">
+                    <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Peso Max</span>
+                    <span class="text-xl font-black text-white">${summary.allTimeMaxWeight ? summary.allTimeMaxWeight + ' <span class="text-[10px] font-bold">kg</span>' : '-'}</span>
+                </div>
+                <div class="bg-white border border-gray-200 p-3 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm">
+                    <span class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1">Sessioni</span>
+                    <span class="text-xl font-black text-gray-800">${summary.totalSessions}</span>
+                </div>
             </div>
             
-            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Volume Totale (Kg x Rep)</h3>
-                <canvas id="chartVol"></canvas>
+            <div class="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+                <div class="flex justify-between items-center mb-1">
+                    <h3 class="text-xs font-bold text-gray-900 uppercase tracking-widest">Forza Pura (1RM Stimato)</h3>
+                    <span class="text-lg">📈</span>
+                </div>
+                <p class="text-[11px] text-gray-400 mb-4 leading-tight font-medium">Il vero indicatore di forza, calcolato con la formula di Brzycki.</p>
+                <div class="relative h-48 w-full"><canvas id="chart1RM"></canvas></div>
+            </div>
+            
+            <div class="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+                <div class="flex justify-between items-center mb-1">
+                    <h3 class="text-xs font-bold text-gray-900 uppercase tracking-widest">Miglior Serie Assoluta</h3>
+                    <span class="text-lg">🏋️‍♂️</span>
+                </div>
+                <p class="text-[11px] text-gray-400 mb-4 leading-tight font-medium">Tocca una colonna per vedere la serie (Kg x Rep) che hai eseguito.</p>
+                <div class="relative h-48 w-full"><canvas id="chartWeight"></canvas></div>
             </div>
         </main>
     `;
 
     document.getElementById('back-stats-btn').addEventListener('click', onBack);
 
-    new Chart(document.getElementById('chartWeight'), {
+    // Grafico 1: Progressione 1RM (Line Chart)
+    new Chart(document.getElementById('chart1RM'), {
         type: 'line',
         data: {
             labels: labels,
-            datasets: [{ label: 'Kg Max', data: weightData, borderColor: '#111827', tension: 0.3, backgroundColor: '#111827' }]
+            datasets: [{
+                label: '1RM (Kg)',
+                data: estimated1RMs,
+                borderColor: '#4F46E5', // Indigo 600
+                backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                borderWidth: 3,
+                pointBackgroundColor: '#4F46E5',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                fill: true,
+                tension: 0.4
+            }]
         },
-        options: { plugins: { legend: { display: false } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#111827',
+                    padding: 10,
+                    callbacks: {
+                        label: function (context) {
+                            return ' Massimale Stimato: ' + context.parsed.y + ' kg';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: { beginAtZero: false, border: { display: false }, grid: { color: '#f3f4f6' } },
+                x: { border: { display: false }, grid: { display: false } }
+            }
+        }
     });
 
-    new Chart(document.getElementById('chartVol'), {
+    // Grafico 2: Peso Max per sessione con Tooltip Personalizzato
+    new Chart(document.getElementById('chartWeight'), {
         type: 'bar',
         data: {
             labels: labels,
-            datasets: [{ label: 'Volume', data: volumeData, backgroundColor: '#3b82f6', borderRadius: 4 }]
+            datasets: [{
+                label: 'Peso Max',
+                data: maxWeights,
+                backgroundColor: '#111827', // Gray 900
+                borderRadius: 4,
+                barPercentage: 0.5
+            }]
         },
-        options: { plugins: { legend: { display: false } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#111827',
+                    padding: 10,
+                    callbacks: {
+                        // Sostituisce il semplice numero con "80kg x 8"
+                        label: function (context) {
+                            const idx = context.dataIndex;
+                            return ' Miglior Set: ' + bestSets[idx];
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: { beginAtZero: false, border: { display: false }, grid: { color: '#f3f4f6' } },
+                x: { border: { display: false }, grid: { display: false } }
+            }
+        }
     });
 }
 
