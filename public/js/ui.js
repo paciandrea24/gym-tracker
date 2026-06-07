@@ -169,12 +169,14 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                 <div class="space-y-3">
                     ${exercises.map(ex => `
                         <div class="w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-                            <div class="flex-1">
-                                <h3 class="text-lg font-bold text-gray-800">${ex.name}</h3>
+                            
+                            <div data-ex-id="${ex.id}" data-ex-name="${ex.name}" class="scheda-ex-click flex-1 cursor-pointer active:opacity-60 transition-opacity pr-2">
+                                <h3 class="text-lg font-bold text-gray-800 hover:text-indigo-600 transition-colors">${ex.name}</h3>
                                 <p class="text-sm font-medium text-gray-500 mt-1">
                                     ${ex.type === 'cardio' ? 'Sessione Unica' : ex.targetSets + ' serie'} <span class="mx-1">•</span> ${ex.type === 'cardio' ? 'Cardio' : (ex.type === 'corpo-libero' ? 'Corpo Libero' : 'Base: ' + ex.baseKg + ' kg')}
                                 </p>
                             </div>
+                            
                             <div class="flex items-center space-x-2 pl-3 border-l border-gray-100 flex-shrink-0">
                                 <button data-config-id="${ex.id}" class="config-ex-btn p-2 text-blue-500 hover:text-blue-700 bg-blue-50 rounded-full active:scale-95 transition-transform">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -209,7 +211,7 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                                     </div>
                                     <div>
                                         <h3 class="text-base text-gray-900">Allenamento</h3>
-                                        <p class="text-xs text-gray-500 font-medium">${formatDate(session.endTime)}</p>
+                                        <p class="text-xs text-gray-500 font-medium">${new Date(session.endTime).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                                     </div>
                                 </div>
                                 <div class="text-gray-400 transition-transform group-open:rotate-180">
@@ -218,14 +220,13 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                             </summary>
                             <div class="p-4 border-t border-gray-50 space-y-4 bg-gray-50/50 rounded-b-2xl">
                                 ${session.exercises.map(ex => `
-                                    <div class="history-ex-row cursor-pointer hover:bg-white p-2 -mx-2 rounded-xl transition-colors group/row" data-ex-id="${ex.exerciseId}" data-ex-name="${ex.name}">
+                                    <div class="p-2 -mx-2 rounded-xl">
                                         <div class="flex justify-between items-center mb-2">
-                                            <h4 class="text-sm font-bold text-gray-700 group-hover/row:text-blue-600 transition-colors">${ex.name}</h4>
-                                            <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-full font-bold opacity-0 group-hover/row:opacity-100 transition-opacity">Vedi Grafici</span>
+                                            <h4 class="text-sm font-bold text-gray-700">${ex.name}</h4>
                                         </div>
                                         <div class="space-y-1">
                                             ${ex.sets.map((s, i) => `
-                                                <div class="flex justify-between text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm group-hover/row:border-blue-100 transition-colors">
+                                                <div class="flex justify-between text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
                                                     <span>Serie ${i + 1}</span>
                                                     <span class="font-bold text-gray-900">
                                                         ${ex.type === 'cardio' ? s.reps + ' min' : (ex.type === 'corpo-libero' ? s.reps + ' rep' : (s.kg || 0) + ' kg x ' + s.reps + ' rep')}
@@ -269,13 +270,16 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
         document.getElementById('start-session-btn').addEventListener('click', onStartSession);
         document.getElementById('add-ex-btn').addEventListener('click', onAddExerciseClick);
         container.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => onDeleteClick(btn.dataset.deleteId)));
+
+        // AGGANCIAMO IL CLICK DELLE STATISTICHE ALLA SCHEDA ATTIVA
+        container.querySelectorAll('.scheda-ex-click').forEach(row => {
+            row.addEventListener('click', () => onHistoryExClick(row.dataset.exId, row.dataset.exName));
+        });
+
+        // Configurazione bilanciere/moltiplicatore
         container.querySelectorAll('.config-ex-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('configExercise', { detail: btn.dataset.configId })); }));
     } else if (currentTab === 'scheda' && !hasExercises) {
         document.getElementById('add-ex-btn').addEventListener('click', onAddExerciseClick);
-    } else if (currentTab === 'storico') {
-        container.querySelectorAll('.history-ex-row').forEach(row => {
-            row.addEventListener('click', () => onHistoryExClick(row.dataset.exId, row.dataset.exName));
-        });
     }
 }
 
