@@ -45,6 +45,49 @@ const HistorySchema = new mongoose.Schema({
 });
 const History = mongoose.model('History', HistorySchema);
 
+// --- MODELLO DATABASE FOODDEX ---
+const FoodDexSchema = new mongoose.Schema({
+    barcode: { type: String, required: true, unique: true },
+    nome: String,
+    immagine: String,
+    calorie100: Number,
+    proteine100: Number,
+    carbo100: Number,
+    grassi100: Number,
+    pesoConfezione: Number,
+    tipoAlimento: String, // Es. "Lotta 🥊"
+    dataScoperta: { type: Date, default: Date.now }
+});
+const FoodDex = mongoose.model('FoodDex', FoodDexSchema);
+
+// --- API FOODDEX ---
+app.get('/api/fooddex', async (req, res) => {
+    try {
+        const items = await FoodDex.find().sort({ dataScoperta: -1 });
+        res.json(items);
+    } catch (e) { res.status(500).json([]); }
+});
+
+app.post('/api/fooddex', async (req, res) => {
+    try {
+        const item = req.body;
+        // Controlla se il codice a barre esiste già nel DB
+        const existing = await FoodDex.findOne({ barcode: item.barcode });
+
+        if (existing) {
+            // Già catturato! Restituisce true e impedisce il doppione
+            res.json({ success: true, alreadyCaught: true, item: existing });
+        } else {
+            // Nuovo alimento! Lo salva
+            const newItem = new FoodDex(item);
+            await newItem.save();
+            res.json({ success: true, alreadyCaught: false, item: newItem });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // --- MODELLO DATABASE PER LA FIAMMA (STREAK) ---
 const StreakSchema = new mongoose.Schema({
     userId: { type: String, default: 'admin' },

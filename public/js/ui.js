@@ -1656,3 +1656,173 @@ export function renderDailyNutritionStats(container, dateStr, meals, totals, goa
         }
     });
 }
+
+// --- RENDER FOODDEX ---
+export function renderFoodDexDashboard(container, foodItems, onBack, onScan) {
+    // Sistema dei Livelli Allenatore
+    const count = foodItems.length;
+    let rank = "Allenatore Novellino";
+    let nextGoal = 10;
+
+    if (count >= 10) { rank = "Ricercatore di Macro"; nextGoal = 50; }
+    if (count >= 50) { rank = "Capopalestra Nutrizionale"; nextGoal = 150; }
+    if (count >= 150) { rank = "Maestro della Dieta"; nextGoal = 500; }
+
+    const progress = Math.min(100, (count / nextGoal) * 100);
+
+    // Mappa Colori in base al tipo assegnato
+    const getTypeColor = (tipo) => {
+        if (!tipo) return 'bg-gray-100 text-gray-600';
+        if (tipo.includes('Lotta')) return 'bg-orange-100 text-orange-600';
+        if (tipo.includes('Erba')) return 'bg-green-100 text-green-600';
+        if (tipo.includes('Fuoco')) return 'bg-red-100 text-red-600';
+        if (tipo.includes('Folletto')) return 'bg-pink-100 text-pink-600';
+        if (tipo.includes('Terra')) return 'bg-amber-100 text-amber-700';
+        return 'bg-gray-100 text-gray-600';
+    };
+
+    container.innerHTML = `
+        <header class="bg-red-600 shadow-xl pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center text-white">
+            <button id="back-fooddex-btn" class="mr-3 text-white/80 hover:text-white p-2 -ml-2 active:scale-90 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <h1 class="text-xl font-black truncate flex items-center gap-2">
+                <span class="text-2xl">📱</span> FoodDex
+            </h1>
+        </header>
+        
+        <main class="p-4 space-y-5 pb-32 bg-gray-50 min-h-screen">
+            
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center text-center relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+                <div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center text-3xl mb-3 shadow-inner">📖</div>
+                <h2 class="text-2xl font-black text-gray-900">${count} Alimenti Scoperti</h2>
+                <p class="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">${rank}</p>
+                
+                <div class="w-full mt-5">
+                    <div class="flex justify-between text-[10px] font-bold text-gray-400 mb-1.5 px-1">
+                        <span>Progresso Livello</span>
+                        <span>${count} / ${nextGoal}</span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                        <div class="bg-red-500 h-2.5 rounded-full transition-all duration-1000" style="width: ${progress}%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="scan-fooddex-btn" class="w-full bg-red-600 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgba(220,38,38,0.3)] active:scale-95 transition-transform flex justify-center items-center gap-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                Cattura Nuovo Alimento
+            </button>
+
+            <div id="fooddex-scanner-container" class="hidden bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
+                <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra un codice a barre</p>
+                <video id="fooddex-reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[250px]" autoplay playsinline></video>
+                <button id="close-fooddex-scanner-btn" class="w-full bg-gray-700 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla</button>
+            </div>
+
+            <div class="space-y-3 pt-2">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Registri FoodDex</h3>
+                ${foodItems.length === 0 ? `
+                    <p class="text-center text-gray-500 font-bold mt-10">Il tuo FoodDex è vuoto. Inizia l'avventura!</p>
+                ` : foodItems.map(item => `
+                    <div class="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-3">
+                        ${item.immagine ? `<img src="${item.immagine}" class="w-16 h-16 object-cover rounded-xl border border-gray-100 shadow-sm flex-shrink-0">` : `<div class="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center text-2xl shadow-sm flex-shrink-0">🍲</div>`}
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-start mb-1">
+                                <h4 class="font-bold text-gray-900 truncate pr-2">${item.nome}</h4>
+                                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${getTypeColor(item.tipoAlimento)}">${item.tipoAlimento || 'Normale 🟢'}</span>
+                            </div>
+                            <div class="mt-1 flex flex-wrap gap-2 text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                <span>Pro: ${item.proteine100}g</span>
+                                <span>Car: ${item.carbo100}g</span>
+                                <span>Fat: ${item.grassi100}g</span>
+                                <span class="text-indigo-400">📦 ${item.pesoConfezione > 0 ? item.pesoConfezione + 'g' : '?'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </main>
+    `;
+
+    document.getElementById('back-fooddex-btn').addEventListener('click', onBack);
+    document.getElementById('scan-fooddex-btn').addEventListener('click', () => {
+        document.getElementById('scan-fooddex-btn').classList.add('hidden');
+        document.getElementById('fooddex-scanner-container').classList.remove('hidden');
+        onScan();
+    });
+}
+
+// --- SISTEMA DI MODALI CUSTOM (Sostituisce gli Alert/Prompt di sistema) ---
+export function showModal({ type = 'alert', title = '', message = '', confirmText = 'OK', cancelText = 'Annulla', inputValue = '' }) {
+    return new Promise((resolve) => {
+        const modalId = 'custom-dialog-modal';
+        let modal = document.getElementById(modalId);
+        if (modal) modal.remove();
+
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = "fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
+
+        // Colori e Icone dinamiche
+        let icon = '🔔';
+        let colorClass = 'bg-blue-600';
+        let focusClass = 'focus:ring-blue-500';
+
+        if (type === 'confirm') { icon = '❓'; colorClass = 'bg-indigo-600'; focusClass = 'focus:ring-indigo-500'; }
+        if (type === 'prompt') { icon = '✍️'; colorClass = 'bg-blue-600'; focusClass = 'focus:ring-blue-500'; }
+        if (type === 'error') { icon = '❌'; colorClass = 'bg-red-500'; focusClass = 'focus:ring-red-500'; }
+        if (type === 'success') { icon = '🎉'; colorClass = 'bg-green-500'; focusClass = 'focus:ring-green-500'; }
+
+        const isPrompt = type === 'prompt';
+        const isConfirm = type === 'confirm' || type === 'prompt';
+
+        modal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl transform scale-95 transition-transform duration-300 flex flex-col border border-gray-100">
+                <div class="text-center mb-6 mt-2">
+                    <div class="text-5xl mb-4 drop-shadow-sm">${icon}</div>
+                    ${title ? `<h2 class="text-xl font-black text-gray-900 mb-2 leading-tight">${title}</h2>` : ''}
+                    <p class="text-[15px] font-medium text-gray-500 leading-snug whitespace-pre-wrap">${message}</p>
+                </div>
+
+                ${isPrompt ? `<input type="text" id="custom-modal-input" value="${inputValue}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-center text-lg font-black text-gray-800 mb-6 ${focusClass} outline-none transition-shadow shadow-inner">` : ''}
+
+                <div class="flex gap-3 mt-auto">
+                    ${isConfirm ? `<button id="custom-modal-cancel" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-4 rounded-2xl active:scale-95 transition-transform">${cancelText}</button>` : ''}
+                    <button id="custom-modal-confirm" class="flex-1 ${colorClass} text-white font-bold py-4 rounded-2xl active:scale-95 transition-transform shadow-md">${confirmText}</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        requestAnimationFrame(() => {
+            modal.classList.remove('opacity-0');
+            modal.querySelector('div').classList.remove('scale-95');
+            if (isPrompt) {
+                const inp = document.getElementById('custom-modal-input');
+                inp.focus();
+                inp.setSelectionRange(0, inp.value.length); // Seleziona il testo di default
+            }
+        });
+
+        const closeAndResolve = (val) => {
+            modal.classList.add('opacity-0');
+            modal.querySelector('div').classList.add('scale-95');
+            setTimeout(() => {
+                modal.remove();
+                resolve(val);
+            }, 300);
+        };
+
+        document.getElementById('custom-modal-confirm').addEventListener('click', () => {
+            if (isPrompt) closeAndResolve(document.getElementById('custom-modal-input').value);
+            else closeAndResolve(true);
+        });
+
+        if (isConfirm) {
+            document.getElementById('custom-modal-cancel').addEventListener('click', () => closeAndResolve(false));
+        }
+    });
+}

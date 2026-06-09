@@ -2,6 +2,18 @@ import * as storage from './storage.js?v=20';
 import * as ui from './ui.js?v=20';
 import { debounce } from './utils.js?v=20';
 
+// --- WRAPPERS PER MODALI CUSTOM ---
+async function appAlert(message, title = 'Avviso', type = 'alert') {
+    return await ui.showModal({ type, title, message });
+}
+async function appConfirm(message, title = 'Conferma') {
+    return await ui.showModal({ type: 'confirm', title, message, confirmText: 'Sì', cancelText: 'No' });
+}
+async function appPrompt(message, defaultValue = '', title = 'Inserimento') {
+    const res = await ui.showModal({ type: 'prompt', title, message, inputValue: defaultValue });
+    return res === false ? null : res; // Se clicchi Annulla ritorna null
+}
+
 const appContainer = document.getElementById('app');
 
 // ==========================================
@@ -23,6 +35,9 @@ let activeScannerTargetMealId = null;
 let currentLastSession = null;
 let recoveryInterval = null;
 let recoveryRemaining = 0;
+let secretTapCount = 0;
+let secretTapTimer = null;
+let currentFoodDexItems = [];
 
 // ==========================================
 // INIZIALIZZAZIONE E NAVIGAZIONE
@@ -76,6 +91,8 @@ function loadCurrentModule() {
         else { showRoutinesList(); }
     } else if (currentAppModule === 'nutrition') {
         showNutritionDashboard();
+    } else if (currentAppModule === 'fooddex') {
+        showFoodDexDashboard(); // <-- AGGIUNTA
     }
 }
 
@@ -102,6 +119,21 @@ async function showHomeDashboard() {
             () => switchModule('gym'), // Inizia Allenamento
             () => { switchModule('nutrition'); handleManualMealClick(); } // Aggiungi Pasto
         );
+        // --- EASTER EGG: IL TRUCCO DEI 5 TOCCHI ---
+        const headerTitle = document.querySelector('header h1');
+        if (headerTitle) {
+            headerTitle.addEventListener('click', () => {
+                secretTapCount++;
+                clearTimeout(secretTapTimer);
+                secretTapTimer = setTimeout(() => secretTapCount = 0, 2000);
+
+                if (secretTapCount >= 5) {
+                    secretTapCount = 0;
+                    if ("vibrate" in navigator) navigator.vibrate([50, 50, 50]);
+                    switchModule('fooddex'); // Entra nel FoodDex!
+                }
+            });
+        }
     } catch (e) { appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione al server.</div>`; }
 }
 
@@ -695,7 +727,7 @@ async function showRoutinesList() {
 }
 
 async function handleCreateRoutine() {
-    const name = window.prompt("Nome scheda:", "Nuova Scheda");
+    const name = await appPrompt("Come vuoi chiamare la nuova scheda?", "Nuova Scheda", "Crea Scheda");
     if (name && name.trim() !== "") {
         await storage.createRoutine(name.trim());
         showRoutinesList();
@@ -703,7 +735,7 @@ async function handleCreateRoutine() {
 }
 
 async function handleEditRoutineName(routineId, oldName) {
-    const newName = window.prompt("Modifica nome:", oldName);
+    const newName = await appPrompt("Inserisci il nuovo nome:", oldName, "Modifica Nome");
     if (newName && newName.trim() !== "") {
         await storage.editRoutineName(routineId, newName.trim());
         showRoutinesList();
@@ -711,7 +743,7 @@ async function handleEditRoutineName(routineId, oldName) {
 }
 
 async function handleDeleteRoutine(routineId) {
-    if (window.confirm("Eliminare scheda?")) {
+    if (await appConfirm("Vuoi davvero eliminare questa scheda e tutti i suoi esercizi?", "Attenzione!")) {
         await storage.deleteRoutine(routineId);
         showRoutinesList();
     }
@@ -742,7 +774,7 @@ function handleTabSwitch(tab) {
 }
 
 async function handleDeleteExercise(exerciseId) {
-    if (window.confirm("Eliminare esercizio?")) {
+    if (await appConfirm("Vuoi eliminare questo esercizio dalla scheda?", "Elimina Esercizio")) {
         await storage.removeExerciseFromRoutine(currentRoutineId, exerciseId);
         showDashboard();
     }
@@ -772,9 +804,9 @@ async function showActiveSession() {
 async function handleEndSession() {
     const session = storage.getActiveSession();
     if (session && session.todo.length > 0) {
-        if (!window.confirm("Terminare in anticipo?")) return;
+        if (!(await appConfirm("Hai ancora esercizi in programma. Vuoi terminare in anticipo?", "Sessione Incompleta"))) return;
     }
-    appContainer.innerHTML = `<p class="text-center mt-20 animate-pulse">Salvataggio nel Database...</p>`;
+    appContainer.innerHTML = `<p class="text-center mt-20 animate-pulse font-bold text-gray-500">Salvataggio nel Database...</p>`;
     await storage.endActiveSession();
     triggerStreak();
     currentTab = 'storico';
@@ -1192,17 +1224,17 @@ window.addEventListener('configExercise', async (e) => {
     const ex = routine.exercises.find(e => String(e.id) === String(exerciseId));
     if (!ex) return;
 
-    const mult = window.prompt(`Calcolo peso per "${ex.name}"\n\nInserisci il moltiplicatore:\n(Scrivi 1 per Manubri/Totale, scrivi 2 se nell'app logghi solo 1 lato del bilanciere)`, ex.weightMultiplier || 1);
+    const mult = await appPrompt(`Inserisci il moltiplicatore:\n(1 = Manubri / Peso Totale)\n(2 = Se logghi solo 1 lato)`, ex.weightMultiplier || 1, `Configura ${ex.name}`);
     if (mult === null) return;
 
-    const bar = window.prompt(`Peso del bilanciere vuoto/Tara in Kg (es. 20):`, ex.barbellWeight || 0);
+    const bar = await appPrompt(`Peso del bilanciere o tara (es. 20):`, ex.barbellWeight || 0, `Tara Attrezzo`);
     if (bar === null) return;
 
     ex.weightMultiplier = parseFloat(mult) || 1;
     ex.barbellWeight = parseFloat(bar) || 0;
 
     await storage.saveRoutine(routine);
-    alert(`Salvato! Da ora in poi i grafici di "${ex.name}" calcoleranno: (Kg x ${ex.weightMultiplier}) + ${ex.barbellWeight}kg.`);
+    await appAlert(`Da ora in poi i grafici calcoleranno:\n(Kg x ${ex.weightMultiplier}) + ${ex.barbellWeight}kg.`, "Salvato!", "success");
 });
 
 // --- LOGICA MODIFICA ALIMENTO (PROPORZIONE PESO O MANUALE) ---
@@ -1340,5 +1372,161 @@ window.addEventListener('openFavSelector', async (e) => {
         }
     });
 });
+
+// ==========================================
+// MODULO SEGRETO: FOODDEX
+// ==========================================
+
+async function showFoodDexDashboard() {
+    appContainer.innerHTML = `<div class="flex justify-center items-center min-h-screen"><p class="animate-pulse font-bold text-red-600">Accesso al FoodDex...</p></div>`;
+
+    try {
+        const res = await fetch('/api/fooddex');
+        currentFoodDexItems = await res.json();
+
+        ui.renderFoodDexDashboard(
+            appContainer, currentFoodDexItems,
+            () => switchModule('home'), // Torna alla Home
+            handleScanFoodDex           // Avvia lo scanner
+        );
+
+        document.getElementById('close-fooddex-scanner-btn')?.addEventListener('click', () => {
+            if (codeReader) codeReader.reset();
+            showFoodDexDashboard(); // Ricarica pulita
+        });
+
+    } catch (e) {
+        alert("Errore caricamento FoodDex.");
+        switchModule('home');
+    }
+}
+
+async function handleScanFoodDex() {
+    if (!codeReader) codeReader = new ZXing.BrowserMultiFormatReader();
+
+    try {
+        const videoInputDevices = await codeReader.listVideoInputDevices();
+        if (videoInputDevices && videoInputDevices.length > 0) {
+            let selectedDeviceId = videoInputDevices[0].deviceId;
+            for (let i = 0; i < videoInputDevices.length; i++) {
+                let label = videoInputDevices[i].label.toLowerCase();
+                if (label.includes("back") || label.includes("posteriore") || label.includes("environment")) {
+                    selectedDeviceId = videoInputDevices[i].deviceId;
+                    if (!label.includes("ultrawide") && !label.includes("ultra wide")) break;
+                }
+            }
+
+            codeReader.decodeFromVideoDevice(selectedDeviceId, 'fooddex-reader-video', (result, err) => {
+                if (result) {
+                    const barcode = result.getText();
+                    if (codeReader) codeReader.reset();
+                    fetchFoodDexProduct(barcode);
+                }
+            });
+        } else {
+            await appAlert("Nessuna fotocamera rilevata sul dispositivo.", "Errore Fotocamera", "error");
+        }
+    } catch (err) {
+        await appAlert("Per usare lo scanner devi consentire l'accesso alla fotocamera.", "Permessi Negati", "error");
+    }
+}
+
+async function fetchFoodDexProduct(barcode) {
+    appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-red-600">Analisi del selvatico in corso... 🔍</div>`;
+
+    try {
+        const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        const data = await res.json();
+
+        if (data.status === 1) {
+            const p = data.product;
+            const name = p.product_name || "Alimento Misterioso";
+            const img = p.image_front_url || "";
+            const n = p.nutriments || {};
+
+            let cal = n['energy-kcal_100g'];
+            if (cal === undefined || cal === null) {
+                if (n['energy-kj_100g']) cal = n['energy-kj_100g'] / 4.184;
+                else if (n['energy_100g']) cal = n['energy_100g'] / 4.184;
+                else cal = 0;
+            }
+            if (cal > 900) cal = cal / 4.184;
+            cal = parseFloat(Number(cal).toFixed(1));
+
+            const pro = n['proteins_100g'] || 0;
+            const carbo = n['carbohydrates_100g'] || 0;
+            const fat = n['fat_100g'] || 0;
+
+            let type = "Normale 🟢";
+            if (pro >= 15 && pro > carbo && pro > fat) type = "Lotta 🥊";
+            else if (cal < 50 || name.toLowerCase().includes("verdura") || name.toLowerCase().includes("insalata")) type = "Erba 🌿";
+            else if (fat >= 20) type = "Fuoco 🔥";
+            else if (carbo >= 50 && (n['sugars_100g'] || 0) >= 15) type = "Folletto 🧚";
+            else if (carbo >= 50) type = "Terra 🪨";
+
+            // --- ESTRAZIONE IBRIDA DEL PESO ---
+            let pesoConfezione = 0;
+
+            // 1. Proviamo a estrarlo in automatico
+            if (p.product_quantity) {
+                pesoConfezione = parseFloat(p.product_quantity);
+            } else if (p.quantity) {
+                const match = p.quantity.match(/(\d+[\.,]?\d*)/);
+                if (match) pesoConfezione = parseFloat(match[1].replace(',', '.'));
+            }
+
+            // 2. Se non lo abbiamo trovato (o è 0), te lo chiediamo con la modale elegante!
+            if (pesoConfezione === 0 || isNaN(pesoConfezione)) {
+                const pesoConfezioneStr = await appPrompt(
+                    `Ho trovato: ${name}\n\nIl database però non specifica il formato. Quanto pesa l'intera confezione in GRAMMI?`,
+                    "500",
+                    "Peso Sconosciuto"
+                );
+
+                if (pesoConfezioneStr === null) return showFoodDexDashboard(); // Se clicchi 'Annulla' interrompiamo la cattura
+                pesoConfezione = parseFloat(pesoConfezioneStr) || 0;
+            }
+
+            const newItem = {
+                barcode: barcode,
+                nome: name,
+                immagine: img,
+                calorie100: cal,
+                proteine100: pro,
+                carbo100: carbo,
+                grassi100: fat,
+                pesoConfezione: pesoConfezione, // Salvato!
+                tipoAlimento: type
+            };
+
+            const saveRes = await fetch('/api/fooddex', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newItem)
+            });
+
+            if (saveRes.ok) {
+                const responseData = await saveRes.json();
+
+                if (responseData.alreadyCaught) {
+                    await appAlert(`Hai già catturato "${name}" nel tuo FoodDex!`, "Già registrato", "alert");
+                } else {
+                    if ("vibrate" in navigator) navigator.vibrate([100, 50, 100, 50, 200]);
+                    await appAlert(`Hai registrato:\n"${name}"\n\nAppartiene al Tipo: ${type}\n📦 Formato: ${pesoConfezione}g`, "🎉 PRESO!", "success");
+                }
+                showFoodDexDashboard();
+            } else {
+                await appAlert("Errore nel salvataggio nel database.", "Errore", "error");
+                showFoodDexDashboard();
+            }
+
+        } else {
+            await appAlert("Il prodotto è fuggito (non trovato sul database mondiale).", "Mancato!", "error");
+            showFoodDexDashboard();
+        }
+    } catch (e) {
+        await appAlert("Errore di connessione al database degli alimenti.", "Errore di Rete", "error");
+        showFoodDexDashboard();
+    }
+}
 
 document.addEventListener('DOMContentLoaded', init);
