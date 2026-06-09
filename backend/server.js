@@ -306,10 +306,11 @@ app.post('/api/recommend-meal', async (req, res) => {
         La mia richiesta: "${question}"
         
         REGOLE FONDAMENTALI:
-        1. Genera esattamente 3 opzioni di pasto principali, ben distinte tra loro (es. una a base di carne, una di pesce/uova, una vegetariana o abbinamento diverso).
+        1. Genera esattamente 3 opzioni di pasto principali, ben distinte tra loro.
         2. I pasti devono rispettare il più possibile i macro RIMANENTI senza sforare troppo in eccesso.
-        3. Per ogni pasto principale, genera 1 "variante" diretta (es: cambia la fonte proteica o la fonte di carboidrati, mantenendo i macro totali molto simili).
-        4. Sii realistico e umano con le porzioni (es. un pasto non deve avere 400g di pollo per raggiungere le proteine, se i macro rimanenti sono troppi proponi un pasto normale e usa il "messaggio" per consigliarmi di fare uno spuntino extra dopo).
+        3. ATTENZIONE AGLI SPUNTINI: Se la richiesta è per uno "Spuntino", DEVI proporre ESCLUSIVAMENTE cibi veloci, snack, frutta, yogurt, gallette, proteine in polvere, affettati, frutta secca o barrette. ASSOLUTAMENTE NESSUN PIATTO CUCINATO (niente pasta, niente pollo ai ferri, niente pesce).
+        4. CREATIVITÀ: Usa i miei gusti abituali come base, ma hai la totale libertà di inserire 1 o 2 ingredienti nuovi o sfiziosi per variare la dieta, purché abbiano senso con il pasto.
+        5. Genera 1 "variante" per ogni opzione (es: cambia una fonte proteica o di carbo).
         
         Restituisci SOLO un array JSON con questa esatta struttura:
         [
@@ -329,7 +330,7 @@ app.post('/api/recommend-meal', async (req, res) => {
               "totaleProteine": 0,
               "totaleCarbo": 0,
               "totaleGrassi": 0,
-              "messaggio": "Motivo per scegliere questa variante (es. più veloce, senza carne, ecc.).",
+              "messaggio": "Motivo per scegliere questa variante.",
               "ingredienti": [
                 { "nome": "Ingrediente alternativo (quantità)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
               ]

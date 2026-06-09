@@ -537,25 +537,6 @@ export function renderActiveExercise(container, exercise, lastSession, currentSe
         });
     });
 
-    container.querySelectorAll('.adjust-btn').forEach(btn => { /* Lasciala identica */
-        btn.addEventListener('click', (e) => {
-            const idx = parseInt(btn.dataset.idx, 10);
-            const field = btn.dataset.field;
-            const step = parseFloat(btn.dataset.step);
-            const action = btn.dataset.action;
-
-            const inputElement = container.querySelector(`input[data-idx="${idx}"][data-field="${field}"]`);
-            let currentValue = parseFloat(inputElement.value) || 0;
-
-            if (action === 'plus') currentValue += step;
-            else if (action === 'minus') currentValue = Math.max(0, currentValue - step);
-
-            currentValue = parseFloat(currentValue.toFixed(2));
-            inputElement.value = currentValue;
-            onInput(idx, field, currentValue);
-        });
-    });
-
     container.querySelectorAll('.save-set-btn').forEach(btn => btn.addEventListener('click', (e) => onSaveSet(parseInt(e.currentTarget.dataset.idx, 10))));
     container.querySelectorAll('.edit-set-btn').forEach(btn => btn.addEventListener('click', (e) => onEditSet(parseInt(e.currentTarget.dataset.idx, 10))));
 }
@@ -797,6 +778,7 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
     const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
     let ingredientsHtml = '';
+    // Cerca la riga: let ingredientsHtml = ''; in renderMealDetails e SOSTITUISCI il blocco if successivo con questo:
     if (meal.ingredienti && meal.ingredienti.length > 0) {
         ingredientsHtml = `
             <div class="pt-6 border-t border-gray-100">
@@ -809,8 +791,13 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
                                 <p class="text-[10px] font-bold text-gray-500 mt-1">${Number(ing.proteine).toFixed(1)}g P • ${Number(ing.carboidrati).toFixed(1)}g C • ${Number(ing.grassi).toFixed(1)}g G</p>
                             </div>
                             <div class="flex items-center flex-shrink-0">
-                                <span class="font-bold text-gray-900 text-sm">${Number(ing.calorie).toFixed(1)} kcal</span>
-                                <button data-idx="${idx}" class="remove-ing-btn ml-3 p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-110 transition-transform">
+                                <span class="font-bold text-gray-900 text-sm mr-3">${Number(ing.calorie).toFixed(1)} kcal</span>
+                                
+                                <button data-idx="${idx}" class="edit-ing-btn p-2 text-blue-500 hover:text-blue-700 bg-blue-50 rounded-full active:scale-110 transition-transform mr-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                </button>
+
+                                <button data-idx="${idx}" class="remove-ing-btn p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-110 transition-transform">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                 </button>
                             </div>
@@ -819,6 +806,8 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
                 </div>
             </div>`;
     }
+
+
 
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
@@ -841,10 +830,12 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
                 </div>
                 <h2 class="text-2xl font-black text-gray-900 leading-tight">${meal.alimenti}</h2>
                 
-                <div id="action-buttons" class="flex space-x-2 my-5">
-                    <button id="add-voice-meal-btn" class="flex-1 bg-gray-900 text-white font-bold text-xs py-3 rounded-xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-1">🎙️ Voce</button>
-                    <button id="add-scan-meal-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">📸 Scan</button>
-                    <button id="add-manual-meal-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">➕ Manuale</button>
+                <div id="action-buttons" class="grid grid-cols-2 gap-2 my-5">
+                    <button id="add-voice-meal-btn" class="bg-gray-900 text-white font-bold text-xs py-3 rounded-xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-1">🎙️ Voce</button>
+                    <button id="add-scan-meal-btn" class="bg-blue-50 text-blue-700 border border-blue-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">📸 Scan</button>
+                    <button id="add-manual-meal-btn" class="bg-white text-gray-900 border border-gray-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">➕ Manuale</button>
+                    
+                    <button id="add-fav-to-meal-btn" class="bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">⭐ Preferiti</button>
                 </div>
 
                 <div id="scanner-container" class="hidden mb-6 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
@@ -892,6 +883,17 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
 
     container.querySelectorAll('.remove-ing-btn').forEach(btn => {
         btn.addEventListener('click', (e) => onRemoveIngredient(parseInt(e.currentTarget.dataset.idx, 10)));
+    });
+
+    // Aggiungi questi insieme agli altri listener in fondo a renderMealDetails:
+    const favToMealBtn = document.getElementById('add-fav-to-meal-btn');
+    if (favToMealBtn) {
+        // Usa CustomEvent per passare la palla ad app.js
+        favToMealBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('openFavSelector', { detail: meal._id })));
+    }
+
+    container.querySelectorAll('.edit-ing-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => window.dispatchEvent(new CustomEvent('editIngredient', { detail: { mealId: meal._id, ingIdx: parseInt(e.currentTarget.dataset.idx, 10) } })));
     });
 }
 
@@ -1351,8 +1353,8 @@ export function renderFavoritesPage(container, favorites, onBack, onAddFavoriteC
     container.querySelectorAll('.fav-meal-btn').forEach(btn => btn.addEventListener('click', () => onAddFavoriteClick(btn.dataset.favId)));
 }
 
-// --- RENDER MODALE NUTRIZIONISTA AI (CAROSELLO + VARIANTI) ---
-export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
+// --- RENDER MODALE NUTRIZIONISTA AI (CARTE VERTICALI + IMPATTO MACRO) ---
+export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null, consumate = null) {
     const modalId = 'ai-modal';
     let modal = document.getElementById(modalId);
     if (modal) modal.remove();
@@ -1382,7 +1384,6 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
                         <p class="text-xs font-medium text-indigo-700 mb-4">Hai già richiesto opzioni per: <b class="uppercase">${cachedData.type}</b>.</p>
                         
                         <button id="restore-ai-btn" class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl text-[15px] transition-all active:scale-95 shadow-md mb-3 flex justify-center items-center gap-2">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                             Riprendi da dove eri
                         </button>
                         <button id="clear-ai-cache-btn" class="text-xs font-bold text-indigo-400 hover:text-indigo-600 p-2 active:scale-95 transition-transform">
@@ -1410,11 +1411,9 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
                     <p class="text-gray-500 font-bold animate-pulse text-center leading-relaxed">Sto incastrando i tuoi macro<br>e spulciando il tuo storico...</p>
                 </div>
 
-                <div id="ai-results-view" class="hidden h-full flex-col">
-                    <p class="text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-3 flex items-center justify-between flex-shrink-0">
-                        Opzioni Trovate <span>Scorri <span class="text-lg leading-none">↔</span></span>
-                    </p>
-                    <div id="ai-carousel" class="flex overflow-x-auto space-x-4 pb-4 -mx-6 px-6 snap-x [&::-webkit-scrollbar]:hidden">
+                <div id="ai-results-view" class="hidden flex-col">
+                    <p class="text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-4">Opzioni Trovate</p>
+                    <div id="ai-list" class="flex flex-col space-y-5">
                     </div>
                 </div>
             </div>
@@ -1423,7 +1422,8 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
 
     document.body.appendChild(modal);
 
-    // BLOCCO LO SCROLL DELLA PAGINA SOTTOSTANTE
+    // FIX SCROLL iOS: applichiamo overflow hidden sia ad html che a body
+    document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
 
     requestAnimationFrame(() => {
@@ -1436,23 +1436,20 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
         modal.querySelector('div').classList.add('translate-y-full');
         setTimeout(() => {
             modal.remove();
-            // RIPRISTINO LO SCROLL DELLA PAGINA QUANDO CHIUDO
+            // RIPRISTINO SCROLL
+            document.documentElement.style.overflow = '';
             document.body.style.overflow = '';
         }, 300);
     };
 
     document.getElementById('close-ai-modal').addEventListener('click', closeModal);
 
-    // Se esiste la cache, gestisce il ripristino o l'eliminazione
     if (cachedData && document.getElementById('restore-ai-btn')) {
         document.getElementById('restore-ai-btn').addEventListener('click', () => {
             document.getElementById('ai-selection-view').classList.add('hidden');
-            document.getElementById('ai-loading-view').classList.add('hidden');
-            document.getElementById('ai-results-view').classList.remove('hidden', 'flex-col');
-            document.getElementById('ai-results-view').classList.add('flex', 'flex-col');
-            renderCarousel(cachedData.recommendations, cachedData.type);
+            document.getElementById('ai-results-view').classList.remove('hidden');
+            renderCards(cachedData.recommendations, cachedData.type);
         });
-
         document.getElementById('clear-ai-cache-btn').addEventListener('click', () => {
             localStorage.removeItem('cachedAIRecommendations');
             document.getElementById('ai-cache-banner').classList.add('hidden');
@@ -1460,7 +1457,6 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
         });
     }
 
-    // Logica dei bottoni per lanciare la richiesta standard
     let selectedType = null;
     modal.querySelectorAll('.ai-meal-type-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -1474,58 +1470,80 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
 
             onAsk(question, (recommendations) => {
                 document.getElementById('ai-loading-view').classList.add('hidden');
-                document.getElementById('ai-results-view').classList.remove('hidden', 'flex-col');
-                document.getElementById('ai-results-view').classList.add('flex', 'flex-col');
-                renderCarousel(recommendations, selectedType);
+                document.getElementById('ai-results-view').classList.remove('hidden');
+                renderCards(recommendations, selectedType);
             });
         });
     });
 
-    function renderCarousel(recommendations, tipoPasto) {
-        // [IL CODICE DI RENDERCAROUSEL RIMANE IDENTICO A QUELLO CHE HAI GIA']
-        const carousel = document.getElementById('ai-carousel');
-        carousel.innerHTML = '';
+    function renderCards(recommendations, tipoPasto) {
+        const listContainer = document.getElementById('ai-list');
+        listContainer.innerHTML = '';
 
         let currentViews = recommendations.map(() => 'main');
 
         recommendations.forEach((rec, idx) => {
             const card = document.createElement('div');
-            card.className = "snap-center shrink-0 w-[88%] bg-white border border-gray-100 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] p-5 flex flex-col relative h-[560px]";
+            // CAMBIATO: Larghezza piena (w-full), altezza dinamica, stile classico
+            card.className = "w-full bg-white border border-gray-200 rounded-3xl shadow-sm p-5 flex flex-col relative";
 
             const renderCardContent = (viewState) => {
                 const data = viewState === 'main' ? rec : rec.variante;
                 const bgColor = viewState === 'main' ? 'bg-indigo-50 text-indigo-700' : 'bg-orange-50 text-orange-700';
                 const toggleText = viewState === 'main' ? '🔄 Variante' : '🔙 Originale';
 
+                // Calcolo Impatto
+                let impactHtml = '';
+                if (goals && consumate) {
+                    const newCal = consumate.calorie + data.totaleCalorie;
+                    const perc = Math.min(100, (newCal / goals.calorie) * 100);
+                    const colorClass = newCal > goals.calorie ? 'bg-red-500' : 'bg-indigo-500';
+                    const textClass = newCal > goals.calorie ? 'text-red-500' : 'text-indigo-600';
+
+                    impactHtml = `
+                        <div class="mt-2 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Impatto Giornaliero</span>
+                                <span class="text-xs font-black ${textClass}">${newCal.toFixed(0)} / ${goals.calorie} kcal</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                <div class="${colorClass} h-1.5 rounded-full transition-all" style="width: ${perc}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 return `
-                    <div class="flex justify-between items-center mb-3 flex-shrink-0">
+                    <div class="flex justify-between items-center mb-3">
                         <span class="text-[10px] font-black ${bgColor} px-2.5 py-1.5 rounded-lg uppercase tracking-wider">${viewState === 'main' ? 'Opzione ' + (idx + 1) : 'Variante ' + (idx + 1)}</span>
                         <button class="toggle-variant-btn text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-xl active:scale-95 transition-transform">${toggleText}</button>
                     </div>
                     
-                    <h3 class="text-lg font-black text-gray-900 leading-tight mb-1 flex-shrink-0 truncate">${data.nomePasto}</h3>
-                    <p class="text-[12px] font-medium text-gray-400 mb-3 leading-tight flex-shrink-0 truncate">${data.messaggio}</p>
+                    <h3 class="text-xl font-black text-gray-900 leading-tight mb-1">${data.nomePasto}</h3>
+                    <p class="text-xs font-medium text-gray-500 mb-3 leading-snug">${data.messaggio}</p>
 
-                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-2xl border border-gray-100 mb-4 flex-shrink-0">
+                    ${impactHtml}
+
+                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-2xl border border-gray-100 mb-4">
                         <div class="text-center"><p class="text-[9px] font-bold text-gray-400 uppercase">Kcal</p><p class="font-black text-gray-900 text-sm">${data.totaleCalorie}</p></div>
                         <div class="text-center"><p class="text-[9px] font-bold text-blue-400 uppercase">Pro</p><p class="font-black text-blue-700 text-sm">${data.totaleProteine}g</p></div>
                         <div class="text-center"><p class="text-[9px] font-bold text-green-500 uppercase">Car</p><p class="font-black text-green-700 text-sm">${data.totaleCarbo}g</p></div>
                         <div class="text-center"><p class="text-[9px] font-bold text-yellow-600 uppercase">Fat</p><p class="font-black text-yellow-700 text-sm">${data.totaleGrassi}g</p></div>
                     </div>
 
-                    <div class="flex-1 overflow-hidden flex flex-col mb-4 min-h-0">
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-gray-100 pb-1 flex-shrink-0">Ingredienti</p>
-                        <ul class="space-y-2 overflow-y-auto pr-1 flex-1">
+                    <div class="mb-5">
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-gray-100 pb-1">Ingredienti</p>
+                        <ul class="space-y-2">
                             ${data.ingredienti.map(ing => `
                                 <li class="flex justify-between items-center text-[13px]">
-                                    <span class="font-medium text-gray-700 truncate pr-2">${ing.nome}</span>
+                                    <span class="font-medium text-gray-700 pr-2">${ing.nome}</span>
                                     <span class="font-bold text-gray-900 flex-shrink-0">${ing.calorie} <span class="text-[10px] font-normal text-gray-400">kcal</span></span>
                                 </li>
                             `).join('')}
                         </ul>
                     </div>
 
-                    <button class="save-ai-meal-btn w-full bg-gray-900 text-white font-black text-[15px] py-3.5 rounded-2xl shadow-md active:scale-95 transition-transform flex justify-center items-center gap-2 flex-shrink-0 mt-auto">
+                    <button class="save-ai-meal-btn w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-md active:scale-95 transition-transform flex justify-center items-center gap-2 mt-auto">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                         Salva nel Diario
                     </button>
@@ -1540,23 +1558,17 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null) {
                     card.innerHTML = renderCardContent(currentViews[idx]);
                 } else if (e.target.closest('.save-ai-meal-btn')) {
                     const dataToSave = currentViews[idx] === 'main' ? rec : rec.variante;
-
                     const finalMeal = {
-                        pasto: tipoPasto,
-                        alimenti: dataToSave.nomePasto,
-                        calorie: dataToSave.totaleCalorie,
-                        proteine: dataToSave.totaleProteine,
-                        carboidrati: dataToSave.totaleCarbo,
-                        grassi: dataToSave.totaleGrassi,
-                        ingredienti: dataToSave.ingredienti
+                        pasto: tipoPasto, alimenti: dataToSave.nomePasto, calorie: dataToSave.totaleCalorie,
+                        proteine: dataToSave.totaleProteine, carboidrati: dataToSave.totaleCarbo,
+                        grassi: dataToSave.totaleGrassi, ingredienti: dataToSave.ingredienti
                     };
-
                     onSaveMeal(finalMeal);
                     closeModal();
                 }
             });
 
-            carousel.appendChild(card);
+            listContainer.appendChild(card);
         });
     }
 }

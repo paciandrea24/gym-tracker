@@ -1096,13 +1096,12 @@ function handleEditSet(idx) {
 
 // --- GESTIONE NUTRIZIONISTA AI ---
 function handleAskAI() {
-    // Leggiamo l'ultima generazione salvata localmente con controllo della data
+    // 1. Controllo e lettura Cache
     let cached = null;
     try {
         const rawCache = localStorage.getItem('cachedAIRecommendations');
         if (rawCache) {
             const parsed = JSON.parse(rawCache);
-            // Se la cache appartiene a OGGI, la carichiamo. Altrimenti la eliminiamo.
             if (parsed.date === new Date().toDateString()) {
                 cached = parsed;
             } else {
@@ -1113,25 +1112,25 @@ function handleAskAI() {
         console.warn("Errore lettura cache localStorage:", e);
     }
 
+    // 2. SPOSTATO QUI: Calcoliamo i macro consumati OGGI prima di aprire la modale
+    const goals = storage.getNutritionGoals();
+    let consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
+    const todayStr = new Date().toDateString();
+
+    currentMealsData.forEach(meal => {
+        if (new Date(meal.data).toDateString() === todayStr) {
+            consumate.calorie += Number(meal.calorie) || 0;
+            consumate.proteine += Number(meal.proteine) || 0;
+            consumate.carbo += Number(meal.carboidrati) || 0;
+            consumate.grassi += Number(meal.grassi) || 0;
+        }
+    });
+
+    // 3. Apriamo la Modale passando TUTTI i dati (inclusi goals e consumate)
     ui.renderAIModal(async (question, callbackResults) => {
 
-        // Estraiamo il tipoPasto dalla stringa (es: "Pasto: Cena.") per catalogare il salvataggio cache
         const match = question.match(/Pasto:\s*(\w+)/);
         const currentType = match ? match[1] : 'Pasto';
-
-        // Calcoliamo i macro consumati OGGI per passarli a Gemini
-        const goals = storage.getNutritionGoals();
-        let consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
-        const todayStr = new Date().toDateString();
-
-        currentMealsData.forEach(meal => {
-            if (new Date(meal.data).toDateString() === todayStr) {
-                consumate.calorie += Number(meal.calorie) || 0;
-                consumate.proteine += Number(meal.proteine) || 0;
-                consumate.carbo += Number(meal.carboidrati) || 0;
-                consumate.grassi += Number(meal.grassi) || 0;
-            }
-        });
 
         try {
             const response = await fetch('/api/recommend-meal', {
@@ -1146,7 +1145,7 @@ function handleAskAI() {
                     localStorage.setItem('cachedAIRecommendations', JSON.stringify({
                         type: currentType,
                         recommendations: data.recommendations,
-                        date: new Date().toDateString() // <--- AGGIUNGI QUESTO: Salva la data di oggi
+                        date: new Date().toDateString()
                     }));
                 } catch (e) {
                     console.warn("Il browser mobile ha bloccato il salvataggio in locale:", e);
@@ -1164,8 +1163,7 @@ function handleAskAI() {
         }
 
     }, async (mealDataToSave) => {
-        // Quando salvi con successo un pasto consigliato dall'IA, svuotiamo la cache 
-        // così la prossima volta eviti di riproporre cose vecchie a obiettivi già parzialmente completati
+        // Salvataggio con successo di un pasto consigliato dall'IA
         appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio pasto in corso...</div>`;
         try {
             const response = await fetch('/api/meals', {
@@ -1173,7 +1171,7 @@ function handleAskAI() {
                 body: JSON.stringify(mealDataToSave)
             });
             if (response.ok) {
-                localStorage.removeItem('cachedAIRecommendations'); // Reset cache a pasto registrato
+                localStorage.removeItem('cachedAIRecommendations');
                 showNutritionDashboard();
                 triggerStreak();
             } else {
@@ -1184,7 +1182,7 @@ function handleAskAI() {
             alert("Errore di connessione");
             showNutritionDashboard();
         }
-    }, cached); // <-- Passiamo la cache letta come terzo parametro
+    }, cached, goals, consumate); // <-- Ora le variabili esistono e sono passate correttamente!
 }
 
 // Listener per aggiornare il calcolo peso degli esercizi già esistenti
@@ -1205,6 +1203,142 @@ window.addEventListener('configExercise', async (e) => {
 
     await storage.saveRoutine(routine);
     alert(`Salvato! Da ora in poi i grafici di "${ex.name}" calcoleranno: (Kg x ${ex.weightMultiplier}) + ${ex.barbellWeight}kg.`);
+});
+
+// --- LOGICA MODIFICA ALIMENTO (PROPORZIONE PESO O MANUALE) ---
+window.addEventListener('editIngredient', async (e) => {
+    const { mealId, ingIdx } = e.detail;
+    const meal = currentMealsData.find(m => String(m._id) === String(mealId));
+    if (!meal) return;
+    const ing = meal.ingredienti[ingIdx];
+
+    // Chiediamo all'utente un moltiplicatore per fare prima
+    const modType = window.prompt(
+        `Stai modificando: ${ing.nome}\n\nOpzione 1: Inserisci un MOLTIPLICATORE per aggiornare tutto in proporzione (es. hai mangiato il doppio? Scrivi "2").\n\nOpzione 2: Scrivi "M" per inserire le calorie manualmente.`, "1"
+    );
+
+    if (modType === null) return; // Annullato
+
+    let newCal = ing.calorie;
+    let newPro = ing.proteine;
+    let newCar = ing.carboidrati;
+    let newFat = ing.grassi;
+
+    if (modType.toUpperCase() === 'M') {
+        // Modifica manuale pura
+        newCal = parseFloat(window.prompt("Nuove Calorie:", ing.calorie)) || 0;
+        newPro = parseFloat(window.prompt("Nuove Proteine (g):", ing.proteine)) || 0;
+        newCar = parseFloat(window.prompt("Nuovi Carboidrati (g):", ing.carboidrati)) || 0;
+        newFat = parseFloat(window.prompt("Nuovi Grassi (g):", ing.grassi)) || 0;
+    } else {
+        // Proporzione
+        const mult = parseFloat(modType);
+        if (!isNaN(mult) && mult > 0) {
+            newCal = parseFloat((ing.calorie * mult).toFixed(1));
+            newPro = parseFloat((ing.proteine * mult).toFixed(1));
+            newCar = parseFloat((ing.carboidrati * mult).toFixed(1));
+            newFat = parseFloat((ing.grassi * mult).toFixed(1));
+        } else {
+            return alert("Valore non valido.");
+        }
+    }
+
+    // Calcoliamo la differenza per aggiornare i totali del pasto "padre"
+    const diffCal = newCal - ing.calorie;
+    const diffPro = newPro - ing.proteine;
+    const diffCar = newCar - ing.carboidrati;
+    const diffFat = newFat - ing.grassi;
+
+    meal.calorie = Math.max(0, parseFloat((meal.calorie + diffCal).toFixed(1)));
+    meal.proteine = Math.max(0, parseFloat((meal.proteine + diffPro).toFixed(1)));
+    meal.carboidrati = Math.max(0, parseFloat((meal.carboidrati + diffCar).toFixed(1)));
+    meal.grassi = Math.max(0, parseFloat((meal.grassi + diffFat).toFixed(1)));
+
+    // Aggiorniamo l'ingrediente specifico
+    ing.calorie = newCal;
+    ing.proteine = newPro;
+    ing.carboidrati = newCar;
+    ing.grassi = newFat;
+
+    try {
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio modifiche...</div>`;
+        const response = await fetch(`/api/meals/${mealId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(meal)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const idx = currentMealsData.findIndex(m => String(m._id) === String(mealId));
+            if (idx > -1) currentMealsData[idx] = data.meal;
+            handleMealClick(mealId); // Ricarica la vista
+        } else {
+            alert("Errore nel salvataggio");
+            handleMealClick(mealId);
+        }
+    } catch (e) {
+        alert("Errore di connessione");
+        handleMealClick(mealId);
+    }
+});
+
+// --- AGGIUNTA DI UN PREFERITO A UN PASTO ESISTENTE ---
+window.addEventListener('openFavSelector', async (e) => {
+    const targetMealId = e.detail;
+
+    // Sfruttiamo la schermata dei preferiti già esistente, 
+    // ma cambiamo momentaneamente il comportamento del click!
+    const originalFavoritesRender = ui.renderFavoritesPage;
+
+    ui.renderFavoritesPage(appContainer, currentFavorites, () => {
+        // Tasto Back: Annulla e torna al dettaglio pasto
+        handleMealClick(targetMealId);
+    }, async (favId) => {
+        // Tasto Click su un Preferito: Aggiungilo al pasto target!
+        const favMeal = currentFavorites.find(m => String(m._id) === String(favId));
+        const targetMeal = currentMealsData.find(m => String(m._id) === String(targetMealId));
+
+        if (!favMeal || !targetMeal) return;
+
+        if (!window.confirm(`Vuoi aggiungere "${favMeal.alimenti}" a questo pasto?`)) return;
+
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Aggiunta in corso...</div>`;
+
+        // Sommiamo i macro
+        targetMeal.calorie = parseFloat((targetMeal.calorie + favMeal.calorie).toFixed(1));
+        targetMeal.proteine = parseFloat((targetMeal.proteine + favMeal.proteine).toFixed(1));
+        targetMeal.carboidrati = parseFloat((targetMeal.carboidrati + favMeal.carboidrati).toFixed(1));
+        targetMeal.grassi = parseFloat((targetMeal.grassi + favMeal.grassi).toFixed(1));
+        targetMeal.alimenti += ", " + favMeal.alimenti;
+
+        // Uniamo gli ingredienti
+        if (favMeal.ingredienti && favMeal.ingredienti.length > 0) {
+            targetMeal.ingredienti.push(...favMeal.ingredienti);
+        } else {
+            targetMeal.ingredienti.push({
+                nome: favMeal.alimenti, calorie: favMeal.calorie,
+                proteine: favMeal.proteine, carboidrati: favMeal.carboidrati, grassi: favMeal.grassi
+            });
+        }
+
+        try {
+            const response = await fetch(`/api/meals/${targetMealId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(targetMeal)
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const idx = currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
+                if (idx > -1) currentMealsData[idx] = data.meal;
+                handleMealClick(targetMealId);
+            }
+        } catch (err) {
+            alert("Errore di connessione");
+            handleMealClick(targetMealId);
+        }
+    });
 });
 
 document.addEventListener('DOMContentLoaded', init);
