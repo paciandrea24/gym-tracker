@@ -172,12 +172,12 @@ async function showNutritionDashboard() {
         ui.renderNutritionDashboard(
             appContainer, mealsData, goals, currentNutriTab, currentFavorites,
             (tab) => { currentNutriTab = tab; showNutritionDashboard(); },
-            () => handleMicRecord(), // Chiamata senza ID per creare un nuovo pasto
-            handleManualMealClick,
+            () => handleMicRecord(),
+            () => handleManualMealClick(), // <--- ORA È PROTETTO!
             handleDeleteMeal,
             handleEditGoals,
             handleMealClick,
-            () => handleScanClick(), // Chiamata senza ID per creare un nuovo pasto
+            () => handleScanClick(),
             handleCloseScanner,
             handlePreviewFavorite,
             handleAskAI,
@@ -358,6 +358,8 @@ async function handleAddFavorite(favId) {
 }
 
 async function handleManualMealClick(targetMealId = null) {
+    if (typeof targetMealId !== 'string') targetMealId = null;
+
     ui.renderManualMealForm(appContainer, async (mealData) => {
         appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio in corso...</div>`;
 
