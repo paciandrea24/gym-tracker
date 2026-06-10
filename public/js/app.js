@@ -1512,8 +1512,27 @@ async function fetchFoodDexProduct(barcode) {
                 if (responseData.alreadyCaught) {
                     await appAlert(`Hai già catturato "${name}" nel tuo FoodDex!`, "Già registrato", "alert");
                 } else {
-                    if ("vibrate" in navigator) navigator.vibrate([100, 50, 100, 50, 200]);
-                    await appAlert(`Hai registrato:\n"${name}"\n\nAppartiene al Tipo: ${type}\n📦 Formato: ${pesoConfezione}g`, "🎉 PRESO!", "success");
+                    // CATTURA AVVENUTA! Controlliamo se hai fatto Level-Up
+                    const countRes = await fetch('/api/fooddex');
+                    const allItems = await countRes.json();
+                    const newCount = allItems.length;
+
+                    let leveledUpTo = null;
+                    let levelIcon = null;
+
+                    if (newCount === 10) { leveledUpTo = "Ricercatore di Macro"; levelIcon = "🔬"; }
+                    else if (newCount === 50) { leveledUpTo = "Capopalestra Nutrizionale"; levelIcon = "🏛️"; }
+                    else if (newCount === 150) { leveledUpTo = "Maestro della Dieta"; levelIcon = "👑"; }
+                    else if (newCount === 500) { leveledUpTo = "Leggenda Suprema"; levelIcon = "🌟"; }
+
+                    // INNESCA LA SORPRESA O L'AVVISO STANDARD
+                    if (leveledUpTo) {
+                        await ui.showLevelUpSurprise(leveledUpTo, levelIcon, newCount);
+                    } else {
+                        if ("vibrate" in navigator) navigator.vibrate([100, 50, 100, 50, 200]);
+                        const msgPeso = pesoConfezione > 0 ? `\n📦 Formato: ${pesoConfezione}g` : `\n📦 Formato: Sconosciuto`;
+                        await appAlert(`Hai registrato:\n"${name}"\n\nAppartiene al Tipo: ${type}${msgPeso}`, "🎉 PRESO!", "success");
+                    }
                 }
                 showFoodDexDashboard();
             } else {
