@@ -212,7 +212,7 @@ app.post('/api/analyze-meal', async (req, res) => {
         console.log("🗣️ Testo ricevuto dall'app:", text);
 
         const model = genAI.getGenerativeModel({
-            model: "gemini-3.5-flash",
+            model: "gemini-3.1-flash-lite",
             generationConfig: { responseMimeType: "application/json" }
         });
 
@@ -337,7 +337,7 @@ app.post('/api/recommend-meal', async (req, res) => {
         };
 
         const model = genAI.getGenerativeModel({
-            model: "gemini-3.5-flash",
+            model: "gemini-3.1-flash-lite",
             generationConfig: { responseMimeType: "application/json" }
         });
 
