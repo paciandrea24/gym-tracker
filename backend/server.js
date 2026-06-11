@@ -525,7 +525,7 @@ app.get('/api/trigger-notifications', async (req, res) => {
     if (tipoNotifica === 'acqua') {
         payloadStr = JSON.stringify({
             title: "Idratazione! 💧",
-            body: "È ora di bere un bel bicchiere d'acqua! Mantieniti idratato."
+            body: "È l'ora di un bel bicchierino d'acqua! Mantieniti idratato."
         });
     } else if (tipoNotifica === 'cena') {
         // Controllo intelligente: hai già cenato oggi?
@@ -543,7 +543,7 @@ app.get('/api/trigger-notifications', async (req, res) => {
         } else {
             payloadStr = JSON.stringify({
                 title: "Diario Alimentare 🍽️",
-                body: "Non hai ancora loggato la cena! Ricordati di inserirla prima di andare a letto."
+                body: "Non hai ancora salvato la cena! Ricordati di inserirla prima di andare a letto."
             });
         }
     }
