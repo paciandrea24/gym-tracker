@@ -1662,9 +1662,9 @@ export function renderFoodDexDashboard(container, foodItems, onBack, onScan) {
     // Sistema dei Livelli Allenatore
     const count = foodItems.length;
     let rank = "Allenatore Novellino";
-    let nextGoal = 10;
+    let nextGoal = 12; // <--- Spostato temporaneamente a 12!
 
-    if (count >= 10) { rank = "Ricercatore di Macro"; nextGoal = 50; }
+    if (count >= 12) { rank = "Ricercatore di Macro"; nextGoal = 50; } // <--- Spostato a 12!
     if (count >= 50) { rank = "Capopalestra Nutrizionale"; nextGoal = 150; }
     if (count >= 150) { rank = "Maestro della Dieta"; nextGoal = 500; }
 

@@ -1520,7 +1520,7 @@ async function fetchFoodDexProduct(barcode) {
                     let leveledUpTo = null;
                     let levelIcon = null;
 
-                    if (newCount === 10) { leveledUpTo = "Ricercatore di Macro"; levelIcon = "🔬"; }
+                    if (newCount === 12) { leveledUpTo = "Ricercatore di Macro"; levelIcon = "🔬"; } // <--- SPOSTATO A 12!
                     else if (newCount === 50) { leveledUpTo = "Capopalestra Nutrizionale"; levelIcon = "🏛️"; }
                     else if (newCount === 150) { leveledUpTo = "Maestro della Dieta"; levelIcon = "👑"; }
                     else if (newCount === 500) { leveledUpTo = "Leggenda Suprema"; levelIcon = "🌟"; }
