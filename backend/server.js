@@ -396,12 +396,20 @@ app.post('/api/recommend-meal', async (req, res) => {
     }
 });
 
+// --- NUOVO SCHEMA PREFERITI INDIPENDENTI ---
+const FavoriteMealSchema = new mongoose.Schema({
+    pasto: String, alimenti: String, calorie: Number, proteine: Number, grassi: Number, carboidrati: Number,
+    ingredienti: [IngredientSchema]
+});
+const FavoriteMeal = mongoose.model('FavoriteMeal', FavoriteMealSchema);
+
 // --- API PREFERITI (CAROSELLO) ---
-app.put('/api/meals/:id/favorite', async (req, res) => {
+// Aggiunge una copia slegata del pasto ai preferiti
+app.post('/api/favorites', async (req, res) => {
     try {
-        const { isFavorite } = req.body;
-        const meal = await Meal.findByIdAndUpdate(req.params.id, { isFavorite }, { returnDocument: 'after' });
-        res.json({ success: true, meal });
+        const newFav = new FavoriteMeal(req.body);
+        await newFav.save();
+        res.json({ success: true, favorite: newFav });
     } catch (error) {
         res.status(500).json({ success: false });
     }
@@ -409,10 +417,9 @@ app.put('/api/meals/:id/favorite', async (req, res) => {
 
 app.get('/api/favorites', async (req, res) => {
     try {
-        // Cerca i pasti preferiti, dal più recente
-        const favs = await Meal.find({ isFavorite: true }).sort({ data: -1 });
+        // Peschiamo dalla nuova collezione indipendente
+        const favs = await FavoriteMeal.find().sort({ _id: -1 });
 
-        // Rimuove i doppioni: se hai salvato 2 volte "Caffè", te lo mostra 1 sola volta nel carosello
         const uniqueFavs = [];
         const seen = new Set();
         for (let f of favs) {
@@ -425,6 +432,16 @@ app.get('/api/favorites', async (req, res) => {
         res.json(uniqueFavs);
     } catch (error) {
         res.status(500).json([]);
+    }
+}); // <-- CORRETTO: Prima mancava il ');' qui!
+
+// Rimozione di un preferito dalla libreria
+app.delete('/api/favorites/:id', async (req, res) => {
+    try {
+        await FavoriteMeal.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false });
     }
 });
 
