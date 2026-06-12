@@ -45,6 +45,218 @@ const HistorySchema = new mongoose.Schema({
 });
 const History = mongoose.model('History', HistorySchema);
 
+// --- SCHEMA DISPENSA ---
+const PantryItemSchema = new mongoose.Schema({
+    // Dati prodotto
+    barcode: { type: String, default: '' },         // vuoto per prodotti aggiunti a voce
+    nome: { type: String, required: true },
+    immagine: { type: String, default: '' },
+
+    // Valori nutrizionali per 100g
+    calorie100: { type: Number, default: 0 },
+    proteine100: { type: Number, default: 0 },
+    carbo100: { type: Number, default: 0 },
+    grassi100: { type: Number, default: 0 },
+
+    // Quantità in dispensa
+    pesoConfezione: { type: Number, default: 0 },   // grammi per singola confezione
+    quantitaConfezioni: { type: Number, default: 1 },// numero confezioni acquistate
+    grammiTotali: { type: Number, default: 0 },      // pesoConfezione * quantitaConfezioni
+    grammiRimasti: { type: Number, default: 0 },     // scalato ad ogni pasto
+
+    // Soglia avviso: sotto il 20% del totale originale
+    sogliaBassa: { type: Number, default: 20 },      // percentuale
+
+    // Categoria (per l'AI)
+    categoria: { type: String, default: 'Altro' },  // Proteina, Carboidrato, Verdura, Frutta, Latticino, Condimento, Altro
+
+    dataAcquisto: { type: Date, default: Date.now },
+    attivo: { type: Boolean, default: true }         // false = finito/rimosso
+});
+const PantryItem = mongoose.model('PantryItem', PantryItemSchema);
+
+// --- SCHEMA CRONOLOGIA SCARICHI DISPENSA ---
+const PantryUsageSchema = new mongoose.Schema({
+    pantryItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'PantryItem' },
+    nomeItem: String,
+    grammiScalati: Number,
+    mealId: { type: mongoose.Schema.Types.ObjectId, ref: 'Meal', default: null },
+    nomePasto: String,
+    data: { type: Date, default: Date.now }
+});
+const PantryUsage = mongoose.model('PantryUsage', PantryUsageSchema);
+
+
+// ============================================================
+// API DISPENSA
+// ============================================================
+
+// GET — tutti gli articoli in dispensa (attivi)
+app.get('/api/pantry', async (req, res) => {
+    try {
+        const items = await PantryItem.find({ attivo: true }).sort({ dataAcquisto: -1 });
+
+        // Aggiungi flag "scorte basse" a ogni item
+        const itemsConFlag = items.map(item => {
+            const percentualeRimasta = item.grammiTotali > 0
+                ? (item.grammiRimasti / item.grammiTotali) * 100
+                : 0;
+            return {
+                ...item.toObject(),
+                scortaBassa: percentualeRimasta <= item.sogliaBassa && item.grammiRimasti > 0,
+                esaurito: item.grammiRimasti <= 0
+            };
+        });
+
+        res.json(itemsConFlag);
+    } catch (e) {
+        res.status(500).json([]);
+    }
+});
+
+// GET — cronologia scarichi di un articolo specifico
+app.get('/api/pantry/:id/usage', async (req, res) => {
+    try {
+        const usage = await PantryUsage.find({ pantryItemId: req.params.id })
+            .sort({ data: -1 })
+            .limit(50);
+        res.json(usage);
+    } catch (e) {
+        res.status(500).json([]);
+    }
+});
+
+// POST — aggiungi articolo (da scanner o voce)
+app.post('/api/pantry', async (req, res) => {
+    try {
+        const { barcode, nome, immagine, calorie100, proteine100, carbo100, grassi100,
+            pesoConfezione, quantitaConfezioni, categoria } = req.body;
+
+        const qty = parseInt(quantitaConfezioni) || 1;
+        const peso = parseFloat(pesoConfezione) || 0;
+        const grammiTotali = peso * qty;
+
+        // Se esiste già un articolo con lo stesso barcode (o stesso nome se senza barcode)
+        // aumenta solo la quantità invece di creare un duplicato
+        let query = barcode
+            ? { barcode, attivo: true }
+            : { nome: { $regex: new RegExp(`^${nome}$`, 'i') }, attivo: true };
+
+        const existing = await PantryItem.findOne(query);
+
+        if (existing) {
+            existing.quantitaConfezioni += qty;
+            existing.grammiTotali += grammiTotali;
+            existing.grammiRimasti += grammiTotali;
+            await existing.save();
+            return res.json({ success: true, item: existing, wasExisting: true });
+        }
+
+        const newItem = new PantryItem({
+            barcode: barcode || '',
+            nome, immagine: immagine || '',
+            calorie100: parseFloat(calorie100) || 0,
+            proteine100: parseFloat(proteine100) || 0,
+            carbo100: parseFloat(carbo100) || 0,
+            grassi100: parseFloat(grassi100) || 0,
+            pesoConfezione: peso,
+            quantitaConfezioni: qty,
+            grammiTotali,
+            grammiRimasti: grammiTotali,
+            categoria: categoria || 'Altro'
+        });
+
+        await newItem.save();
+        res.json({ success: true, item: newItem, wasExisting: false });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// PUT — aggiorna quantità manualmente (es. rifornimento)
+app.put('/api/pantry/:id', async (req, res) => {
+    try {
+        const item = await PantryItem.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        res.json({ success: true, item });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// DELETE — rimuove dalla dispensa
+app.delete('/api/pantry/:id', async (req, res) => {
+    try {
+        await PantryItem.findByIdAndUpdate(req.params.id, { attivo: false });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
+// POST — scala grammi dalla dispensa (chiamato quando si salva un pasto)
+// Body: { ingredienti: [{ nome, grammi }], mealId, nomePasto }
+app.post('/api/pantry/consume', async (req, res) => {
+    try {
+        const { ingredienti, mealId, nomePasto } = req.body;
+        const risultati = [];
+
+        for (const ing of ingredienti) {
+            if (!ing.nome || !ing.grammi || ing.grammi <= 0) continue;
+
+            // Cerca nella dispensa per nome (fuzzy: contiene il nome)
+            const pantryItem = await PantryItem.findOne({
+                nome: { $regex: new RegExp(ing.nome.split(' ')[0], 'i') },
+                attivo: true,
+                grammiRimasti: { $gt: 0 }
+            });
+
+            if (pantryItem) {
+                const grammiDaScalare = Math.min(ing.grammi, pantryItem.grammiRimasti);
+                pantryItem.grammiRimasti = Math.max(0, pantryItem.grammiRimasti - grammiDaScalare);
+                await pantryItem.save();
+
+                // Salva nella cronologia
+                await new PantryUsage({
+                    pantryItemId: pantryItem._id,
+                    nomeItem: pantryItem.nome,
+                    grammiScalati: grammiDaScalare,
+                    mealId: mealId || null,
+                    nomePasto: nomePasto || 'Pasto non specificato'
+                }).save();
+
+                const percentuale = pantryItem.grammiTotali > 0
+                    ? (pantryItem.grammiRimasti / pantryItem.grammiTotali) * 100
+                    : 0;
+
+                risultati.push({
+                    nome: pantryItem.nome,
+                    grammiScalati: grammiDaScalare,
+                    grammiRimasti: pantryItem.grammiRimasti,
+                    scortaBassa: percentuale <= pantryItem.sogliaBassa && pantryItem.grammiRimasti > 0,
+                    esaurito: pantryItem.grammiRimasti <= 0
+                });
+            }
+        }
+
+        // Restituisce lista di prodotti con scorte basse per mostrare avvisi nel frontend
+        const avvisi = risultati.filter(r => r.scortaBassa || r.esaurito);
+        res.json({ success: true, risultati, avvisi });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// GET — lista articoli per l'AI (solo nome, grammi rimasti, macro)
+app.get('/api/pantry/for-ai', async (req, res) => {
+    try {
+        const items = await PantryItem.find({ attivo: true, grammiRimasti: { $gt: 0 } })
+            .select('nome grammiRimasti calorie100 proteine100 carbo100 grassi100 categoria');
+        res.json(items);
+    } catch (e) {
+        res.status(500).json([]);
+    }
+});
+
 // --- MODELLO DATABASE FOODDEX ---
 const FoodDexSchema = new mongoose.Schema({
     barcode: { type: String, required: true, unique: true },
@@ -319,16 +531,44 @@ app.get('/api/today-meals', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
-// --- API: CONSIGLIERE NUTRIZIONALE BASATO SUI GUSTI (OPZIONE B) ---
 app.post('/api/recommend-meal', async (req, res) => {
     try {
         const { question, goals, consumate } = req.body;
 
-        // 1. Recupera gli ultimi 50 pasti per estrapolare la lista dei cibi abituali (i tuoi gusti)
-        const recentMeals = await Meal.find().sort({ data: -1 }).limit(50);
-        const ingredientiAbituali = [...new Set(recentMeals.map(m => m.alimenti))].join(', ');
+        // 1. Legge la dispensa virtuale (solo prodotti disponibili)
+        const pantryItems = await PantryItem.find({ attivo: true, grammiRimasti: { $gt: 50 } })
+            .select('nome grammiRimasti calorie100 proteine100 carbo100 grassi100 categoria')
+            .sort({ grammiRimasti: -1 });
 
-        // 2. Calcolo dei macro rimanenti (aiutiamo l'IA facendole noi la matematica base)
+        // 2. Fallback: se la dispensa è vuota, usa lo storico pasti (vecchio comportamento)
+        let contestoAlimenti = '';
+        let fonteContesto = '';
+
+        if (pantryItems.length > 0) {
+            const dispensa = pantryItems.map(p =>
+                `${p.nome} (${p.grammiRimasti}g disponibili, cat: ${p.categoria})`
+            ).join(', ');
+            contestoAlimenti = `DISPENSA ATTUALE (prodotti che ho fisicamente a casa): ${dispensa}`;
+            fonteContesto = 'dispensa';
+        } else {
+            // Fallback storico
+            const recentMeals = await Meal.find().sort({ data: -1 }).limit(60);
+            const tuttiGliIngredienti = new Set();
+            recentMeals.forEach(meal => {
+                if (meal.ingredienti && meal.ingredienti.length > 0) {
+                    meal.ingredienti.forEach(ing => {
+                        const nomePulito = ing.nome.replace(/\(.*?\)/g, '').replace(/\d+\s*g/gi, '').replace(/\d+\s*ml/gi, '').trim();
+                        if (nomePulito.length > 2) tuttiGliIngredienti.add(nomePulito);
+                    });
+                } else {
+                    tuttiGliIngredienti.add(meal.alimenti);
+                }
+            });
+            contestoAlimenti = `INGREDIENTI ABITUALI (dal mio storico): ${[...tuttiGliIngredienti].slice(0, 40).join(', ')}`;
+            fonteContesto = 'storico';
+        }
+
+        // 3. Calcolo macro rimanenti
         const rimanenti = {
             calorie: Math.max(0, goals.calorie - consumate.calorie),
             proteine: Math.max(0, goals.proteine - consumate.proteine),
@@ -342,40 +582,41 @@ app.post('/api/recommend-meal', async (req, res) => {
         });
 
         const prompt = `Sei il mio nutrizionista personale AI. L'app è usata solo da me.
-        I miei OBIETTIVI RIMANENTI per la giornata di oggi sono circa: ${rimanenti.calorie.toFixed(0)} kcal, ${rimanenti.proteine.toFixed(0)}g Proteine, ${rimanenti.carbo.toFixed(0)}g Carbo, ${rimanenti.grassi.toFixed(0)}g Grassi.
+        I miei OBIETTIVI RIMANENTI per oggi sono circa: ${rimanenti.calorie.toFixed(0)} kcal, ${rimanenti.proteine.toFixed(0)}g Proteine, ${rimanenti.carbo.toFixed(0)}g Carbo, ${rimanenti.grassi.toFixed(0)}g Grassi.
         
-        I miei GUSTI (cibi che mangio abitualmente): ${ingredientiAbituali || 'Usa cibi comuni, sani e semplici'}.
+        ${contestoAlimenti}
+        ${fonteContesto === 'dispensa' ? 'REGOLA CRITICA: Usa ESCLUSIVAMENTE i prodotti presenti nella dispensa elencata sopra. Non inventare ingredienti che non sono in lista.' : 'Usa questi ingredienti come base, puoi aggiungerne qualcuno nuovo.'}
         
         La mia richiesta: "${question}"
         
-        REGOLE FONDAMENTALI:
-        1. Genera esattamente 3 opzioni di pasto principali, ben distinte tra loro.
-        2. I pasti devono rispettare il più possibile i macro RIMANENTI senza sforare troppo in eccesso.
-        3. ATTENZIONE AGLI SPUNTINI: Se la richiesta è per uno "Spuntino", DEVI proporre ESCLUSIVAMENTE cibi veloci, snack, frutta, yogurt, gallette, proteine in polvere, affettati, frutta secca o barrette. ASSOLUTAMENTE NESSUN PIATTO CUCINATO (niente pasta, niente pollo ai ferri, niente pesce).
-        4. CREATIVITÀ: Usa i miei gusti abituali come base, ma hai la totale libertà di inserire 1 o 2 ingredienti nuovi o sfiziosi per variare la dieta, purché abbiano senso con il pasto.
-        5. Genera 1 "variante" per ogni opzione (es: cambia una fonte proteica o di carbo).
+        REGOLE:
+        1. Genera esattamente 3 opzioni DIVERSE tra loro come tema: classico, creativo/fusion, light/veloce.
+        2. ${fonteContesto === 'dispensa' ? 'USA SOLO ingredienti dalla dispensa. Controlla che ogni ingrediente sia nella lista fornita.' : 'Ricombina creativamente gli ingredienti.'}
+        3. Rispetta i macro RIMANENTI senza sforare eccessivamente.
+        4. Per spuntini: usa solo cibi veloci senza cottura (frutta, yogurt, affettati, frutta secca, gallette, barrette).
+        5. Genera 1 "variante" per ogni opzione con approccio diverso.
         
-        Restituisci SOLO un array JSON con questa esatta struttura:
+        Restituisci SOLO un array JSON:
         [
           {
-            "nomePasto": "Nome del pasto 1",
+            "nomePasto": "Nome descrittivo",
             "totaleCalorie": 0,
             "totaleProteine": 0,
             "totaleCarbo": 0,
             "totaleGrassi": 0,
-            "messaggio": "Breve frase motivazionale o consiglio su questo pasto.",
+            "messaggio": "Perché questo pasto è interessante.",
             "ingredienti": [
-              { "nome": "Ingrediente 1 (quantità in g)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
+              { "nome": "Ingrediente (quantità in g)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
             ],
             "variante": {
-              "nomePasto": "Variante del pasto 1",
+              "nomePasto": "Variante",
               "totaleCalorie": 0,
               "totaleProteine": 0,
               "totaleCarbo": 0,
               "totaleGrassi": 0,
-              "messaggio": "Motivo per scegliere questa variante.",
+              "messaggio": "Perché scegliere questa variante.",
               "ingredienti": [
-                { "nome": "Ingrediente alternativo (quantità)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
+                { "nome": "Ingrediente (quantità)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
               ]
             }
           }
@@ -383,16 +624,12 @@ app.post('/api/recommend-meal', async (req, res) => {
 
         const result = await model.generateContent(prompt);
         let jsonText = result.response.text();
-
-        // Pulizia preventiva (nel caso Gemini aggiunga formattazione markdown per errore)
         jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
-
         const recommendations = JSON.parse(jsonText);
-
         res.json({ success: true, recommendations });
     } catch (error) {
         console.error("Errore AI Recommender:", error);
-        res.status(500).json({ success: false, error: "Impossibile generare consigli in questo momento." });
+        res.status(500).json({ success: false, error: "Impossibile generare consigli." });
     }
 });
 

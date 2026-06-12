@@ -6,6 +6,7 @@ import * as scanner from '../components/scanner.js';
 import * as modal from '../components/modal.js';
 import * as ui from '../ui.js?v=20';
 import { exportToCSV } from '../utils.js?v=20';
+import * as pantryService from '../services/pantryService.js';
 
 export class NutritionView {
     constructor(container) {
@@ -387,6 +388,7 @@ export class NutritionView {
                         this.render();
                         userService.triggerStreak();
                     }
+                    this.scalaDispensa(data.meal);
                 } else {
                     throw new Error(data.error);
                 }
@@ -589,5 +591,60 @@ export class NutritionView {
             Proteine: m.proteine, Carboidrati: m.carboidrati, Grassi: m.grassi
         }));
         exportToCSV('storico_nutrizione.csv', rows);
+    }
+
+    // Scala automaticamente dalla dispensa dopo aver salvato un pasto
+    async scalaDispensa(meal) {
+        if (!meal) return;
+        try {
+            // Costruisci lista ingredienti con grammi
+            let ingredienti = [];
+            if (meal.ingredienti && meal.ingredienti.length > 0) {
+                ingredienti = meal.ingredienti.map(ing => ({
+                    nome: ing.nome,
+                    grammi: ing.calorie > 0 && meal.calorie100
+                        // Se abbiamo calorie per 100g, calcoliamo i grammi
+                        ? Math.round((ing.calorie / meal.calorie100) * 100)
+                        // Altrimenti usiamo le calorie come approssimazione dei grammi
+                        : Math.round(ing.calorie / 2)
+                }));
+            } else {
+                // Fallback: usa il nome del pasto intero
+                ingredienti = [{ nome: meal.alimenti, grammi: Math.round(meal.calorie / 2) }];
+            }
+
+            const result = await pantryService.consumeFromPantry(
+                ingredienti, meal._id, `${meal.pasto}: ${meal.alimenti}`
+            );
+
+            // Mostra avvisi scorte basse (non bloccanti, solo toast)
+            if (result.avvisi && result.avvisi.length > 0) {
+                result.avvisi.forEach(av => {
+                    this.showPantryToast(av);
+                });
+            }
+        } catch (e) {
+            // Silenzioso: lo scalaggio dispensa non deve bloccare il salvataggio pasto
+            console.warn('Scalaggio dispensa fallito:', e);
+        }
+    }
+
+    showPantryToast(avviso) {
+        const toast = document.createElement('div');
+        toast.className = "fixed top-4 left-1/2 -translate-x-1/2 z-[999999] bg-orange-500 text-white font-bold text-sm px-4 py-3 rounded-2xl shadow-xl max-w-xs text-center opacity-0 transition-all duration-300";
+
+        if (avviso.esaurito) {
+            toast.classList.replace('bg-orange-500', 'bg-red-500');
+            toast.innerHTML = `🔴 "${avviso.nome}" è esaurito dalla dispensa!`;
+        } else {
+            toast.innerHTML = `⚠️ "${avviso.nome}" in esaurimento (${avviso.grammiRimasti}g rimasti)`;
+        }
+
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.remove('opacity-0'));
+        setTimeout(() => {
+            toast.classList.add('opacity-0');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
     }
 }
