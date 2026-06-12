@@ -1,6 +1,5 @@
-import { formatDate } from './utils.js?v=8';
+// public/js/services/gymService.js
 
-// --- GESTIONE SCHEDE MULTIPLE (MONGODB) ---
 export async function getRoutines() {
     try { const res = await fetch('/api/gym/routines'); return await res.json(); } catch (e) { return []; }
 }
@@ -44,7 +43,6 @@ export async function removeExerciseFromRoutine(routineId, exerciseId) {
     }
 }
 
-// --- SESSIONE ATTIVA & BOZZE (Rimangono in Locale per non perderle se si ricarica la pagina) ---
 export function getActiveSession() { return JSON.parse(localStorage.getItem('activeWorkoutSession')) || null; }
 
 export function startSession(routineId, exerciseIds) {
@@ -95,7 +93,11 @@ export function getDraft(exerciseId) {
 }
 export function clearDraft() { localStorage.removeItem('workoutDraft'); }
 
-export function getNutritionGoals() {
-    return JSON.parse(localStorage.getItem('nutriGoals')) || { calorie: 2000, proteine: 150, carbo: 200, grassi: 60 };
+export async function getAllHistory() {
+    try {
+        const res = await fetch('/api/gym/history');
+        return await res.json();
+    } catch (e) {
+        return [];
+    }
 }
-export function saveNutritionGoals(goals) { localStorage.setItem('nutriGoals', JSON.stringify(goals)); }
