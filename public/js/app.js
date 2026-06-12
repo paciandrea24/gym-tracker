@@ -1,6 +1,7 @@
 import * as storage from './storage.js?v=20';
 import * as ui from './ui.js?v=20';
 import { debounce } from './utils.js?v=20';
+import { getWeekLabel, exportToCSV } from './utils.js?v=20';
 
 // --- WRAPPERS PER MODALI CUSTOM ---
 async function appAlert(message, title = 'Avviso', type = 'alert') {
@@ -113,11 +114,17 @@ async function showHomeDashboard() {
 
         ui.renderHomeDashboard(
             appContainer, stats, waterData.glasses, consumedCal, goals.calorie,
-            () => showStreakModal(), // Click Fiamma
-            () => switchModule('nutrition'), // Click Calorie (Ti porta a Nutrizione)
-            (newAmount) => handleUpdateWater(newAmount), // Click acqua
-            () => switchModule('gym'), // Inizia Allenamento
-            () => { switchModule('nutrition'); handleManualMealClick(); } // Aggiungi Pasto
+            () => showStreakModal(),
+            () => switchModule('nutrition'),
+            (newAmount) => handleUpdateWater(newAmount),
+            () => switchModule('gym'),
+            () => {
+                // FIX GLITCH: Passiamo una callback che verrà eseguita DOPO il rendering della nutrizione
+                currentAppModule = 'nutrition';
+                document.getElementById('nav-nutri').className = `flex flex-col items-center w-[70px] transition-colors text-[#4F46E5]`;
+                document.getElementById('nav-home').className = `flex flex-col items-center w-[70px] transition-colors text-gray-400 hover:text-gray-600`;
+                showNutritionDashboard(() => handleManualMealClick());
+            }
         );
         // --- EASTER EGG: IL TRUCCO DEI 5 TOCCHI ---
         const headerTitle = document.querySelector('header h1');
@@ -151,7 +158,7 @@ async function handleUpdateWater(newAmount) {
 // MODULO 1: NUTRIZIONE
 // ==========================================
 
-async function showNutritionDashboard() {
+async function showNutritionDashboard(onLoadCallback = null) {
     appContainer.innerHTML = `
         <div class="flex items-center justify-center min-h-screen">
             <p class="text-gray-500 font-bold animate-pulse">Caricamento dati dal server...</p>
@@ -161,19 +168,20 @@ async function showNutritionDashboard() {
     try {
         const url = currentNutriTab === 'oggi' ? '/api/today-meals' : '/api/history';
         const [response, favsResponse] = await Promise.all([fetch(url), fetch('/api/favorites')]);
-        if (!response.ok) throw new Error("Errore del server");
+
+        if (!response.ok) throw new Error("Errore API pasti");
+        if (!favsResponse.ok) throw new Error("Errore API preferiti");
 
         const mealsData = await response.json();
         currentMealsData = mealsData;
         currentFavorites = await favsResponse.json();
         const goals = storage.getNutritionGoals();
 
-        // 1. Renderizziamo l'interfaccia principale (inserisce l'HTML nel container)
         ui.renderNutritionDashboard(
             appContainer, mealsData, goals, currentNutriTab, currentFavorites,
             (tab) => { currentNutriTab = tab; showNutritionDashboard(); },
             () => handleMicRecord(),
-            () => handleManualMealClick(), // <--- ORA È PROTETTO!
+            () => handleManualMealClick(),
             handleDeleteMeal,
             handleEditGoals,
             handleMealClick,
@@ -184,14 +192,19 @@ async function showNutritionDashboard() {
             handleDailyHistoryClick
         );
 
-        // 2. ORA che l'HTML è presente nella pagina, agganciamo il listener al nuovo bottone dei preferiti
         const favoritesPageBtn = document.getElementById('favorites-page-btn');
         if (favoritesPageBtn) {
             favoritesPageBtn.addEventListener('click', showFavoritesPage);
         }
 
+        // FIX BUG: Controlliamo che sia una VERA funzione e non un click del mouse!
+        if (typeof onLoadCallback === 'function') {
+            onLoadCallback();
+        }
+
     } catch (error) {
-        appContainer.innerHTML = `<div class="p-10 text-center mt-20">Errore di connessione.</div>`;
+        console.error(error); // Aiuta per il debug
+        appContainer.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Errore di connessione al database.</div>`;
     }
 }
 
@@ -223,30 +236,20 @@ function handleDailyHistoryClick(dateStr) {
     ui.renderDailyNutritionStats(appContainer, dateStr, dayMeals, totals, goals, showNutritionDashboard);
 }
 
-// Apre la modale e aspetta la conferma
-// Apre la modale e gestisce Aggiunta o Rimozione dai Preferiti
+// GESTIONE NUOVI PREFERITI INDIPENDENTI
 function handlePreviewFavorite(favId) {
     const favMeal = currentFavorites.find(m => String(m._id) === String(favId));
     if (!favMeal) return;
 
     ui.renderFavoritePreviewModal(
         favMeal,
-        // 1. Azione di CONFERMA (Aggiungi a oggi)
         () => handleAddFavorite(favId),
-
-        // 2. Azione di RIMOZIONE (Togli dai preferiti)
         async () => {
             try {
-                const res = await fetch(`/api/meals/${favId}/favorite`, {
-                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ isFavorite: false }) // Togliamo lo status di preferito!
-                });
-                if (res.ok) {
-                    // Aggiorniamo la pagina Nutrizione per far ricaricare il carosello "Pasti Rapidi"
-                    showNutritionDashboard();
-                } else {
-                    alert("Errore durante la rimozione dai preferiti.");
-                }
+                // Elimina dalla nuova collezione
+                const res = await fetch(`/api/favorites/${favId}`, { method: 'DELETE' });
+                if (res.ok) showNutritionDashboard();
+                else alert("Errore durante la rimozione dai preferiti.");
             } catch (e) { alert("Errore di connessione."); }
         }
     );
@@ -317,18 +320,22 @@ async function handleRemoveIngredient(mealId, ingIdx) {
 }
 
 async function handleToggleFavorite(mealId, newStatus) {
+    const meal = currentMealsData.find(m => String(m._id) === String(mealId));
+    if (!meal) return;
+
     try {
-        const res = await fetch(`/api/meals/${mealId}/favorite`, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isFavorite: newStatus })
-        });
-        if (res.ok) {
-            const data = await res.json();
-            // Aggiorna in memoria e ricarica la vista dettaglio
-            const mealIndex = currentMealsData.findIndex(m => String(m._id) === String(mealId));
-            if (mealIndex > -1) currentMealsData[mealIndex] = data.meal;
-            handleMealClick(mealId);
+        if (newStatus) {
+            // Clona il pasto e invialo ai preferiti
+            const clone = { ...meal };
+            delete clone._id;
+            await fetch('/api/favorites', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(clone)
+            });
+            alert("Aggiunto ai preferiti!");
         }
+        // Ricarichiamo per aggiornare visivamente il tasto
+        handleMealClick(mealId);
     } catch (e) { alert("Errore salvataggio preferito."); }
 }
 
@@ -546,11 +553,11 @@ async function fetchProductFromBarcode(barcode) {
             openPreFilledManualMeal(name, cal, pro, carbo, fat, activeScannerTargetMealId);
         } else {
             alert("Spiacente, prodotto non trovato nel database mondiale.");
-            showNutritionDashboard();
+            if (activeScannerTargetMealId) handleMealClick(activeScannerTargetMealId); else showNutritionDashboard();
         }
     } catch (e) {
         alert("Errore di connessione a Open Food Facts.");
-        showNutritionDashboard();
+        if (activeScannerTargetMealId) handleMealClick(activeScannerTargetMealId); else showNutritionDashboard();
     }
 }
 
@@ -1549,5 +1556,44 @@ async function fetchFoodDexProduct(barcode) {
         showFoodDexDashboard();
     }
 }
+
+window.addEventListener('exportNutritionCSV', () => {
+    const rows = currentMealsData.map(m => ({
+        Data: new Date(m.data).toLocaleDateString('it-IT'),
+        Ora: new Date(m.data).toLocaleTimeString('it-IT'),
+        Pasto: m.pasto,
+        Alimento: m.alimenti,
+        Kcal: m.calorie,
+        Proteine: m.proteine,
+        Carboidrati: m.carboidrati,
+        Grassi: m.grassi
+    }));
+    exportToCSV('storico_nutrizione.csv', rows);
+});
+
+window.addEventListener('exportGymCSV', async () => {
+    try {
+        const historyRes = await fetch('/api/gym/history');
+        const history = await historyRes.json();
+
+        const rows = [];
+        history.forEach(session => {
+            const dataStr = new Date(session.endTime).toLocaleDateString('it-IT');
+            session.exercises.forEach(ex => {
+                ex.sets.forEach((set, idx) => {
+                    rows.push({
+                        Data: dataStr,
+                        Esercizio: ex.name,
+                        Tipo: ex.type,
+                        Serie: idx + 1,
+                        Reps_o_Minuti: set.reps,
+                        Kg: set.kg || 0
+                    });
+                });
+            });
+        });
+        exportToCSV('storico_palestra.csv', rows);
+    } catch (e) { alert("Errore durante l'esportazione"); }
+});
 
 document.addEventListener('DOMContentLoaded', init);

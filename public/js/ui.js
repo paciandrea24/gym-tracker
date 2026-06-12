@@ -1,4 +1,4 @@
-import { formatDate } from './utils.js?v=20';
+import { formatDate, getWeekLabel } from './utils.js?v=20';
 
 // --- RENDER HOME DASHBOARD (RIEPILOGO) ---
 export function renderHomeDashboard(container, stats, waterGlasses, consumedCal, goalCal, onFlameClick, onCalorieClick, onWaterUpdate, onStartWorkout, onAddManualMeal) {
@@ -197,48 +197,81 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
         `;
     } else {
         const reversedHistory = [...history].reverse();
+        const weeklyGroups = {};
+
+        reversedHistory.forEach(session => {
+            const week = getWeekLabel(session.endTime);
+            if (!weeklyGroups[week]) weeklyGroups[week] = { sessions: [], volumeKg: 0 };
+
+            weeklyGroups[week].sessions.push(session);
+
+            // Calcolo volume
+            session.exercises.forEach(ex => {
+                if (ex.type === 'sala-pesi') {
+                    ex.sets.forEach(set => weeklyGroups[week].volumeKg += (parseFloat(set.kg) || 0) * (parseInt(set.reps) || 0));
+                }
+            });
+        });
+
         contentHtml = `
-            ${reversedHistory.length === 0 ? `
+            <div class="mb-4 flex justify-end">
+                <button onclick="window.dispatchEvent(new CustomEvent('exportGymCSV'))" class="text-xs font-bold bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg flex items-center gap-1 active:scale-95 transition-transform">
+                    📥 Esporta CSV
+                </button>
+            </div>
+            ${Object.keys(weeklyGroups).length === 0 ? `
                 <div class="text-center py-10"><p class="text-gray-500 font-medium">Nessuno storico per questa scheda.</p></div>
             ` : `
-                <div class="space-y-4">
-                    ${reversedHistory.map(session => `
-                        <details class="bg-white rounded-2xl shadow-sm border border-gray-100 group">
-                            <summary class="p-4 font-bold text-gray-800 flex justify-between items-center cursor-pointer outline-none list-none [&::-webkit-details-marker]:hidden">
-                                <div class="flex items-center gap-3">
-                                    <div class="bg-gray-100 text-gray-900 p-2 rounded-lg">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                    </div>
-                                    <div>
-                                        <h3 class="text-base text-gray-900">Allenamento</h3>
-                                        <p class="text-xs text-gray-500 font-medium">${new Date(session.endTime).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-                                    </div>
-                                </div>
-                                <div class="text-gray-400 transition-transform group-open:rotate-180">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                </div>
-                            </summary>
-                            <div class="p-4 border-t border-gray-50 space-y-4 bg-gray-50/50 rounded-b-2xl">
-                                ${session.exercises.map(ex => `
-                                    <div class="p-2 -mx-2 rounded-xl">
-                                        <div class="flex justify-between items-center mb-2">
-                                            <h4 class="text-sm font-bold text-gray-700">${ex.name}</h4>
-                                        </div>
-                                        <div class="space-y-1">
-                                            ${ex.sets.map((s, i) => `
-                                                <div class="flex justify-between text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
-                                                    <span>Serie ${i + 1}</span>
-                                                    <span class="font-bold text-gray-900">
-                                                        ${ex.type === 'cardio' ? s.reps + ' min' : (ex.type === 'corpo-libero' ? s.reps + ' rep' : (s.kg || 0) + ' kg x ' + s.reps + ' rep')}
-                                                    </span>
+                <div class="space-y-6">
+                    ${Object.keys(weeklyGroups).map(week => {
+            const data = weeklyGroups[week];
+            const avgVolume = data.sessions.length > 0 ? (data.volumeKg / data.sessions.length).toFixed(0) : 0;
+            return `
+                        <div class="bg-gray-100/50 p-4 rounded-3xl border border-gray-200 shadow-sm">
+                            <h3 class="text-sm font-black text-gray-800 mb-1">${week}</h3>
+                            <div class="flex gap-4 mb-4 text-[11px] font-bold text-gray-500 uppercase">
+                                <span>Allenamenti: <span class="text-indigo-600">${data.sessions.length}</span></span>
+                                <span>Media Volume: <span class="text-gray-800">${avgVolume} kg</span>/sess.</span>
+                            </div>
+                            <div class="space-y-3">
+                                ${data.sessions.map(session => `
+                                    <details class="bg-white rounded-2xl shadow-sm border border-gray-100 group">
+                                        <summary class="p-4 font-bold text-gray-800 flex justify-between items-center cursor-pointer outline-none list-none [&::-webkit-details-marker]:hidden">
+                                            <div class="flex items-center gap-3">
+                                                <div class="bg-indigo-50 text-indigo-600 p-2 rounded-lg">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                </div>
+                                                <div>
+                                                    <h3 class="text-sm text-gray-900">${new Date(session.endTime).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}</h3>
+                                                </div>
+                                            </div>
+                                            <div class="text-gray-400 transition-transform group-open:rotate-180">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                            </div>
+                                        </summary>
+                                        <div class="p-4 border-t border-gray-50 space-y-4 bg-gray-50/50 rounded-b-2xl">
+                                            ${session.exercises.map(ex => `
+                                                <div class="p-2 -mx-2 rounded-xl">
+                                                    <h4 class="text-sm font-bold text-gray-700 mb-2">${ex.name}</h4>
+                                                    <div class="space-y-1">
+                                                        ${ex.sets.map((s, i) => `
+                                                            <div class="flex justify-between text-sm text-gray-600 bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                                                                <span>Serie ${i + 1}</span>
+                                                                <span class="font-bold text-gray-900">
+                                                                    ${ex.type === 'cardio' ? s.reps + ' min' : (ex.type === 'corpo-libero' ? s.reps + ' rep' : (s.kg || 0) + ' kg x ' + s.reps + ' rep')}
+                                                                </span>
+                                                            </div>
+                                                        `).join('')}
+                                                    </div>
                                                 </div>
                                             `).join('')}
                                         </div>
-                                    </div>
+                                    </details>
                                 `).join('')}
                             </div>
-                        </details>
-                    `).join('')}
+                        </div>
+                        `;
+        }).join('')}
                 </div>
             `}
         `;
@@ -652,65 +685,109 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             </div>
         `;
     } else {
-        const grouped = {};
-        mealsData.forEach(meal => {
-            const dateStr = new Date(meal.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
-            if (!grouped[dateStr]) grouped[dateStr] = { meals: [], totals: { cal: 0, pro: 0, car: 0, grassi: 0 } };
+        const weeklyGroups = {};
 
-            grouped[dateStr].meals.push(meal);
-            grouped[dateStr].totals.cal += Number(meal.calorie) || 0;
-            grouped[dateStr].totals.pro += Number(meal.proteine) || 0;
-            grouped[dateStr].totals.car += Number(meal.carboidrati) || 0;
-            grouped[dateStr].totals.grassi += Number(meal.grassi) || 0;
+        mealsData.forEach(meal => {
+            const week = getWeekLabel(meal.data);
+            if (!weeklyGroups[week]) {
+                weeklyGroups[week] = {
+                    daysMap: {},
+                    totals: { cal: 0, pro: 0, car: 0, grassi: 0 }
+                };
+            }
+
+            const dateStr = new Date(meal.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+            if (!weeklyGroups[week].daysMap[dateStr]) {
+                weeklyGroups[week].daysMap[dateStr] = { meals: [], totals: { cal: 0, pro: 0, car: 0, grassi: 0 } };
+            }
+
+            // Somma giornaliera
+            weeklyGroups[week].daysMap[dateStr].meals.push(meal);
+            weeklyGroups[week].daysMap[dateStr].totals.cal += Number(meal.calorie) || 0;
+            weeklyGroups[week].daysMap[dateStr].totals.pro += Number(meal.proteine) || 0;
+            weeklyGroups[week].daysMap[dateStr].totals.car += Number(meal.carboidrati) || 0;
+            weeklyGroups[week].daysMap[dateStr].totals.grassi += Number(meal.grassi) || 0;
+
+            // Somma Settimanale globale
+            weeklyGroups[week].totals.cal += Number(meal.calorie) || 0;
+            weeklyGroups[week].totals.pro += Number(meal.proteine) || 0;
+            weeklyGroups[week].totals.car += Number(meal.carboidrati) || 0;
+            weeklyGroups[week].totals.grassi += Number(meal.grassi) || 0;
         });
 
         contentHtml = `
-            ${Object.keys(grouped).length === 0 ? `
+            <div class="mb-4 flex justify-end">
+                <button onclick="window.dispatchEvent(new CustomEvent('exportNutritionCSV'))" class="text-xs font-bold bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg flex items-center gap-1 active:scale-95 transition-transform">
+                    📥 Esporta CSV
+                </button>
+            </div>
+            ${Object.keys(weeklyGroups).length === 0 ? `
                 <div class="text-center py-10"><p class="text-gray-500 font-medium">Nessun pasto registrato nello storico.</p></div>
             ` : `
-                <div class="space-y-4">
-                    ${Object.keys(grouped).map(dateStr => {
-            const day = grouped[dateStr];
-            const calPercent = Math.min(100, (day.totals.cal / goals.calorie) * 100);
+                <div class="space-y-8">
+                    ${Object.keys(weeklyGroups).map(week => {
+            const weekData = weeklyGroups[week];
+            const daysLogged = Object.keys(weekData.daysMap).length;
+            // Medie settimanali (Totale diviso i giorni in cui ha mangiato in quella settimana)
+            const avgCal = daysLogged > 0 ? (weekData.totals.cal / daysLogged).toFixed(0) : 0;
+            const avgPro = daysLogged > 0 ? (weekData.totals.pro / daysLogged).toFixed(0) : 0;
+
             return `
-                            <div class="daily-history-card bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 cursor-pointer active:scale-95 transition-transform" data-date="${dateStr}">
-                                <div class="flex justify-between items-center mb-4">
-                                    <div class="flex items-center gap-3">
-                                        <div class="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                        </div>
-                                        <div>
-                                            <h3 class="text-base font-bold text-gray-900 capitalize">${dateStr}</h3>
-                                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Vedi Statistiche</p>
-                                        </div>
-                                    </div>
-                                    <div class="text-gray-300">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                                    </div>
-                                </div>
-                                
-                                <div class="flex justify-between items-end mb-2">
-                                    <span class="text-2xl font-black text-gray-900">${Number(day.totals.cal).toFixed(0)} <span class="text-sm font-bold text-gray-400">/ ${goals.calorie} kcal</span></span>
-                                </div>
-                                <div class="w-full bg-gray-100 rounded-full h-2.5 mb-4 overflow-hidden">
-                                    <div class="bg-indigo-500 h-2.5 rounded-full" style="width: ${calPercent}%"></div>
-                                </div>
-                                
-                                <div class="grid grid-cols-3 gap-2">
-                                    <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                        <p class="text-[9px] font-bold text-blue-500 uppercase">Pro</p>
-                                        <p class="text-sm font-black text-gray-800">${Number(day.totals.pro).toFixed(0)}g</p>
-                                    </div>
-                                    <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                        <p class="text-[9px] font-bold text-green-500 uppercase">Car</p>
-                                        <p class="text-sm font-black text-gray-800">${Number(day.totals.car).toFixed(0)}g</p>
-                                    </div>
-                                    <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                        <p class="text-[9px] font-bold text-yellow-500 uppercase">Fat</p>
-                                        <p class="text-sm font-black text-gray-800">${Number(day.totals.grassi).toFixed(0)}g</p>
-                                    </div>
+                        <div>
+                            <div class="mb-4 bg-indigo-50 border border-indigo-100 p-3 rounded-xl flex justify-between items-center shadow-sm">
+                                <div>
+                                    <h3 class="text-sm font-black text-indigo-900">${week}</h3>
+                                    <p class="text-[10px] font-bold text-indigo-500 uppercase mt-0.5">Media: ${avgCal} kcal • ${avgPro}g Pro / giorno</p>
                                 </div>
                             </div>
+                            
+                            <div class="space-y-4">
+                            ${Object.keys(weekData.daysMap).map(dateStr => {
+                const day = weekData.daysMap[dateStr];
+                const calPercent = Math.min(100, (day.totals.cal / goals.calorie) * 100);
+                return `
+                                    <div class="daily-history-card bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 cursor-pointer active:scale-95 transition-transform" data-date="${dateStr}">
+                                        <div class="flex justify-between items-center mb-4">
+                                            <div class="flex items-center gap-3">
+                                                <div class="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                </div>
+                                                <div>
+                                                    <h3 class="text-base font-bold text-gray-900 capitalize">${dateStr}</h3>
+                                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Vedi Statistiche</p>
+                                                </div>
+                                            </div>
+                                            <div class="text-gray-300">
+                                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex justify-between items-end mb-2">
+                                            <span class="text-2xl font-black text-gray-900">${Number(day.totals.cal).toFixed(0)} <span class="text-sm font-bold text-gray-400">/ ${goals.calorie} kcal</span></span>
+                                        </div>
+                                        <div class="w-full bg-gray-100 rounded-full h-2.5 mb-4 overflow-hidden">
+                                            <div class="bg-indigo-500 h-2.5 rounded-full" style="width: ${calPercent}%"></div>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                                <p class="text-[9px] font-bold text-blue-500 uppercase">Pro</p>
+                                                <p class="text-sm font-black text-gray-800">${Number(day.totals.pro).toFixed(0)}g</p>
+                                            </div>
+                                            <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                                <p class="text-[9px] font-bold text-green-500 uppercase">Car</p>
+                                                <p class="text-sm font-black text-gray-800">${Number(day.totals.car).toFixed(0)}g</p>
+                                            </div>
+                                            <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
+                                                <p class="text-[9px] font-bold text-yellow-500 uppercase">Fat</p>
+                                                <p class="text-sm font-black text-gray-800">${Number(day.totals.grassi).toFixed(0)}g</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+            }).join('')}
+                            </div>
+                        </div>
                         `;
         }).join('')}
                 </div>
