@@ -452,21 +452,38 @@ export class NutritionView {
         let consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
         const todayStr = new Date().toDateString();
 
+        // NOVITÀ: Raccogliamo tutto ciò che hai mangiato oggi
+        let giaMangiati = new Set();
+
         this.currentMealsData.forEach(meal => {
             if (new Date(meal.data).toDateString() === todayStr) {
                 consumate.calorie += Number(meal.calorie) || 0;
                 consumate.proteine += Number(meal.proteine) || 0;
                 consumate.carbo += Number(meal.carboidrati) || 0;
                 consumate.grassi += Number(meal.grassi) || 0;
+
+                // Estrai gli alimenti per non farli riproporre all'AI
+                if (meal.ingredienti && meal.ingredienti.length > 0) {
+                    meal.ingredienti.forEach(ing => {
+                        // Pulisce il nome (es: "Pollo (150g)" diventa "pollo")
+                        const cleanName = ing.nome.replace(/\(.*?\)/g, '').trim().toLowerCase();
+                        giaMangiati.add(cleanName);
+                    });
+                } else {
+                    giaMangiati.add(meal.alimenti.toLowerCase());
+                }
             }
         });
+
+        const giaMangiatiArray = Array.from(giaMangiati);
 
         ui.renderAIModal(async (question, callbackResults) => {
             const match = question.match(/Pasto:\s*(\w+)/);
             const currentType = match ? match[1] : 'Pasto';
 
             try {
-                const data = await nutriService.recommendMeal(question, goals, consumate);
+                // NOVITÀ: Passiamo l'array dei cibi già mangiati
+                const data = await nutriService.recommendMeal(question, goals, consumate, giaMangiatiArray);
                 if (data.success && data.recommendations) {
                     try {
                         localStorage.setItem('cachedAIRecommendations', JSON.stringify({

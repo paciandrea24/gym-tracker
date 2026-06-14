@@ -544,14 +544,15 @@ app.get('/api/today-meals', async (req, res) => {
 
 app.post('/api/recommend-meal', async (req, res) => {
     try {
-        const { question, goals, consumate } = req.body;
+        // NOVITÀ: Estrai giaMangiati dal body
+        const { question, goals, consumate, giaMangiati } = req.body;
 
         // 1. Legge la dispensa virtuale (solo prodotti disponibili)
         const pantryItems = await PantryItem.find({ attivo: true, grammiRimasti: { $gt: 50 } })
             .select('nome grammiRimasti calorie100 proteine100 carbo100 grassi100 categoria')
             .sort({ grammiRimasti: -1 });
 
-        // 2. Fallback: se la dispensa è vuota, usa lo storico pasti (vecchio comportamento)
+        // 2. Fallback: se la dispensa è vuota, usa lo storico pasti
         let contestoAlimenti = '';
         let fonteContesto = '';
 
@@ -559,10 +560,9 @@ app.post('/api/recommend-meal', async (req, res) => {
             const dispensa = pantryItems.map(p =>
                 `${p.nome} (${p.grammiRimasti}g disponibili, cat: ${p.categoria})`
             ).join(', ');
-            contestoAlimenti = `DISPENSA ATTUALE (prodotti che ho fisicamente a casa): ${dispensa}`;
+            contestoAlimenti = `DISPENSA ATTUALE: ${dispensa}`;
             fonteContesto = 'dispensa';
         } else {
-            // Fallback storico
             const recentMeals = await Meal.find().sort({ data: -1 }).limit(60);
             const tuttiGliIngredienti = new Set();
             recentMeals.forEach(meal => {
@@ -575,7 +575,7 @@ app.post('/api/recommend-meal', async (req, res) => {
                     tuttiGliIngredienti.add(meal.alimenti);
                 }
             });
-            contestoAlimenti = `INGREDIENTI ABITUALI (dal mio storico): ${[...tuttiGliIngredienti].slice(0, 40).join(', ')}`;
+            contestoAlimenti = `INGREDIENTI ABITUALI: ${[...tuttiGliIngredienti].slice(0, 40).join(', ')}`;
             fonteContesto = 'storico';
         }
 
@@ -592,20 +592,32 @@ app.post('/api/recommend-meal', async (req, res) => {
             generationConfig: { responseMimeType: "application/json" }
         });
 
+        // NOVITÀ: Costruiamo stringhe di regole rigide per l'AI
+        const cibiGiaMangiatiStr = (giaMangiati && giaMangiati.length > 0)
+            ? `CIBI DA NON USARE ASSOLUTAMENTE (li ho già mangiati oggi): ${giaMangiati.join(', ')}.`
+            : '';
+
+        const isSpuntino = question.toLowerCase().includes('spuntino');
+        const regolaSpuntino = isSpuntino
+            ? `4. REGOLA SPUNTINO: L'utente vuole uno snack. VIETATO proporre piatti complessi come pasta, riso, carne, pesce o pasti salati da cucinare. Usa SOLO snack rapidi (es. yogurt, frutta, frutta secca, barrette, proteine in polvere, gallette o formaggi super leggeri come i fiocchi di latte).`
+            : `4. Proponi pasti adatti al momento della giornata richiesto.`;
+
         const prompt = `Sei il mio nutrizionista personale AI. L'app è usata solo da me.
         I miei OBIETTIVI RIMANENTI per oggi sono circa: ${rimanenti.calorie.toFixed(0)} kcal, ${rimanenti.proteine.toFixed(0)}g Proteine, ${rimanenti.carbo.toFixed(0)}g Carbo, ${rimanenti.grassi.toFixed(0)}g Grassi.
         
         ${contestoAlimenti}
-        ${fonteContesto === 'dispensa' ? 'REGOLA CRITICA: Usa ESCLUSIVAMENTE i prodotti presenti nella dispensa elencata sopra. Non inventare ingredienti che non sono in lista.' : 'Usa questi ingredienti come base, puoi aggiungerne qualcuno nuovo.'}
+        ${fonteContesto === 'dispensa' ? 'REGOLA CRITICA: Usa ESCLUSIVAMENTE i prodotti presenti nella dispensa elencata sopra.' : 'Usa questi ingredienti come base.'}
         
+        ${cibiGiaMangiatiStr}
+
         La mia richiesta: "${question}"
         
         REGOLE:
         1. Genera esattamente 3 opzioni DIVERSE tra loro come tema: classico, creativo/fusion, light/veloce.
-        2. ${fonteContesto === 'dispensa' ? 'USA SOLO ingredienti dalla dispensa. Controlla che ogni ingrediente sia nella lista fornita.' : 'Ricombina creativamente gli ingredienti.'}
+        2. Non proporre in alcun modo ingredienti scritti in "CIBI DA NON USARE ASSOLUTAMENTE". Trova delle valide alternative.
         3. Rispetta i macro RIMANENTI senza sforare eccessivamente.
-        4. Per spuntini: usa solo cibi veloci senza cottura (frutta, yogurt, affettati, frutta secca, gallette, barrette).
-        5. Genera 1 "variante" per ogni opzione con approccio diverso.
+        ${regolaSpuntino}
+        5. Genera 1 "variante" per ogni opzione.
         
         Restituisci SOLO un array JSON:
         [

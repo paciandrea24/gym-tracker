@@ -1340,6 +1340,7 @@ export function renderFavoritesPage(container, favorites, onBack, onAddFavoriteC
 }
 
 // --- RENDER MODALE NUTRIZIONISTA AI (CARTE VERTICALI + IMPATTO MACRO) ---
+// --- RENDER MODALE NUTRIZIONISTA AI (CARTE VERTICALI + IMPATTO MACRO AGGIORNATO) ---
 export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null, consumate = null) {
     const modalId = 'ai-modal';
     let modal = document.getElementById(modalId);
@@ -1408,7 +1409,6 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null
 
     document.body.appendChild(modal);
 
-    // FIX SCROLL iOS: applichiamo overflow hidden sia ad html che a body
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
 
@@ -1422,7 +1422,6 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null
         modal.querySelector('div').classList.add('translate-y-full');
         setTimeout(() => {
             modal.remove();
-            // RIPRISTINO SCROLL
             document.documentElement.style.overflow = '';
             document.body.style.overflow = '';
         }, 300);
@@ -1470,7 +1469,6 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null
 
         recommendations.forEach((rec, idx) => {
             const card = document.createElement('div');
-            // CAMBIATO: Larghezza piena (w-full), altezza dinamica, stile classico
             card.className = "w-full bg-white border border-gray-200 rounded-3xl shadow-sm p-5 flex flex-col relative";
 
             const renderCardContent = (viewState) => {
@@ -1478,22 +1476,72 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null
                 const bgColor = viewState === 'main' ? 'bg-indigo-50 text-indigo-700' : 'bg-orange-50 text-orange-700';
                 const toggleText = viewState === 'main' ? '🔄 Variante' : '🔙 Originale';
 
-                // Calcolo Impatto
+                // NOVITÀ: Calcolo Impatto Globale Calorico E dei Macronutrienti
                 let impactHtml = '';
                 if (goals && consumate) {
+                    // Calcolo Calorie Proiettate
                     const newCal = consumate.calorie + data.totaleCalorie;
-                    const perc = Math.min(100, (newCal / goals.calorie) * 100);
-                    const colorClass = newCal > goals.calorie ? 'bg-red-500' : 'bg-indigo-500';
-                    const textClass = newCal > goals.calorie ? 'text-red-500' : 'text-indigo-600';
+                    const percCal = Math.min(100, (newCal / goals.calorie) * 100);
+                    const colorCal = newCal > goals.calorie ? 'bg-red-500' : 'bg-indigo-500';
+                    const textCal = newCal > goals.calorie ? 'text-red-500' : 'text-indigo-600';
+
+                    // Calcolo Proteine Proiettate
+                    const newPro = consumate.proteine + data.totaleProteine;
+                    const percPro = Math.min(100, (newPro / goals.proteine) * 100);
+                    const colorPro = newPro > goals.proteine ? 'bg-red-500' : 'bg-blue-500';
+
+                    // Calcolo Carboidrati Proiettati
+                    const newCar = consumate.carbo + data.totaleCarbo;
+                    const percCar = Math.min(100, (newCar / goals.carbo) * 100);
+                    const colorCar = newCar > goals.carbo ? 'bg-red-500' : 'bg-green-500';
+
+                    // Calcolo Grassi Proiettati
+                    const newFat = consumate.grassi + data.totaleGrassi;
+                    const percFat = Math.min(100, (newFat / goals.grassi) * 100);
+                    const colorFat = newFat > goals.grassi ? 'bg-red-500' : 'bg-yellow-500';
 
                     impactHtml = `
-                        <div class="mt-2 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                            <div class="flex justify-between items-center mb-1.5">
-                                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Impatto Giornaliero</span>
-                                <span class="text-xs font-black ${textClass}">${newCal.toFixed(0)} / ${goals.calorie} kcal</span>
+                        <div class="mt-2 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-3 shadow-inner">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block border-b border-gray-200/60 pb-1">Previsione Giornaliera Completa</span>
+                            
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Calorie Totali</span>
+                                    <span class="text-xs font-black ${textCal}">${newCal.toFixed(0)} / ${goals.calorie} kcal</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                    <div class="${colorCal} h-1.5 rounded-full transition-all duration-500" style="width: ${percCal}%"></div>
+                                </div>
                             </div>
-                            <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                                <div class="${colorClass} h-1.5 rounded-full transition-all" style="width: ${perc}%"></div>
+
+                            <div class="grid grid-cols-3 gap-3 pt-1">
+                                <div>
+                                    <div class="flex justify-between items-center text-[9px] font-bold mb-1 truncate">
+                                        <span class="text-blue-500">PRO</span>
+                                        <span class="text-gray-700 font-mono">${newPro.toFixed(0)}/${goals.proteine}g</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+                                        <div class="${colorPro} h-1 rounded-full transition-all duration-500" style="width: ${percPro}%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between items-center text-[9px] font-bold mb-1 truncate">
+                                        <span class="text-green-500">CAR</span>
+                                        <span class="text-gray-700 font-mono">${newCar.toFixed(0)}/${goals.carbo}g</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+                                        <div class="${colorCar} h-1 rounded-full transition-all duration-500" style="width: ${percCar}%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between items-center text-[9px] font-bold mb-1 truncate">
+                                        <span class="text-yellow-600">FAT</span>
+                                        <span class="text-gray-700 font-mono">${newFat.toFixed(0)}/${goals.grassi}g</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-1 overflow-hidden">
+                                        <div class="${colorFat} h-1 rounded-full transition-all duration-500" style="width: ${percFat}%"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     `;
