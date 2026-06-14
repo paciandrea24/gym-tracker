@@ -23,7 +23,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 // --- SCHEMI DATABASE ---
 const IngredientSchema = new mongoose.Schema({
-    nome: String, calorie: Number, proteine: Number, grassi: Number, carboidrati: Number
+    nome: String, calorie: Number, proteine: Number, grassi: Number, carboidrati: Number, grammi: Number
 });
 
 const MealSchema = new mongoose.Schema({
