@@ -21,15 +21,13 @@ export class PantryView {
         this.container = container;
         this.items = [];
         this.filtroCategoria = 'Tutti';
-        this.filtroStato = 'tutti'; // tutti | ok | bassa | esaurito
-        this.isRecording = false;
-        this.currentRecognition = null;
+        this.filtroStato = 'tutti'; // tutti | allerta (bassa + esaurito)
     }
 
     async render() {
         this.container.innerHTML = `
             <div class="flex justify-center items-center min-h-screen">
-                <p class="animate-pulse font-bold text-green-600">Caricamento dispensa...</p>
+                <p class="animate-pulse font-bold text-gray-500">Caricamento dispensa...</p>
             </div>`;
         try {
             this.items = await pantryService.getPantryItems();
@@ -40,108 +38,104 @@ export class PantryView {
         }
     }
 
-    // ─── RENDER PRINCIPALE ──────────────────────────────────────────────────────
+    // ─── RENDER PRINCIPALE (DASHBOARD) ─────────────────────────────────
     generateHTML() {
         const totale = this.items.length;
         const scarseScorete = this.items.filter(i => i.scortaBassa).length;
         const esauriti = this.items.filter(i => i.esaurito).length;
+        const inAllerta = scarseScorete + esauriti;
 
         // Filtraggio
         let filtered = [...this.items];
         if (this.filtroCategoria !== 'Tutti') {
             filtered = filtered.filter(i => i.categoria === this.filtroCategoria);
         }
-        if (this.filtroStato === 'ok') {
-            filtered = filtered.filter(i => !i.scortaBassa && !i.esaurito);
-        } else if (this.filtroStato === 'bassa') {
-            filtered = filtered.filter(i => i.scortaBassa);
-        } else if (this.filtroStato === 'esaurito') {
-            filtered = filtered.filter(i => i.esaurito);
+        if (this.filtroStato === 'allerta') {
+            filtered = filtered.filter(i => i.scortaBassa || i.esaurito);
         }
 
         const itemsHtml = filtered.length === 0
-            ? `<div class="text-center py-12 text-gray-400 font-medium">Nessun prodotto trovato.</div>`
+            ? `<div class="text-center py-12 text-gray-400 font-medium">Nessun prodotto corrisponde ai filtri.</div>`
             : filtered.map(item => this.renderItemCard(item)).join('');
 
         this.container.innerHTML = `
-            <header class="bg-white shadow-sm pt-12 pb-3 px-4 sticky top-0 z-10">
-                <div class="flex justify-between items-center mb-3">
-                    <div>
-                        <h1 class="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                            🏪 Dispensa
-                        </h1>
-                        <p class="text-xs text-gray-400 font-medium mt-0.5">${totale} prodotti
-                            ${scarseScorete > 0 ? `• <span class="text-orange-500 font-bold">${scarseScorete} in esaurimento</span>` : ''}
-                            ${esauriti > 0 ? `• <span class="text-red-500 font-bold">${esauriti} esauriti</span>` : ''}
-                        </p>
-                    </div>
-                    <div class="flex gap-2">
-                        <button id="voice-add-btn"
-                            class="bg-gray-100 text-gray-700 p-2.5 rounded-xl active:scale-95 transition-transform"
-                            title="Aggiungi a voce">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-                            </svg>
-                        </button>
-                        <button id="scan-add-btn"
-                            class="bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm active:scale-95 transition-transform flex items-center gap-1.5 shadow-md">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-                            </svg>
-                            Scanner
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Filtro stato -->
-                <div class="flex gap-2 mb-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
-                    ${['tutti', 'ok', 'bassa', 'esaurito'].map(s => {
-            const labels = { tutti: 'Tutti', ok: '✅ OK', bassa: '⚠️ In esaur.', esaurito: '🔴 Esauriti' };
-            const active = this.filtroStato === s;
-            return `<button data-stato="${s}"
-                            class="stato-filter flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all
-                            ${active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}">
-                            ${labels[s]}
-                        </button>`;
-        }).join('')}
-                </div>
-
-                <!-- Filtro categoria -->
-                <div class="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
-                    ${['Tutti', ...CATEGORIE].map(cat => {
-            const active = this.filtroCategoria === cat;
-            const style = CATEGORIA_STYLE[cat];
-            return `<button data-cat="${cat}"
-                            class="cat-filter flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all
-                            ${active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}">
-                            ${style ? style.icon + ' ' : ''}${cat}
-                        </button>`;
-        }).join('')}
-                </div>
+            <header class="bg-white shadow-sm pt-14 pb-4 px-5 sticky top-0 z-10 flex justify-between items-center">
+                <h1 class="text-2xl font-black text-gray-900 tracking-tight">La Mia Dispensa</h1>
             </header>
 
-            <!-- Scanner container -->
-            <div id="scanner-container" class="hidden mx-4 mt-4 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
-                <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra il codice a barre</p>
-                <video id="pantry-reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[220px]" autoplay playsinline></video>
-                <div class="flex gap-2">
-                    <input type="number" id="qty-input" value="1" min="1" max="99"
-                        class="w-20 bg-gray-800 text-white text-center font-bold rounded-xl p-2 text-lg border border-gray-700 outline-none">
-                    <label class="text-xs text-gray-400 font-medium self-center">confezioni</label>
-                    <button id="close-scanner-btn" class="flex-1 bg-red-500 text-white font-bold py-2 rounded-xl active:scale-95 transition-transform">
-                        Annulla
+            <main class="p-4 space-y-5 pb-32 safe-pb bg-gray-50 min-h-screen">
+                
+                <div class="bg-gray-900 text-white p-5 rounded-[24px] shadow-xl flex justify-between items-center">
+                    <div>
+                        <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Prodotti Totali</p>
+                        <h2 class="text-4xl font-black">${totale}</h2>
+                    </div>
+                    <div class="text-right flex flex-col gap-2">
+                        <div class="bg-white/10 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-sm">
+                            <p class="text-[10px] font-bold text-orange-400 uppercase tracking-widest">⚠️ ${scarseScorete} In esaurimento</p>
+                        </div>
+                        <div class="bg-white/10 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-sm">
+                            <p class="text-[10px] font-bold text-red-400 uppercase tracking-widest">🔴 ${esauriti} Esauriti</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="action-buttons" class="grid grid-cols-3 gap-2">
+                    <button id="shopping-list-btn" class="bg-yellow-50 text-yellow-700 border border-yellow-200 font-black text-[13px] py-3 rounded-[20px] shadow-sm active:scale-95 transition-transform flex flex-col justify-center items-center gap-1">
+                        <span class="text-2xl mb-1">🛒</span> Spesa
+                    </button>
+                    <button id="scan-add-btn" class="bg-blue-50 text-blue-700 border border-blue-200 font-black text-[13px] py-3 rounded-[20px] shadow-sm active:scale-95 transition-transform flex flex-col justify-center items-center gap-1">
+                        <span class="text-2xl mb-1">📸</span> Scanner
+                    </button>
+                    <button id="voice-add-btn" class="bg-white text-gray-900 border border-gray-200 font-black text-[13px] py-3 rounded-[20px] shadow-sm active:scale-95 transition-transform flex flex-col justify-center items-center gap-1">
+                        <span class="text-2xl mb-1">🎙️</span> Manuale
                     </button>
                 </div>
-            </div>
 
-            <main class="p-4 space-y-3 pb-32 bg-gray-50 min-h-screen">
-                ${itemsHtml}
+                <div id="scanner-container" class="hidden bg-gray-900 p-2 rounded-[24px] shadow-xl border border-gray-800">
+                    <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider mt-2">Inquadra il codice a barre</p>
+                    <video id="pantry-reader-video" class="w-full rounded-[18px] overflow-hidden mb-3 bg-black min-h-[220px]" autoplay playsinline></video>
+                    <div class="flex gap-2">
+                        <div class="bg-gray-800 rounded-xl px-3 py-2 flex items-center border border-gray-700">
+                            <label class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mr-2">Q.TÀ</label>
+                            <input type="number" id="qty-input" value="1" min="1" max="99" class="w-10 bg-transparent text-white text-center font-black text-lg outline-none">
+                        </div>
+                        <button id="close-scanner-btn" class="flex-1 bg-red-500 text-white font-bold py-2 rounded-xl active:scale-95 transition-transform">
+                            Annulla
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <div class="flex bg-gray-100 p-1 rounded-xl mb-4">
+                        <button data-stato="tutti" class="stato-filter flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${this.filtroStato === 'tutti' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}">
+                            Tutti i Prodotti
+                        </button>
+                        <button data-stato="allerta" class="stato-filter flex-1 py-2 text-sm font-bold rounded-lg transition-colors flex justify-center items-center gap-1 ${this.filtroStato === 'allerta' ? 'bg-white shadow-sm text-red-600' : 'text-gray-500'}">
+                            ${inAllerta > 0 ? `<span class="flex h-2 w-2 relative"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>` : ''}
+                            Da Rifornire
+                        </button>
+                    </div>
+
+                    <div class="flex gap-2 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
+                        ${['Tutti', ...CATEGORIE].map(cat => {
+            const active = this.filtroCategoria === cat;
+            const style = CATEGORIA_STYLE[cat];
+            return `<button data-cat="${cat}" class="cat-filter flex-shrink-0 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all ${active ? 'bg-gray-800 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200'}">
+                                ${style ? style.icon + ' ' : ''}${cat}
+                            </button>`;
+        }).join('')}
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    ${itemsHtml}
+                </div>
             </main>
         `;
     }
 
+    // ─── CARD SINGOLO PRODOTTO ──────────────────────────────────────────────────
     renderItemCard(item) {
         const style = CATEGORIA_STYLE[item.categoria] || CATEGORIA_STYLE['Altro'];
         const perc = item.grammiTotali > 0 ? (item.grammiRimasti / item.grammiTotali) * 100 : 0;
@@ -149,161 +143,150 @@ export class PantryView {
 
         let barColor = 'bg-green-500';
         let borderClass = 'border-gray-100';
-        let badge = '';
+        let statusBadge = '';
 
         if (item.esaurito) {
             barColor = 'bg-gray-300';
             borderClass = 'border-red-200';
-            badge = `<span class="text-[9px] font-black bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase">Esaurito</span>`;
+            statusBadge = `<span class="text-[9px] font-black bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-md uppercase tracking-wider">Esaurito</span>`;
         } else if (item.scortaBassa) {
             barColor = 'bg-orange-400';
             borderClass = 'border-orange-200';
-            badge = `<span class="text-[9px] font-black bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full uppercase animate-pulse">⚠️ Scorta bassa</span>`;
+            statusBadge = `<span class="text-[9px] font-black bg-orange-50 text-orange-600 border border-orange-100 px-2 py-0.5 rounded-md uppercase tracking-wider animate-pulse">Scorta bassa</span>`;
         }
 
         return `
-            <div class="pantry-item-card bg-white rounded-2xl border ${borderClass} shadow-sm p-4 cursor-pointer active:scale-95 transition-transform"
-                data-id="${item._id}">
-                <div class="flex items-start gap-3">
-                    ${item.immagine
-                ? `<img src="${item.immagine}" class="w-14 h-14 object-cover rounded-xl border border-gray-100 flex-shrink-0">`
-                : `<div class="w-14 h-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl flex-shrink-0 border ${style.border}">${style.icon}</div>`
+            <div class="pantry-item-card bg-white rounded-[20px] border ${borderClass} shadow-[0_4px_15px_rgb(0,0,0,0.02)] p-4 cursor-pointer active:scale-95 transition-transform flex gap-4 items-center" data-id="${item._id}">
+                
+                ${item.immagine
+                ? `<img src="${item.immagine}" class="w-16 h-16 object-cover rounded-[16px] border border-gray-100 shadow-sm flex-shrink-0">`
+                : `<div class="w-16 h-16 ${style.bg} rounded-[16px] flex items-center justify-center text-3xl flex-shrink-0 border ${style.border}">${style.icon}</div>`
             }
-                    <div class="flex-1 min-w-0">
-                        <div class="flex justify-between items-start mb-1">
-                            <h3 class="font-bold text-gray-900 leading-tight truncate pr-2">${item.nome}</h3>
-                            ${badge}
-                        </div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="text-[9px] font-bold ${style.bg} ${style.text} px-2 py-0.5 rounded-full">${style.icon} ${item.categoria}</span>
-                            <span class="text-[10px] text-gray-400 font-medium">${item.grammiRimasti}g rimasti / ${item.grammiTotali}g</span>
-                        </div>
+                
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-start mb-0.5">
+                        <h3 class="font-bold text-gray-900 text-[16px] leading-tight truncate pr-2">${item.nome}</h3>
+                    </div>
+                    
+                    <div class="flex justify-between items-end mb-2">
+                        <p class="text-sm font-black text-gray-800">${item.grammiRimasti}g <span class="text-[10px] font-medium text-gray-400">/ ${item.grammiTotali}g</span></p>
+                        ${statusBadge}
+                    </div>
 
-                        <!-- Barra progresso -->
-                        <div class="w-full bg-gray-100 rounded-full h-1.5 mb-2 overflow-hidden">
-                            <div class="${barColor} h-1.5 rounded-full transition-all" style="width: ${percRounded}%"></div>
-                        </div>
-
-                        <!-- Macro per 100g -->
-                        <div class="flex gap-3 text-[9px] font-bold text-gray-400 uppercase">
-                            <span>P: ${item.proteine100}g</span>
-                            <span>C: ${item.carbo100}g</span>
-                            <span>G: ${item.grassi100}g</span>
-                            <span class="text-gray-500">${item.calorie100} kcal/100g</span>
-                        </div>
+                    <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                        <div class="${barColor} h-2 rounded-full transition-all" style="width: ${percRounded}%"></div>
                     </div>
                 </div>
             </div>
         `;
     }
 
-    // ─── DETTAGLIO ARTICOLO + CRONOLOGIA ────────────────────────────────────────
+    // ─── DETTAGLIO ARTICOLO ─────────────────────────────────────────────────────
     async showItemDetail(itemId) {
         const item = this.items.find(i => String(i._id) === String(itemId));
         if (!item) return;
 
         this.container.innerHTML = `
             <div class="flex justify-center items-center min-h-screen">
-                <p class="animate-pulse font-bold text-gray-500">Caricamento...</p>
+                <p class="animate-pulse font-bold text-gray-500">Caricamento dettagli...</p>
             </div>`;
 
         const usage = await pantryService.getPantryItemUsage(itemId);
         const style = CATEGORIA_STYLE[item.categoria] || CATEGORIA_STYLE['Altro'];
         const perc = item.grammiTotali > 0 ? (item.grammiRimasti / item.grammiTotali) * 100 : 0;
-
-        let barColor = perc > 20 ? 'bg-green-500' : (perc > 0 ? 'bg-orange-400' : 'bg-gray-300');
+        let barColor = perc > 20 ? 'bg-green-500' : (perc > 0 ? 'bg-orange-400' : 'bg-red-500');
 
         const usageHtml = usage.length === 0
-            ? `<p class="text-center text-gray-400 font-medium py-6">Nessun utilizzo registrato.</p>`
+            ? `<div class="text-center py-6 text-gray-400 font-medium">Nessun utilizzo registrato.</div>`
             : usage.map(u => `
-                <div class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
-                    <div>
-                        <p class="text-sm font-bold text-gray-800">${u.nomePasto}</p>
-                        <p class="text-[10px] text-gray-400 font-medium mt-0.5">
-                            ${new Date(u.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            • ${new Date(u.data).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between mb-3">
+                    <div class="flex-1 pr-3">
+                        <h4 class="text-sm font-bold text-gray-800">${u.nomePasto}</h4>
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                            ${new Date(u.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })} • 
+                            ${new Date(u.data).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                     </div>
-                    <span class="font-black text-gray-900 text-sm">-${u.grammiScalati}g</span>
+                    <div class="bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                        <span class="font-black text-gray-900 text-sm">-${u.grammiScalati}g</span>
+                    </div>
                 </div>
             `).join('');
 
         this.container.innerHTML = `
-            <header class="bg-white shadow-sm pt-12 pb-4 px-4 sticky top-0 z-10 flex items-center gap-3">
-                <button id="back-detail-btn" class="text-gray-500 p-2 -ml-2 active:scale-90 transition-transform">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
+            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
+                <div class="flex items-center">
+                    <button id="back-detail-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2 active:scale-90 transition-transform">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    </button>
+                    <h1 class="text-xl font-bold text-gray-900 truncate">Prodotto</h1>
+                </div>
+                <button id="delete-item-btn" data-id="${item._id}" class="p-2 rounded-full text-red-500 bg-red-50 active:scale-95 transition-all">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 </button>
-                <h1 class="text-xl font-black text-gray-900 truncate">${item.nome}</h1>
             </header>
 
-            <main class="p-4 space-y-5 pb-32 bg-gray-50">
-
-                <!-- Card principale -->
-                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
-                    <div class="flex items-center gap-4 mb-5">
+            <main class="p-4 space-y-6 pb-32 safe-pb bg-gray-50">
+                
+                <div class="bg-white p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+                    <div class="flex flex-col items-center mb-6">
                         ${item.immagine
-                ? `<img src="${item.immagine}" class="w-20 h-20 object-cover rounded-2xl border border-gray-100">`
-                : `<div class="w-20 h-20 ${style.bg} rounded-2xl flex items-center justify-center text-4xl border ${style.border}">${style.icon}</div>`
+                ? `<img src="${item.immagine}" class="w-24 h-24 object-cover rounded-[20px] border border-gray-100 shadow-sm mb-4">`
+                : `<div class="w-24 h-24 ${style.bg} rounded-[20px] flex items-center justify-center text-5xl border ${style.border} mb-4 shadow-inner">${style.icon}</div>`
             }
-                        <div>
-                            <span class="text-[10px] font-bold ${style.bg} ${style.text} px-2.5 py-1 rounded-full">${style.icon} ${item.categoria}</span>
-                            <p class="text-2xl font-black text-gray-900 mt-1">${item.grammiRimasti}g</p>
-                            <p class="text-xs text-gray-400 font-medium">rimasti su ${item.grammiTotali}g totali</p>
+                        <span class="text-[10px] font-bold ${style.bg} ${style.text} px-3 py-1 rounded-full uppercase tracking-widest mb-2 border ${style.border}">${item.categoria}</span>
+                        <h2 class="text-2xl font-black text-gray-900 text-center leading-tight">${item.nome}</h2>
+                    </div>
+
+                    <div class="bg-gray-50 p-5 rounded-[20px] border border-gray-100 mb-6">
+                        <div class="flex justify-between items-end mb-2">
+                            <div>
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Disponibilità</p>
+                                <p class="text-4xl font-black text-gray-900 leading-none mt-1">${item.grammiRimasti}<span class="text-lg font-bold text-gray-400">g</span></p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Acquistato</p>
+                                <p class="text-lg font-black text-gray-600 mt-1">${item.grammiTotali} g</p>
+                            </div>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-4 overflow-hidden">
+                            <div class="${barColor} h-2 rounded-full transition-all" style="width: ${Math.max(0, Math.min(100, perc))}%"></div>
                         </div>
                     </div>
 
-                    <!-- Barra progresso grande -->
-                    <div class="w-full bg-gray-100 rounded-full h-3 mb-4 overflow-hidden">
-                        <div class="${barColor} h-3 rounded-full" style="width: ${Math.max(0, Math.min(100, perc))}%"></div>
-                    </div>
-
-                    <!-- Macro per 100g -->
-                    <div class="grid grid-cols-4 gap-2 mb-5">
-                        <div class="bg-gray-50 p-2 rounded-xl text-center border border-gray-100">
-                            <p class="text-[9px] font-bold text-gray-400 uppercase">Kcal</p>
-                            <p class="font-black text-gray-900 text-sm">${item.calorie100}</p>
-                        </div>
-                        <div class="bg-blue-50 p-2 rounded-xl text-center border border-blue-100">
-                            <p class="text-[9px] font-bold text-blue-400 uppercase">Pro</p>
-                            <p class="font-black text-blue-700 text-sm">${item.proteine100}g</p>
-                        </div>
-                        <div class="bg-green-50 p-2 rounded-xl text-center border border-green-100">
-                            <p class="text-[9px] font-bold text-green-500 uppercase">Car</p>
-                            <p class="font-black text-green-700 text-sm">${item.carbo100}g</p>
-                        </div>
-                        <div class="bg-yellow-50 p-2 rounded-xl text-center border border-yellow-100">
-                            <p class="text-[9px] font-bold text-yellow-600 uppercase">Fat</p>
-                            <p class="font-black text-yellow-700 text-sm">${item.grassi100}g</p>
-                        </div>
-                    </div>
-
-                    <!-- Azioni -->
-                    <div class="flex gap-2">
-                        <button id="restock-btn" data-id="${item._id}"
-                            class="flex-1 bg-green-50 text-green-700 border border-green-200 font-bold text-sm py-3 rounded-xl active:scale-95 transition-transform">
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <button id="restock-btn" data-id="${item._id}" class="bg-gray-900 text-white font-bold text-[14px] py-4 rounded-xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-2">
                             ➕ Rifornisci
                         </button>
-                        <button id="edit-grams-btn" data-id="${item._id}"
-                            class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-xl active:scale-95 transition-transform">
-                            ✏️ Modifica g
+                        <button id="edit-grams-btn" data-id="${item._id}" class="bg-white text-gray-900 border border-gray-200 font-bold text-[14px] py-4 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-2">
+                            ✏️ Modifica
                         </button>
-                        <button id="delete-item-btn" data-id="${item._id}"
-                            class="bg-red-50 text-red-500 border border-red-100 font-bold text-sm px-4 py-3 rounded-xl active:scale-95 transition-transform">
-                            🗑️
-                        </button>
+                    </div>
+
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 pt-4 border-t border-gray-100">Valori Nutrizionali (su 100g)</p>
+                    <div class="grid grid-cols-4 gap-2">
+                        <div class="bg-gray-50 p-2 sm:p-3 rounded-[16px] flex flex-col justify-center items-center border border-gray-100">
+                            <p class="text-[9px] font-bold text-gray-400 uppercase mb-1 w-full text-center">Kcal</p>
+                            <p class="text-sm sm:text-base font-black text-gray-900">${item.calorie100}</p>
+                        </div>
+                        <div class="bg-blue-50 p-2 sm:p-3 rounded-[16px] flex flex-col justify-center items-center border border-blue-100">
+                            <p class="text-[9px] font-bold text-blue-400 uppercase mb-1 w-full text-center">Pro</p>
+                            <p class="text-sm sm:text-base font-black text-blue-700">${item.proteine100}g</p>
+                        </div>
+                        <div class="bg-green-50 p-2 sm:p-3 rounded-[16px] flex flex-col justify-center items-center border border-green-100">
+                            <p class="text-[9px] font-bold text-green-500 uppercase mb-1 w-full text-center">Car</p>
+                            <p class="text-sm sm:text-base font-black text-green-700">${item.carbo100}g</p>
+                        </div>
+                        <div class="bg-yellow-50 p-2 sm:p-3 rounded-[16px] flex flex-col justify-center items-center border border-yellow-100">
+                            <p class="text-[9px] font-bold text-yellow-600 uppercase mb-1 w-full text-center">Fat</p>
+                            <p class="text-sm sm:text-base font-black text-yellow-700">${item.grassi100}g</p>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Cronologia utilizzi -->
-                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
-                        Cronologia Utilizzi
-                    </h3>
-                    <div class="space-y-2">
-                        ${usageHtml}
-                    </div>
+                <div class="pt-2">
+                    <h3 class="text-xs font-bold text-gray-800 uppercase tracking-widest mb-3 px-1">Cronologia Utilizzi</h3>
+                    ${usageHtml}
                 </div>
             </main>
         `;
@@ -313,7 +296,7 @@ export class PantryView {
         document.getElementById('restock-btn').addEventListener('click', async () => {
             const qtyStr = await modal.showModal({
                 type: 'prompt',
-                title: '➕ Rifornimento',
+                title: 'Rifornimento',
                 message: `Quante confezioni di "${item.nome}" hai acquistato?\n(Peso confezione: ${item.pesoConfezione}g)`,
                 inputValue: '1'
             });
@@ -331,7 +314,7 @@ export class PantryView {
         document.getElementById('edit-grams-btn').addEventListener('click', async () => {
             const newGrams = await modal.showModal({
                 type: 'prompt',
-                title: '✏️ Modifica Grammi Rimasti',
+                title: 'Modifica Grammi',
                 message: `Inserisci i grammi effettivamente rimasti in dispensa:`,
                 inputValue: String(item.grammiRimasti)
             });
@@ -347,7 +330,7 @@ export class PantryView {
                 type: 'confirm',
                 title: 'Rimuovi dalla dispensa',
                 message: `Vuoi rimuovere "${item.nome}" dalla dispensa?`,
-                confirmText: 'Sì, rimuovi',
+                confirmText: 'Sì',
                 cancelText: 'Annulla'
             });
             if (!ok) return;
@@ -358,12 +341,10 @@ export class PantryView {
 
     // ─── EVENTI PRINCIPALI ──────────────────────────────────────────────────────
     bindEvents() {
-        // Click su card articolo
         this.container.querySelectorAll('.pantry-item-card').forEach(card => {
             card.addEventListener('click', () => this.showItemDetail(card.dataset.id));
         });
 
-        // Filtro stato
         this.container.querySelectorAll('.stato-filter').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.filtroStato = btn.dataset.stato;
@@ -372,7 +353,6 @@ export class PantryView {
             });
         });
 
-        // Filtro categoria
         this.container.querySelectorAll('.cat-filter').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.filtroCategoria = btn.dataset.cat;
@@ -381,46 +361,187 @@ export class PantryView {
             });
         });
 
-        // Scanner
-        document.getElementById('scan-add-btn').addEventListener('click', () => {
-            document.getElementById('scanner-container').classList.remove('hidden');
-            document.getElementById('scan-add-btn').classList.add('hidden');
-            scanner.startScanner(
-                'pantry-reader-video',
-                (barcode) => {
-                    this.handleCloseScanner();
-                    const qty = parseInt(document.getElementById('qty-input')?.value) || 1;
-                    this.fetchAndAddProduct(barcode, qty);
-                },
-                async (err) => {
-                    await modal.showModal({ type: 'error', title: 'Errore Scanner', message: err });
-                    this.handleCloseScanner();
-                }
-            );
-        });
+        // Tasto Lista della Spesa
+        const shoppingBtn = document.getElementById('shopping-list-btn');
+        if (shoppingBtn) {
+            shoppingBtn.addEventListener('click', () => this.showShoppingListModal());
+        }
 
-        document.getElementById('close-scanner-btn').addEventListener('click', () => {
-            this.handleCloseScanner();
-        });
+        // Tasto Scanner
+        const scanBtn = document.getElementById('scan-add-btn');
+        if (scanBtn) {
+            scanBtn.addEventListener('click', () => {
+                document.getElementById('scanner-container').classList.remove('hidden');
+                document.getElementById('action-buttons').classList.add('hidden');
+                scanner.startScanner(
+                    'pantry-reader-video',
+                    (barcode) => {
+                        this.handleCloseScanner();
+                        const qty = parseInt(document.getElementById('qty-input')?.value) || 1;
+                        this.fetchAndAddProduct(barcode, qty);
+                    },
+                    async (err) => {
+                        await modal.showModal({ type: 'error', title: 'Errore Scanner', message: err });
+                        this.handleCloseScanner();
+                    }
+                );
+            });
+        }
 
-        // Voce
-        document.getElementById('voice-add-btn').addEventListener('click', () => {
-            this.handleVoiceAdd();
-        });
+        const closeScannerBtn = document.getElementById('close-scanner-btn');
+        if (closeScannerBtn) {
+            closeScannerBtn.addEventListener('click', () => {
+                this.handleCloseScanner();
+            });
+        }
+
+        const voiceBtn = document.getElementById('voice-add-btn');
+        if (voiceBtn) {
+            voiceBtn.addEventListener('click', () => {
+                this.handleVoiceAdd();
+            });
+        }
     }
 
     handleCloseScanner() {
         scanner.stopScanner();
-        document.getElementById('scanner-container')?.classList.add('hidden');
-        document.getElementById('scan-add-btn')?.classList.remove('hidden');
+        const scannerContainer = document.getElementById('scanner-container');
+        const actionBtns = document.getElementById('action-buttons');
+        if (scannerContainer) scannerContainer.classList.add('hidden');
+        if (actionBtns) actionBtns.classList.remove('hidden');
     }
+
+    // ─── NUOVO: MODALE LISTA DELLA SPESA AUTOMATICA ─────────────────────────────
+    showShoppingListModal() {
+        const toBuy = this.items.filter(i => i.scortaBassa || i.esaurito);
+
+        const modalId = 'shopping-list-modal';
+        let m = document.getElementById(modalId);
+        if (m) m.remove();
+
+        m = document.createElement('div');
+        m.id = modalId;
+        m.className = "fixed inset-0 z-[99999] flex items-end justify-center bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
+
+        const itemsHtml = toBuy.length === 0
+            ? `<div class="text-center py-10">
+                 <div class="text-6xl mb-4">🛒</div>
+                 <p class="text-gray-900 font-black text-xl mb-1">Niente da comprare!</p>
+                 <p class="text-gray-500 font-medium">La tua dispensa è al top. 🚀</p>
+               </div>`
+            : toBuy.map((item) => `
+                <div class="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-3">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                        <input type="checkbox" id="buy-${item._id}" value="${item._id}" class="shopping-cb w-6 h-6 text-yellow-500 bg-white border-gray-300 rounded focus:ring-yellow-500 active:scale-90 transition-transform" checked>
+                        <div class="flex-1 min-w-0">
+                            <label for="buy-${item._id}" class="font-bold text-gray-900 text-[15px] truncate block leading-tight cursor-pointer">${item.nome}</label>
+                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">${item.pesoConfezione}g per singola conf.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase">Q.tà</label>
+                        <input type="number" id="qty-${item._id}" value="1" min="1" max="99" class="w-12 bg-white border border-gray-200 rounded-xl p-2 text-center font-black text-gray-900 outline-none focus:ring-2 focus:ring-yellow-400 transition-all">
+                    </div>
+                </div>
+            `).join('');
+
+        m.innerHTML = `
+            <div class="bg-white w-full max-w-md rounded-t-[2rem] p-6 shadow-2xl transform translate-y-full transition-transform duration-300 max-h-[90vh] flex flex-col">
+                <div class="flex justify-between items-center mb-6 flex-shrink-0">
+                    <h2 class="text-xl font-black text-gray-900 flex items-center gap-2"><span class="text-2xl">🛒</span> Lista Spesa</h2>
+                    <button id="close-shopping-modal" class="text-gray-400 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <div class="overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden pb-2">
+                    ${toBuy.length > 0 ? `<p class="text-xs font-bold text-gray-500 mb-5 leading-relaxed bg-yellow-50 text-yellow-700 p-3 rounded-xl border border-yellow-100">L'app ha rilevato che i seguenti prodotti scarseggiano. Spunta quelli che hai comprato per aggiungerli alla dispensa.</p>` : ''}
+                    ${itemsHtml}
+                </div>
+
+                ${toBuy.length > 0 ? `
+                    <div class="pt-4 mt-2 border-t border-gray-100 flex-shrink-0">
+                        <button id="confirm-shopping-btn" class="w-full bg-yellow-400 text-yellow-900 font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgba(250,204,21,0.3)] active:scale-95 transition-all flex justify-center items-center gap-2">
+                            ✅ Rifornisci i selezionati
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        document.body.appendChild(m);
+        document.body.style.overflow = 'hidden';
+
+        requestAnimationFrame(() => {
+            m.classList.remove('opacity-0');
+            m.querySelector('div').classList.remove('translate-y-full');
+        });
+
+        const closeModal = () => {
+            m.classList.add('opacity-0');
+            m.querySelector('div').classList.add('translate-y-full');
+            setTimeout(() => {
+                m.remove();
+                document.body.style.overflow = '';
+            }, 300);
+        };
+
+        document.getElementById('close-shopping-modal').addEventListener('click', closeModal);
+
+        const confirmBtn = document.getElementById('confirm-shopping-btn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', async () => {
+                const checkboxes = m.querySelectorAll('.shopping-cb:checked');
+                if (checkboxes.length === 0) {
+                    await modal.showModal({ type: 'alert', title: 'Attenzione', message: 'Seleziona almeno un prodotto spuntando la casella.' });
+                    return;
+                }
+
+                // Disabilita pulsante e mostra loading
+                confirmBtn.innerHTML = '⏳ Aggiornamento in corso...';
+                confirmBtn.classList.replace('bg-yellow-400', 'bg-gray-200');
+                confirmBtn.classList.replace('text-yellow-900', 'text-gray-500');
+                confirmBtn.classList.remove('shadow-[0_8px_20px_rgba(250,204,21,0.3)]');
+                confirmBtn.disabled = true;
+
+                // Prepara tutte le richieste PUT
+                const updatePromises = Array.from(checkboxes).map(async (cb) => {
+                    const itemId = cb.value;
+                    const item = this.items.find(i => String(i._id) === String(itemId));
+                    const qtyInput = document.getElementById(`qty-${itemId}`);
+                    const qty = parseInt(qtyInput.value) || 1;
+
+                    if (item) {
+                        const grammiDaAggiungere = qty * item.pesoConfezione;
+                        return pantryService.updatePantryItem(itemId, {
+                            quantitaConfezioni: item.quantitaConfezioni + qty,
+                            grammiTotali: item.grammiTotali + grammiDaAggiungere,
+                            grammiRimasti: item.grammiRimasti + grammiDaAggiungere
+                        });
+                    }
+                });
+
+                try {
+                    await Promise.all(updatePromises);
+                    closeModal();
+                    await modal.showModal({ type: 'success', title: 'Dispensa Aggiornata', message: 'I prodotti selezionati sono stati riforniti con successo! 🎉' });
+                    this.render();
+                } catch (e) {
+                    await modal.showModal({ type: 'error', title: 'Errore', message: 'Si è verificato un errore durante il rifornimento.' });
+                    closeModal();
+                    this.render();
+                }
+            });
+        }
+    }
+
 
     // ─── AGGIUNGI DA SCANNER ─────────────────────────────────────────────────────
     async fetchAndAddProduct(barcode, quantitaConfezioni = 1) {
         this.container.innerHTML = `
             <div class="flex flex-col justify-center items-center min-h-screen gap-4">
-                <p class="animate-pulse font-bold text-green-600 text-lg">Ricerca prodotto...</p>
-                <p class="text-gray-400 text-sm">${barcode}</p>
+                <p class="animate-pulse font-bold text-blue-600 text-lg">Ricerca nel database...</p>
+                <p class="text-gray-400 text-sm font-medium tracking-widest">${barcode}</p>
             </div>`;
 
         try {
@@ -428,8 +549,8 @@ export class PantryView {
 
             if (data.status !== 1) {
                 await modal.showModal({
-                    type: 'error', title: 'Prodotto non trovato',
-                    message: 'Non ho trovato questo prodotto nel database mondiale.\nPuoi aggiungerlo manualmente tramite il pulsante voce.'
+                    type: 'error', title: 'Non trovato',
+                    message: 'Prodotto non trovato nel database mondiale. Aggiungilo manualmente.'
                 });
                 return this.render();
             }
@@ -453,7 +574,6 @@ export class PantryView {
             const carbo = parseFloat(n['carbohydrates_100g'] || 0);
             const fat = parseFloat(n['fat_100g'] || 0);
 
-            // Peso confezione
             let pesoConfezione = 0;
             if (p.product_quantity) {
                 pesoConfezione = parseFloat(p.product_quantity);
@@ -465,8 +585,8 @@ export class PantryView {
             if (!pesoConfezione || isNaN(pesoConfezione) || pesoConfezione <= 0) {
                 const pesoStr = await modal.showModal({
                     type: 'prompt',
-                    title: '📦 Peso Confezione',
-                    message: `Ho trovato: "${nome}"\n\nQuanto pesa una singola confezione in grammi?`,
+                    title: 'Peso Confezione',
+                    message: `Ho trovato:\n"${nome}"\n\nQuanto pesa una singola confezione in grammi?`,
                     inputValue: '500'
                 });
                 if (pesoStr === false || pesoStr === null) return this.render();
@@ -475,10 +595,9 @@ export class PantryView {
 
             const categoria = pantryService.determinaCategoria(nome, pro, carbo, fat, cal);
 
-            // Conferma prima di aggiungere
             const ok = await modal.showModal({
                 type: 'confirm',
-                title: '✅ Aggiungi alla dispensa',
+                title: 'Aggiungi Prodotto',
                 message: `${nome}\n\n📦 ${quantitaConfezioni}x ${pesoConfezione}g = ${quantitaConfezioni * pesoConfezione}g totali\n🏷️ Categoria: ${categoria}\n⚡ ${cal} kcal/100g`,
                 confirmText: 'Aggiungi',
                 cancelText: 'Annulla'
@@ -496,7 +615,7 @@ export class PantryView {
                 const msg = result.wasExisting
                     ? `Aggiunto a stock esistente!\n\nOra hai ${result.item.grammiRimasti}g di "${nome}".`
                     : `"${nome}" aggiunto alla dispensa!\n\n${quantitaConfezioni * pesoConfezione}g disponibili.`;
-                await modal.showModal({ type: 'success', title: '🎉 Aggiunto!', message: msg });
+                await modal.showModal({ type: 'success', title: 'Fatto!', message: msg });
             }
 
             this.render();
@@ -506,9 +625,8 @@ export class PantryView {
         }
     }
 
-    // ─── AGGIUNGI A VOCE ─────────────────────────────────────────────────────────
+    // ─── AGGIUNGI MANUALE / VOCE ─────────────────────────────────────────────────
     async handleVoiceAdd() {
-        // Mostra form manuale con opzione voce per il nome
         const result = await this.showManualAddForm();
         if (result) this.render();
     }
@@ -525,76 +643,76 @@ export class PantryView {
 
             m.innerHTML = `
                 <div class="bg-white w-full max-w-md rounded-t-[2rem] p-6 shadow-2xl transform translate-y-full transition-transform duration-300 max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
-                    <div class="flex justify-between items-center mb-5">
-                        <h2 class="text-xl font-black text-gray-900">➕ Aggiungi Manuale</h2>
-                        <button id="close-manual-modal" class="text-gray-400 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-black text-gray-900">Aggiungi Manuale</h2>
+                        <button id="close-manual-modal" class="text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                         </button>
                     </div>
 
-                    <div class="space-y-4">
+                    <div class="space-y-4 pb-6">
                         <div>
-                            <label class="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Nome prodotto</label>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nome prodotto</label>
                             <div class="flex gap-2">
                                 <input type="text" id="m-nome" placeholder="es. Mozzarella, Bresaola..."
-                                    class="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-gray-800 outline-none focus:ring-2 focus:ring-green-500">
-                                <button id="voice-nome-btn" class="bg-gray-100 text-gray-600 p-3 rounded-xl active:scale-95 transition-transform" title="Dettare nome">
-                                    🎙️
+                                    class="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 transition-all">
+                                <button id="voice-nome-btn" class="bg-gray-900 text-white p-4 rounded-xl active:scale-95 transition-transform shadow-md flex items-center justify-center min-w-[56px]" title="Dettare nome">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
                                 </button>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Peso confezione (g)</label>
+                                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Peso conf. (g)</label>
                                 <input type="number" id="m-peso" placeholder="es. 125"
-                                    class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-center outline-none focus:ring-2 focus:ring-green-500">
+                                    class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-center outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                             </div>
                             <div>
-                                <label class="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Confezioni</label>
+                                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Q.tà Confezioni</label>
                                 <input type="number" id="m-qty" value="1" min="1"
-                                    class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-center outline-none focus:ring-2 focus:ring-green-500">
+                                    class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-center outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                             </div>
                         </div>
 
                         <div>
-                            <label class="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Categoria</label>
-                            <select id="m-categoria" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Categoria</label>
+                            <select id="m-categoria" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                                 ${CATEGORIE.map(c => `<option value="${c}">${CATEGORIA_STYLE[c]?.icon || ''} ${c}</option>`).join('')}
                             </select>
                         </div>
 
-                        <div class="border-t border-gray-100 pt-4">
-                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Valori nutrizionali per 100g <span class="text-gray-300">(opzionale)</span></p>
+                        <div class="border-t border-gray-100 pt-4 mt-2">
+                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Valori Nutrizionali (per 100g) <span class="normal-case font-medium text-gray-300">(opzionali)</span></p>
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-[10px] text-gray-400 font-bold block mb-1">Calorie</label>
+                                    <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Calorie</label>
                                     <input type="number" id="m-cal" placeholder="0"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-center font-bold outline-none">
+                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                                 </div>
                                 <div>
-                                    <label class="text-[10px] text-gray-400 font-bold block mb-1">Proteine (g)</label>
+                                    <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Proteine (g)</label>
                                     <input type="number" id="m-pro" placeholder="0"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-center font-bold outline-none">
+                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                                 </div>
                                 <div>
-                                    <label class="text-[10px] text-gray-400 font-bold block mb-1">Carboidrati (g)</label>
+                                    <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Carboidrati (g)</label>
                                     <input type="number" id="m-carbo" placeholder="0"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-center font-bold outline-none">
+                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                                 </div>
                                 <div>
-                                    <label class="text-[10px] text-gray-400 font-bold block mb-1">Grassi (g)</label>
+                                    <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Grassi (g)</label>
                                     <input type="number" id="m-fat" placeholder="0"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-center font-bold outline-none">
+                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                                 </div>
                             </div>
                         </div>
 
                         <button id="save-manual-btn"
-                            class="w-full bg-green-600 text-white font-black text-[15px] py-4 rounded-2xl shadow-md active:scale-95 transition-transform mt-2">
-                            Aggiungi alla Dispensa
+                            class="w-full bg-gray-900 text-white font-black text-lg py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform mt-4">
+                            Salva in Dispensa
                         </button>
                     </div>
                 </div>
@@ -620,26 +738,41 @@ export class PantryView {
 
             document.getElementById('close-manual-modal').addEventListener('click', () => closeModal(false));
 
-            // Riconoscimento vocale per il nome
-            document.getElementById('voice-nome-btn').addEventListener('click', () => {
+            const voiceBtn = document.getElementById('voice-nome-btn');
+            const originalVoiceHtml = voiceBtn.innerHTML;
+
+            voiceBtn.addEventListener('click', () => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (!SpeechRecognition) return alert('Riconoscimento vocale non supportato');
+                if (!SpeechRecognition) {
+                    modal.showModal({ type: 'error', title: 'Errore', message: 'Riconoscimento vocale non supportato' });
+                    return;
+                }
 
                 const rec = new SpeechRecognition();
                 rec.lang = 'it-IT';
                 rec.continuous = false;
                 rec.interimResults = false;
 
-                const btn = document.getElementById('voice-nome-btn');
-                btn.textContent = '⏳';
+                voiceBtn.innerHTML = '⏳';
+                voiceBtn.classList.replace('bg-gray-900', 'bg-red-500');
+                voiceBtn.classList.add('animate-pulse');
 
                 rec.onresult = (e) => {
                     const text = e.results[0][0].transcript;
                     document.getElementById('m-nome').value = text;
-                    btn.textContent = '✅';
-                    setTimeout(() => { btn.textContent = '🎙️'; }, 1500);
+                    voiceBtn.innerHTML = '✅';
+                    voiceBtn.classList.remove('animate-pulse');
+                    voiceBtn.classList.replace('bg-red-500', 'bg-green-500');
+                    setTimeout(() => {
+                        voiceBtn.innerHTML = originalVoiceHtml;
+                        voiceBtn.classList.replace('bg-green-500', 'bg-gray-900');
+                    }, 1500);
                 };
-                rec.onerror = () => { btn.textContent = '🎙️'; };
+                rec.onerror = () => {
+                    voiceBtn.innerHTML = originalVoiceHtml;
+                    voiceBtn.classList.replace('bg-red-500', 'bg-gray-900');
+                    voiceBtn.classList.remove('animate-pulse');
+                };
                 rec.start();
             });
 
@@ -654,7 +787,7 @@ export class PantryView {
                 const fat = parseFloat(document.getElementById('m-fat').value) || 0;
 
                 if (!nome || peso <= 0) {
-                    alert('Inserisci almeno il nome e il peso della confezione.');
+                    await modal.showModal({ type: 'error', title: 'Campi mancanti', message: 'Inserisci almeno il nome e il peso della confezione.' });
                     return;
                 }
 
@@ -667,7 +800,7 @@ export class PantryView {
                     });
                     closeModal(true);
                 } catch (e) {
-                    alert('Errore nel salvataggio.');
+                    await modal.showModal({ type: 'error', title: 'Errore', message: 'Errore nel salvataggio.' });
                 }
             });
         });
