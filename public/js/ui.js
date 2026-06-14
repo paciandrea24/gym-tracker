@@ -959,7 +959,7 @@ export function renderManualMealForm(container, onSave, onCancel) {
         const carboidrati = parseFloat((carbo100 * multiplier).toFixed(1));
         const grassi = parseFloat((fat100 * multiplier).toFixed(1));
 
-        onSave({ pasto, alimenti, calorie, proteine, carboidrati, grassi });
+        onSave({ pasto, alimenti, calorie, proteine, carboidrati, grassi, grammi: peso });
     });
 }
 

@@ -203,12 +203,23 @@ app.post('/api/pantry/consume', async (req, res) => {
         for (const ing of ingredienti) {
             if (!ing.nome || !ing.grammi || ing.grammi <= 0) continue;
 
-            // Cerca nella dispensa per nome (fuzzy: contiene il nome)
-            const pantryItem = await PantryItem.findOne({
-                nome: { $regex: new RegExp(ing.nome.split(' ')[0], 'i') },
-                attivo: true,
-                grammiRimasti: { $gt: 0 }
-            });
+            // Genera termini di ricerca: tutte le parole con 4+ caratteri
+            const termini = ing.nome
+                .replace(/\(.*?\)/g, '')           // rimuove "(100g)" ecc.
+                .replace(/\d+\s*g\b/gi, '')        // rimuove "100g" standalone
+                .trim()
+                .split(/\s+/)
+                .filter(t => t.length >= 4);
+
+            let pantryItem = null;
+            for (const termine of termini) {
+                pantryItem = await PantryItem.findOne({
+                    nome: { $regex: new RegExp(termine, 'i') },
+                    attivo: true,
+                    grammiRimasti: { $gt: 0 }
+                });
+                if (pantryItem) break;
+            }
 
             if (pantryItem) {
                 const grammiDaScalare = Math.min(ing.grammi, pantryItem.grammiRimasti);

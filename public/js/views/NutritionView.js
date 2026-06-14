@@ -206,7 +206,8 @@ export class NutritionView {
 
             mealData.ingredienti = [{
                 nome: mealData.alimenti, calorie: mealData.calorie,
-                proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi
+                proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi,
+                grammi: mealData.grammi || 0  // <-- AGGIUNTO
             }];
 
             try {
@@ -225,9 +226,11 @@ export class NutritionView {
                     const response = await nutriService.updateMeal(targetMealId, updatedMeal);
                     const idx = this.currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
                     if (idx > -1) this.currentMealsData[idx] = response.meal;
+                    this.scalaDispensa(response.meal); // <-- AGGIUNTO
                     this.handleMealClick(targetMealId);
                 } else {
-                    await nutriService.saveMeal(mealData);
+                    const saved = await nutriService.saveMeal(mealData);
+                    this.scalaDispensa(saved.meal); // <-- AGGIUNTO
                     this.render();
                     userService.triggerStreak();
                 }
@@ -593,38 +596,39 @@ export class NutritionView {
         exportToCSV('storico_nutrizione.csv', rows);
     }
 
-    // Scala automaticamente dalla dispensa dopo aver salvato un pasto
     async scalaDispensa(meal) {
         if (!meal) return;
         try {
-            // Costruisci lista ingredienti con grammi
             let ingredienti = [];
             if (meal.ingredienti && meal.ingredienti.length > 0) {
-                ingredienti = meal.ingredienti.map(ing => ({
-                    nome: ing.nome,
-                    grammi: ing.calorie > 0 && meal.calorie100
-                        // Se abbiamo calorie per 100g, calcoliamo i grammi
-                        ? Math.round((ing.calorie / meal.calorie100) * 100)
-                        // Altrimenti usiamo le calorie come approssimazione dei grammi
-                        : Math.round(ing.calorie / 2)
-                }));
+                ingredienti = meal.ingredienti.map(ing => {
+                    // 1. Grammi espliciti salvati (manuale/scanner)
+                    let grammi = ing.grammi || 0;
+
+                    // 2. Estrai dal nome se l'AI ha scritto "Cracker (100g)"
+                    if (!grammi) {
+                        const match = ing.nome.match(/(\d+[\.,]?\d*)\s*g\b/i);
+                        if (match) grammi = parseFloat(match[1].replace(',', '.'));
+                    }
+
+                    // 3. Fallback: non scalare (meglio 0 che un numero inventato)
+                    return { nome: ing.nome, grammi: grammi || 0 };
+                });
             } else {
-                // Fallback: usa il nome del pasto intero
-                ingredienti = [{ nome: meal.alimenti, grammi: Math.round(meal.calorie / 2) }];
+                ingredienti = [{ nome: meal.alimenti, grammi: meal.grammi || 0 }];
             }
+
+            ingredienti = ingredienti.filter(i => i.nome && i.grammi > 0);
+            if (ingredienti.length === 0) return;
 
             const result = await pantryService.consumeFromPantry(
                 ingredienti, meal._id, `${meal.pasto}: ${meal.alimenti}`
             );
 
-            // Mostra avvisi scorte basse (non bloccanti, solo toast)
             if (result.avvisi && result.avvisi.length > 0) {
-                result.avvisi.forEach(av => {
-                    this.showPantryToast(av);
-                });
+                result.avvisi.forEach(av => this.showPantryToast(av));
             }
         } catch (e) {
-            // Silenzioso: lo scalaggio dispensa non deve bloccare il salvataggio pasto
             console.warn('Scalaggio dispensa fallito:', e);
         }
     }
