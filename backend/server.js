@@ -542,44 +542,16 @@ app.get('/api/today-meals', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
+// --- API: CONSIGLIERE NUTRIZIONALE BASATO SUI GUSTI (OPZIONE B) ---
 app.post('/api/recommend-meal', async (req, res) => {
     try {
-        // NOVITÀ: Estrai giaMangiati dal body
-        const { question, goals, consumate, giaMangiati } = req.body;
+        const { question, goals, consumate } = req.body;
 
-        // 1. Legge la dispensa virtuale (solo prodotti disponibili)
-        const pantryItems = await PantryItem.find({ attivo: true, grammiRimasti: { $gt: 50 } })
-            .select('nome grammiRimasti calorie100 proteine100 carbo100 grassi100 categoria')
-            .sort({ grammiRimasti: -1 });
+        // 1. Recupera gli ultimi 50 pasti per estrapolare la lista dei cibi abituali (i tuoi gusti)
+        const recentMeals = await Meal.find().sort({ data: -1 }).limit(50);
+        const ingredientiAbituali = [...new Set(recentMeals.map(m => m.alimenti))].join(', ');
 
-        // 2. Fallback: se la dispensa è vuota, usa lo storico pasti
-        let contestoAlimenti = '';
-        let fonteContesto = '';
-
-        if (pantryItems.length > 0) {
-            const dispensa = pantryItems.map(p =>
-                `${p.nome} (${p.grammiRimasti}g disponibili, cat: ${p.categoria})`
-            ).join(', ');
-            contestoAlimenti = `DISPENSA ATTUALE: ${dispensa}`;
-            fonteContesto = 'dispensa';
-        } else {
-            const recentMeals = await Meal.find().sort({ data: -1 }).limit(60);
-            const tuttiGliIngredienti = new Set();
-            recentMeals.forEach(meal => {
-                if (meal.ingredienti && meal.ingredienti.length > 0) {
-                    meal.ingredienti.forEach(ing => {
-                        const nomePulito = ing.nome.replace(/\(.*?\)/g, '').replace(/\d+\s*g/gi, '').replace(/\d+\s*ml/gi, '').trim();
-                        if (nomePulito.length > 2) tuttiGliIngredienti.add(nomePulito);
-                    });
-                } else {
-                    tuttiGliIngredienti.add(meal.alimenti);
-                }
-            });
-            contestoAlimenti = `INGREDIENTI ABITUALI: ${[...tuttiGliIngredienti].slice(0, 40).join(', ')}`;
-            fonteContesto = 'storico';
-        }
-
-        // 3. Calcolo macro rimanenti
+        // 2. Calcolo dei macro rimanenti
         const rimanenti = {
             calorie: Math.max(0, goals.calorie - consumate.calorie),
             proteine: Math.max(0, goals.proteine - consumate.proteine),
@@ -592,54 +564,41 @@ app.post('/api/recommend-meal', async (req, res) => {
             generationConfig: { responseMimeType: "application/json" }
         });
 
-        // NOVITÀ: Costruiamo stringhe di regole rigide per l'AI
-        const cibiGiaMangiatiStr = (giaMangiati && giaMangiati.length > 0)
-            ? `CIBI DA NON USARE ASSOLUTAMENTE (li ho già mangiati oggi): ${giaMangiati.join(', ')}.`
-            : '';
-
-        const isSpuntino = question.toLowerCase().includes('spuntino');
-        const regolaSpuntino = isSpuntino
-            ? `4. REGOLA SPUNTINO: L'utente vuole uno snack. VIETATO proporre piatti complessi come pasta, riso, carne, pesce o pasti salati da cucinare. Usa SOLO snack rapidi (es. yogurt, frutta, frutta secca, barrette, proteine in polvere, gallette o formaggi super leggeri come i fiocchi di latte).`
-            : `4. Proponi pasti adatti al momento della giornata richiesto.`;
-
         const prompt = `Sei il mio nutrizionista personale AI. L'app è usata solo da me.
-        I miei OBIETTIVI RIMANENTI per oggi sono circa: ${rimanenti.calorie.toFixed(0)} kcal, ${rimanenti.proteine.toFixed(0)}g Proteine, ${rimanenti.carbo.toFixed(0)}g Carbo, ${rimanenti.grassi.toFixed(0)}g Grassi.
+        I miei OBIETTIVI RIMANENTI per la giornata di oggi sono circa: ${rimanenti.calorie.toFixed(0)} kcal, ${rimanenti.proteine.toFixed(0)}g Proteine, ${rimanenti.carbo.toFixed(0)}g Carbo, ${rimanenti.grassi.toFixed(0)}g Grassi.
         
-        ${contestoAlimenti}
-        ${fonteContesto === 'dispensa' ? 'REGOLA CRITICA: Usa ESCLUSIVAMENTE i prodotti presenti nella dispensa elencata sopra.' : 'Usa questi ingredienti come base.'}
+        I miei GUSTI (cibi che mangio abitualmente): ${ingredientiAbituali || 'Usa cibi comuni, sani e semplici'}.
         
-        ${cibiGiaMangiatiStr}
-
         La mia richiesta: "${question}"
         
-        REGOLE:
-        1. Genera esattamente 3 opzioni DIVERSE tra loro come tema: classico, creativo/fusion, light/veloce.
-        2. Non proporre in alcun modo ingredienti scritti in "CIBI DA NON USARE ASSOLUTAMENTE". Trova delle valide alternative.
-        3. Rispetta i macro RIMANENTI senza sforare eccessivamente.
-        ${regolaSpuntino}
-        5. Genera 1 "variante" per ogni opzione.
+        REGOLE FONDAMENTALI:
+        1. Genera esattamente 3 opzioni di pasto principali, ben distinte tra loro.
+        2. I pasti devono rispettare il più possibile i macro RIMANENTI senza sforare troppo in eccesso.
+        3. ATTENZIONE AGLI SPUNTINI: Se la richiesta è per uno "Spuntino", DEVI proporre ESCLUSIVAMENTE cibi veloci, snack, frutta, yogurt, gallette, proteine in polvere, affettati, frutta secca o barrette. ASSOLUTAMENTE NESSUN PIATTO CUCINATO.
+        4. INGREDIENTI: Devi comporre i pasti usando QUASI ESCLUSIVAMENTE i cibi elencati nei miei GUSTI. Usa la fantasia per combinarli, ma NON propormi ricette con ingredienti elaborati che non ho mai mangiato, a meno che non manchi un macro specifico per raggiungere l'obiettivo (in quel caso aggiungi 1 solo ingrediente base extra).
+        5. Genera 1 "variante" per ogni opzione (es: cambia una fonte proteica o di carbo pescando sempre dai miei gusti).
         
-        Restituisci SOLO un array JSON:
+        Restituisci SOLO un array JSON con questa esatta struttura:
         [
           {
-            "nomePasto": "Nome descrittivo",
+            "nomePasto": "Nome del pasto 1",
             "totaleCalorie": 0,
             "totaleProteine": 0,
             "totaleCarbo": 0,
             "totaleGrassi": 0,
-            "messaggio": "Perché questo pasto è interessante.",
+            "messaggio": "Breve frase motivazionale o consiglio su questo pasto.",
             "ingredienti": [
-              { "nome": "Ingrediente (quantità in g)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
+              { "nome": "Ingrediente 1 (quantità in g)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
             ],
             "variante": {
-              "nomePasto": "Variante",
+              "nomePasto": "Variante del pasto 1",
               "totaleCalorie": 0,
               "totaleProteine": 0,
               "totaleCarbo": 0,
               "totaleGrassi": 0,
-              "messaggio": "Perché scegliere questa variante.",
+              "messaggio": "Motivo per scegliere questa variante.",
               "ingredienti": [
-                { "nome": "Ingrediente (quantità)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
+                { "nome": "Ingrediente alternativo (quantità)", "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
               ]
             }
           }
@@ -647,12 +606,25 @@ app.post('/api/recommend-meal', async (req, res) => {
 
         const result = await model.generateContent(prompt);
         let jsonText = result.response.text();
-        jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+        // FIX ESTREMO PER PREVENIRE IL CRASH JSON:
+        // Estraiamo in modo chirurgico solo la porzione che inizia con '[' e finisce con ']' 
+        // ignorando tutto il testo discorsivo che l'IA potrebbe aver aggiunto prima o dopo.
+        const startIndex = jsonText.indexOf('[');
+        const endIndex = jsonText.lastIndexOf(']');
+
+        if (startIndex !== -1 && endIndex !== -1) {
+            jsonText = jsonText.substring(startIndex, endIndex + 1);
+        } else {
+            throw new Error("L'IA non ha formattato correttamente i dati.");
+        }
+
         const recommendations = JSON.parse(jsonText);
+
         res.json({ success: true, recommendations });
     } catch (error) {
         console.error("Errore AI Recommender:", error);
-        res.status(500).json({ success: false, error: "Impossibile generare consigli." });
+        res.status(500).json({ success: false, error: "Impossibile generare consigli in questo momento." });
     }
 });
 
