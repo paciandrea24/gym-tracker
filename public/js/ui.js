@@ -80,11 +80,19 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
                         <div class="w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
                             
                             <div data-ex-id="${ex.id}" data-ex-name="${ex.name}" class="scheda-ex-click flex-1 cursor-pointer active:opacity-60 transition-opacity pr-2">
-                                <h3 class="text-lg font-bold text-gray-800 hover:text-indigo-600 transition-colors">${ex.name}</h3>
-                                <p class="text-sm font-medium text-gray-500 mt-1">
-                                    ${ex.type === 'cardio' ? 'Sessione Unica' : ex.targetSets + ' serie'} <span class="mx-1">•</span> ${ex.type === 'cardio' ? 'Cardio' : (ex.type === 'corpo-libero' ? 'Corpo Libero' : 'Base: ' + ex.baseKg + ' kg')}
-                                </p>
-                            </div>
+        <h3 class="text-lg font-bold text-gray-800 hover:text-indigo-600 transition-colors">${ex.name}</h3>
+        <p class="text-sm font-medium text-gray-500 mt-1 flex items-center flex-wrap gap-y-1">
+            <span>${ex.type === 'cardio' ? 'Sessione Unica' : ex.targetSets + ' serie'}</span>
+            <span class="mx-1.5 text-gray-300">•</span>
+            <span>${ex.type === 'cardio' ? 'Cardio' : (ex.type === 'corpo-libero' ? 'Corpo Libero' : 'Base: ' + ex.baseKg + ' kg')}</span>
+            ${ex.type !== 'cardio' ? `
+            <span class="mx-1.5 text-gray-300">•</span>
+            <span class="text-indigo-500 font-bold flex items-center gap-0.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                ${ex.restSeconds || 90}s
+            </span>` : ''}
+        </p>
+    </div>
                             
                             <div class="flex items-center space-x-2 pl-3 border-l border-gray-100 flex-shrink-0">
                                 <button data-config-id="${ex.id}" class="config-ex-btn p-2 text-blue-500 hover:text-blue-700 bg-blue-50 rounded-full active:scale-95 transition-transform">
@@ -275,6 +283,7 @@ export function renderActiveSession(container, session, routine, onExerciseClick
 }
 
 // --- RENDER FORM CREAZIONE ESERCIZIO ---
+// --- RENDER FORM CREAZIONE ESERCIZIO ---
 export function renderRoutineBuilder(container, onSave, onCancel) {
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
@@ -311,6 +320,11 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
                         <input type="number" id="ex-kg" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
                     </div>
                 </div>
+
+                <div id="box-rest" class="mt-4 pt-4 border-t border-gray-100">
+                    <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Recupero (Secondi)</label>
+                    <input type="number" id="ex-rest" value="90" step="15" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
+                </div>
                 
                 <div id="box-equipment" class="space-y-3 pt-4 border-t border-gray-100">
                     <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Setup Statistiche e Grafici</p>
@@ -340,11 +354,13 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
     const boxKg = document.getElementById('box-kg');
     const labelReps = document.getElementById('label-reps');
     const boxEquipment = document.getElementById('box-equipment');
+    const boxRest = document.getElementById('box-rest'); // NUOVO
 
     typeSelect.addEventListener('change', (e) => {
         const val = e.target.value;
         boxKg.style.display = val === 'cardio' || val === 'corpo-libero' ? 'none' : 'block';
         boxSets.style.display = val === 'cardio' ? 'none' : 'block';
+        boxRest.style.display = val === 'cardio' ? 'none' : 'block'; // Il cardio non ha recupero
         boxEquipment.style.display = val === 'sala-pesi' ? 'block' : 'none';
         labelReps.textContent = val === 'cardio' ? 'Minuti Target' : 'Reps Target';
     });
@@ -357,12 +373,15 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
         const reps = parseInt(document.getElementById('ex-reps').value, 10);
         const kg = parseFloat(document.getElementById('ex-kg').value) || 0;
 
+        const rest = parseInt(document.getElementById('ex-rest').value, 10) || 90; // NUOVO
+
         const mult = parseFloat(document.getElementById('ex-multiplier').value) || 1;
         const barbell = parseFloat(document.getElementById('ex-barbell').value) || 0;
 
         if (name && sets && reps) {
             onSave({
                 id: 'ex-' + Date.now(), name, type, targetSets: sets, targetReps: reps, baseKg: kg,
+                restSeconds: type === 'cardio' ? 0 : rest, // Salviamo i secondi!
                 weightMultiplier: type === 'sala-pesi' ? mult : 1,
                 barbellWeight: type === 'sala-pesi' ? barbell : 0
             });

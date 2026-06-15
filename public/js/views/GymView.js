@@ -208,7 +208,8 @@ export class GymView {
         gymService.saveDraft(this.currentExercise.id, this.currentSessionData);
 
         if (this.currentExercise && this.currentExercise.type !== 'cardio') {
-            this.startRecoveryTimer(90);
+            const restTime = this.currentExercise.restSeconds || 90; // Prende il tempo salvato o 90
+            this.startRecoveryTimer(restTime);
         }
         this.renderActiveExerciseUI();
     }
@@ -299,17 +300,28 @@ export class GymView {
         const ex = routine.exercises.find(e => String(e.id) === String(exerciseId));
         if (!ex) return;
 
-        const mult = await modal.showModal({ type: 'prompt', title: `Configura ${ex.name}`, message: `Inserisci il moltiplicatore:\n(1 = Manubri / Peso Totale)\n(2 = Se logghi solo 1 lato)`, inputValue: ex.weightMultiplier || 1 });
+        // 1. Chiediamo prima i secondi di recupero
+        const rest = await modal.showModal({ type: 'prompt', title: `Configura ${ex.name}`, message: `Inserisci i SECONDI di recupero tra le serie (es. 90 o 120):`, inputValue: String(ex.restSeconds || 90) });
+        if (rest === null || rest === false) return;
+
+        // 2. Chiediamo il moltiplicatore
+        const mult = await modal.showModal({ type: 'prompt', title: `Configura ${ex.name}`, message: `Inserisci il moltiplicatore:\n(1 = Manubri / Peso Totale)\n(2 = Se logghi solo 1 lato)`, inputValue: String(ex.weightMultiplier || 1) });
         if (mult === null || mult === false) return;
 
-        const bar = await modal.showModal({ type: 'prompt', title: `Tara Attrezzo`, message: `Peso del bilanciere o tara (es. 20):`, inputValue: ex.barbellWeight || 0 });
+        // 3. Chiediamo il peso del bilanciere
+        const bar = await modal.showModal({ type: 'prompt', title: `Tara Attrezzo`, message: `Peso del bilanciere o tara in kg (es. 20):`, inputValue: String(ex.barbellWeight || 0) });
         if (bar === null || bar === false) return;
 
+        // Salvataggio Parametri
+        ex.restSeconds = parseInt(rest, 10) || 90;
         ex.weightMultiplier = parseFloat(mult) || 1;
         ex.barbellWeight = parseFloat(bar) || 0;
 
         await gymService.saveRoutine(routine);
-        await modal.showModal({ type: 'success', title: 'Salvato!', message: `Da ora in poi i grafici calcoleranno:\n(Kg x ${ex.weightMultiplier}) + ${ex.barbellWeight}kg.` });
+        await modal.showModal({ type: 'success', title: 'Salvato!', message: `Configurazione salvata con successo!\n\n⏱️ Recupero: ${ex.restSeconds}s\n⚖️ Calcolo Grafici: (Kg x ${ex.weightMultiplier}) + ${ex.barbellWeight}kg` });
+
+        // Aggiorniamo la vista
+        this.showDashboard();
     }
 
     startRecoveryTimer(seconds) {
