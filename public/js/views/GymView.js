@@ -347,6 +347,9 @@ export class GymView {
 
     startRecoveryTimer(seconds) {
         if (this.recoveryInterval) clearInterval(this.recoveryInterval);
+
+        // FIX BACKGROUND TIMER: Memorizziamo l'orario effettivo in cui DEVE finire il timer
+        this.recoveryEndTime = Date.now() + (seconds * 1000);
         this.recoveryRemaining = seconds;
 
         let timerEl = document.getElementById('recovery-fullscreen-modal');
@@ -364,7 +367,7 @@ export class GymView {
                 <div class="relative z-10 flex items-center justify-center mb-16">
                     <span id="recovery-time-display" class="text-[110px] sm:text-[130px] font-black font-mono tracking-tighter tabular-nums leading-none drop-shadow-2xl"></span>
                 </div>
-                <button id="close-timer-btn" class="z-10 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold py-5 px-14 rounded-[24px] text-xl transition-all border border-white/10 shadow-lg">
+                <button id="close-timer-btn" class="z-10 bg-white text-blue-900 active:scale-95 font-black py-5 px-14 rounded-[24px] text-xl transition-all shadow-[0_0_40px_rgba(255,255,255,0.3)] border-none">
                     Salta Recupero
                 </button>
             `;
@@ -377,11 +380,14 @@ export class GymView {
         this.updateTimerDisplay();
         requestAnimationFrame(() => timerEl.classList.remove('opacity-0'));
 
+        // Controllo aggiornato ogni mezzo secondo per una super precisione
         this.recoveryInterval = setInterval(() => {
-            this.recoveryRemaining--;
+            // Calcolo la differenza esatta tra l'orario di fine e il momento attuale (anche se il telefono era bloccato!)
+            this.recoveryRemaining = Math.max(0, Math.ceil((this.recoveryEndTime - Date.now()) / 1000));
             this.updateTimerDisplay();
+
             if (this.recoveryRemaining <= 0) this.stopRecoveryTimer();
-        }, 1000);
+        }, 500);
     }
 
     updateTimerDisplay() {

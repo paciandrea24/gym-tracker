@@ -846,5 +846,28 @@ app.use((req, res, next) => {
     next();
 });
 
+// --- SCHEMA E API PESO CORPOREO ---
+const WeightSchema = new mongoose.Schema({
+    userId: { type: String, default: 'admin' },
+    weight: { type: Number, required: true },
+    date: { type: Date, default: Date.now }
+});
+const Weight = mongoose.model('Weight', WeightSchema);
+
+app.get('/api/weight', async (req, res) => {
+    try {
+        const logs = await Weight.find({ userId: 'admin' }).sort({ date: -1 });
+        res.json(logs);
+    } catch (e) { res.status(500).json([]); }
+});
+
+app.post('/api/weight', async (req, res) => {
+    try {
+        const newLog = new Weight({ weight: req.body.weight });
+        await newLog.save();
+        res.json({ success: true, log: newLog });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server avviato su porta ${PORT}`));

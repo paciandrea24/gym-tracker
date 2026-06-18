@@ -2,6 +2,7 @@
 
 import * as userService from '../services/userService.js';
 import * as nutriService from '../services/nutriService.js';
+import * as modal from '../components/modal.js';
 import * as ui from '../ui.js?v=20';
 
 export class HomeView {
@@ -17,29 +18,37 @@ export class HomeView {
     async render() {
         this.container.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento Riepilogo...</p></div>`;
         try {
-            const [stats, waterData, mealsData] = await Promise.all([
+            // Aggiungiamo la chiamata per prendere il peso!
+            const [stats, waterData, mealsData, weightLogs] = await Promise.all([
                 userService.getStreak(),
                 userService.getWater(),
-                nutriService.getTodayMeals()
+                nutriService.getTodayMeals(),
+                userService.getWeightLogs()
             ]);
 
             const goals = nutriService.getNutritionGoals();
             let consumedCal = 0;
             mealsData.forEach(m => consumedCal += Number(m.calorie) || 0);
 
-            this.generateHTML(stats, waterData.glasses, consumedCal, goals.calorie);
+            this.generateHTML(stats, waterData.glasses, consumedCal, goals.calorie, weightLogs);
             this.bindEvents(stats, waterData.glasses);
         } catch (e) {
             this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Errore di connessione al server.</div>`;
         }
     }
 
-    generateHTML(stats, waterGlasses, consumedCal, goalCal) {
+    generateHTML(stats, waterGlasses, consumedCal, goalCal, weightLogs) {
         const dateOpts = { weekday: 'long', day: 'numeric', month: 'long' };
         let dateStr = new Date().toLocaleDateString('it-IT', dateOpts);
         dateStr = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
         const remainingCal = Math.max(0, goalCal - consumedCal);
+
+        // Prepariamo i dati del peso
+        const lastWeight = weightLogs && weightLogs.length > 0 ? weightLogs[0].weight : '--';
+        const lastWeightDate = weightLogs && weightLogs.length > 0
+            ? new Date(weightLogs[0].date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
+            : 'Tocca per inserire';
 
         let dropsHtml = '';
         for (let i = 1; i <= 8; i++) {
@@ -53,7 +62,7 @@ export class HomeView {
                 <p class="text-sm font-medium text-gray-400 mt-0.5">${dateStr}</p>
             </header>
 
-            <main class="p-5 space-y-5 pb-24 bg-[#f9fafb]">
+            <main class="p-5 space-y-4 pb-24 bg-[#f9fafb]">
                 <div class="grid grid-cols-2 gap-4">
                     <div id="home-flame-card" class="bg-white p-4 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-center justify-center text-center aspect-square cursor-pointer active:scale-95 transition-transform">
                         <span class="font-bold text-gray-800 text-xs mb-1 flex items-center gap-1">Fiamma <span class="text-sm">🔥</span></span>
@@ -72,18 +81,29 @@ export class HomeView {
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                <div id="home-weight-card" class="bg-white p-5 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex justify-between items-center cursor-pointer active:scale-95 transition-transform">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-[16px] flex items-center justify-center text-2xl">⚖️</div>
+                        <div>
+                            <p class="font-bold text-gray-800 text-sm">Peso Corporeo</p>
+                            <p class="text-[11px] font-bold text-gray-400 mt-0.5" id="last-weight-date">${lastWeightDate}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-2xl font-black text-gray-900" id="current-weight-display">${lastWeight} <span class="text-sm font-bold text-gray-400">kg</span></p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
                     <div class="flex justify-between items-center mb-4">
                         <span class="font-bold text-gray-800 flex items-center gap-1.5 text-sm">
                             Idratazione <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2c-5.33 5.58-8 9.24-8 12.83A8.04 8.04 0 0012 22a8.04 8.04 0 008-7.17C20 11.24 17.33 7.58 12 2z"/></svg>
                         </span>
                         <span class="text-[11px] font-bold text-gray-500">${waterGlasses * 250} ml / 2000 ml</span>
                     </div>
-                    
                     <div class="flex justify-between items-center px-1 mb-4">
                         ${dropsHtml}
                     </div>
-                    
                     <div class="flex justify-between px-2">
                         <button id="water-minus-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-1.5 rounded-lg font-bold text-sm transition-colors active:scale-90">-</button>
                         <button id="water-plus-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-1.5 rounded-lg font-bold text-sm transition-colors active:scale-90">+</button>
@@ -113,6 +133,26 @@ export class HomeView {
         document.getElementById('home-start-workout-btn').addEventListener('click', this.onNavigateToGym);
         document.getElementById('home-add-meal-btn').addEventListener('click', () => this.onNavigateToNutri(true));
 
+        // Evento per aggiornare il peso
+        document.getElementById('home-weight-card').addEventListener('click', async () => {
+            const currentVal = document.getElementById('current-weight-display').innerText.replace(' kg', '').trim();
+            const res = await modal.showModal({
+                type: 'prompt',
+                title: 'Peso Corporeo',
+                message: 'Inserisci il tuo peso odierno (in kg):',
+                inputValue: currentVal !== '--' ? currentVal : ''
+            });
+
+            if (res) {
+                const weightNum = parseFloat(res.replace(',', '.'));
+                if (!isNaN(weightNum)) {
+                    document.getElementById('home-weight-card').style.opacity = '0.5';
+                    await userService.addWeightLog(weightNum);
+                    this.render(); // Ricarica la vista per mostrare il nuovo peso
+                }
+            }
+        });
+
         this.container.querySelectorAll('.water-drop-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const index = parseInt(e.currentTarget.dataset.index, 10);
@@ -125,7 +165,7 @@ export class HomeView {
         document.getElementById('water-minus-btn').addEventListener('click', async () => { if (waterGlasses > 0) await this.updateWater(waterGlasses - 1); });
         document.getElementById('water-plus-btn').addEventListener('click', async () => { if (waterGlasses < 8) await this.updateWater(waterGlasses + 1); });
 
-        // L'Easter Egg dei 5 Tap è spostato qui ed incapsulato!
+        // L'Easter Egg dei 5 Tap
         const headerTitle = this.container.querySelector('header h1');
         if (headerTitle) {
             headerTitle.addEventListener('click', () => {
@@ -146,8 +186,6 @@ export class HomeView {
         try {
             await userService.updateWater(newAmount);
             this.render(); // Re-renderizza in tempo reale
-        } catch (e) {
-            console.error("Errore salvataggio acqua", e);
-        }
+        } catch (e) { console.error("Errore salvataggio acqua", e); }
     }
 }
