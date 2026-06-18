@@ -207,7 +207,7 @@ export class NutritionView {
             mealData.ingredienti = [{
                 nome: mealData.alimenti, calorie: mealData.calorie,
                 proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi,
-                grammi: mealData.grammi || 0  // <-- AGGIUNTO
+                grammi: mealData.grammi || 0
             }];
 
             try {
@@ -226,11 +226,15 @@ export class NutritionView {
                     const response = await nutriService.updateMeal(targetMealId, updatedMeal);
                     const idx = this.currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
                     if (idx > -1) this.currentMealsData[idx] = response.meal;
-                    this.scalaDispensa(response.meal); // <-- AGGIUNTO
+
+                    // FIX DOPPIO SCALO: Passiamo alla dispensa SOLO l'ingrediente appena aggiunto
+                    const partialMeal = { ...response.meal, ingredienti: [mealData.ingredienti[0]] };
+                    this.scalaDispensa(partialMeal);
+
                     this.handleMealClick(targetMealId);
                 } else {
                     const saved = await nutriService.saveMeal(mealData);
-                    this.scalaDispensa(saved.meal); // <-- AGGIUNTO
+                    this.scalaDispensa(saved.meal);
                     this.render();
                     userService.triggerStreak();
                 }
@@ -335,7 +339,11 @@ export class NutritionView {
         const micBtn = document.getElementById(btnId);
         if (!micBtn) return;
 
-        const originalBtnHtml = micBtn.innerHTML;
+        // FIX BUG MICROFONO: Salviamo il testo originale solo se non stiamo già registrando
+        if (!this.isRecording) {
+            this.originalMicBtnHtml = micBtn.innerHTML;
+        }
+        const originalBtnHtml = this.originalMicBtnHtml;
 
         if (this.isRecording && this.currentRecognition) {
             this.currentRecognition.stop();
@@ -384,14 +392,22 @@ export class NutritionView {
                 const data = await nutriService.analyzeVoice(finalTranscript, targetMealId);
                 if (data.success) {
                     if (targetMealId) {
+                        // FIX DOPPIO SCALO: Troviamo quanti ingredienti c'erano prima per scalare solo quelli nuovi
+                        const oldMeal = this.currentMealsData.find(m => String(m._id) === String(targetMealId));
+                        const oldIngCount = oldMeal && oldMeal.ingredienti ? oldMeal.ingredienti.length : 0;
+
                         const idx = this.currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
                         if (idx > -1) this.currentMealsData[idx] = data.meal;
                         this.handleMealClick(targetMealId);
+
+                        // Scaliamo SOLO i nuovi ingredienti trovati dalla voce
+                        const newIngredients = data.meal.ingredienti.slice(oldIngCount);
+                        this.scalaDispensa({ ...data.meal, ingredienti: newIngredients });
                     } else {
                         this.render();
                         userService.triggerStreak();
+                        this.scalaDispensa(data.meal);
                     }
-                    this.scalaDispensa(data.meal);
                 } else {
                     throw new Error(data.error);
                 }
@@ -519,40 +535,48 @@ export class NutritionView {
         if (!meal) return;
         const ing = meal.ingredienti[ingIdx];
 
-        const modType = await modal.showModal({
-            type: 'prompt', title: `Modifica: ${ing.nome}`,
-            message: `Opzione 1: Inserisci un MOLTIPLICATORE per aggiornare tutto in proporzione (es. hai mangiato il doppio? Scrivi "2").\n\nOpzione 2: Scrivi "M" per inserire le calorie manualmente.`,
-            inputValue: "1"
+        const vecchiGrammi = ing.grammi || 100; // Valore base di sicurezza
+
+        const res = await modal.showModal({
+            type: 'prompt',
+            title: `Modifica: ${ing.nome}`,
+            message: `Quanti grammi hai consumato?`,
+            inputValue: String(vecchiGrammi)
         });
 
-        if (modType === null || modType === false) return;
+        if (res === null || res === false) return;
 
-        let newCal = ing.calorie; let newPro = ing.proteine; let newCar = ing.carboidrati; let newFat = ing.grassi;
-
-        if (modType.toUpperCase() === 'M') {
-            newCal = parseFloat(await modal.showModal({ type: 'prompt', title: 'Calorie', message: 'Nuove Calorie:', inputValue: ing.calorie })) || 0;
-            newPro = parseFloat(await modal.showModal({ type: 'prompt', title: 'Proteine', message: 'Nuove Proteine (g):', inputValue: ing.proteine })) || 0;
-            newCar = parseFloat(await modal.showModal({ type: 'prompt', title: 'Carboidrati', message: 'Nuovi Carboidrati (g):', inputValue: ing.carboidrati })) || 0;
-            newFat = parseFloat(await modal.showModal({ type: 'prompt', title: 'Grassi', message: 'Nuovi Grassi (g):', inputValue: ing.grassi })) || 0;
-        } else {
-            const mult = parseFloat(modType);
-            if (!isNaN(mult) && mult > 0) {
-                newCal = parseFloat((ing.calorie * mult).toFixed(1));
-                newPro = parseFloat((ing.proteine * mult).toFixed(1));
-                newCar = parseFloat((ing.carboidrati * mult).toFixed(1));
-                newFat = parseFloat((ing.grassi * mult).toFixed(1));
-            } else {
-                return modal.showModal({ type: 'error', title: 'Errore', message: "Valore non valido." });
-            }
+        const nuoviGrammi = parseFloat(res);
+        if (isNaN(nuoviGrammi) || nuoviGrammi <= 0) {
+            return modal.showModal({ type: 'error', title: 'Errore', message: "Valore non valido." });
         }
 
-        const diffCal = newCal - ing.calorie; const diffPro = newPro - ing.proteine; const diffCar = newCar - ing.carboidrati; const diffFat = newFat - ing.grassi;
-        meal.calorie = Math.max(0, parseFloat((meal.calorie + diffCal).toFixed(1))); meal.proteine = Math.max(0, parseFloat((meal.proteine + diffPro).toFixed(1)));
-        meal.carboidrati = Math.max(0, parseFloat((meal.carboidrati + diffCar).toFixed(1))); meal.grassi = Math.max(0, parseFloat((meal.grassi + diffFat).toFixed(1)));
-        ing.calorie = newCal; ing.proteine = newPro; ing.carboidrati = newCar; ing.grassi = newFat;
+        // Calcoliamo la proporzione e aggiorniamo tutti i macros
+        const mult = nuoviGrammi / vecchiGrammi;
+
+        const newCal = parseFloat((ing.calorie * mult).toFixed(1));
+        const newPro = parseFloat((ing.proteine * mult).toFixed(1));
+        const newCar = parseFloat((ing.carboidrati * mult).toFixed(1));
+        const newFat = parseFloat((ing.grassi * mult).toFixed(1));
+
+        const diffCal = newCal - ing.calorie;
+        const diffPro = newPro - ing.proteine;
+        const diffCar = newCar - ing.carboidrati;
+        const diffFat = newFat - ing.grassi;
+
+        meal.calorie = Math.max(0, parseFloat((meal.calorie + diffCal).toFixed(1)));
+        meal.proteine = Math.max(0, parseFloat((meal.proteine + diffPro).toFixed(1)));
+        meal.carboidrati = Math.max(0, parseFloat((meal.carboidrati + diffCar).toFixed(1)));
+        meal.grassi = Math.max(0, parseFloat((meal.grassi + diffFat).toFixed(1)));
+
+        ing.grammi = nuoviGrammi;
+        ing.calorie = newCal;
+        ing.proteine = newPro;
+        ing.carboidrati = newCar;
+        ing.grassi = newFat;
 
         try {
-            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio modifiche...</div>`;
+            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Ricalcolo valori...</div>`;
             const response = await nutriService.updateMeal(mealId, meal);
             const idx = this.currentMealsData.findIndex(m => String(m._id) === String(mealId));
             if (idx > -1) this.currentMealsData[idx] = response.meal;
@@ -595,6 +619,14 @@ export class NutritionView {
                 const response = await nutriService.updateMeal(targetMealId, targetMeal);
                 const idx = this.currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
                 if (idx > -1) this.currentMealsData[idx] = response.meal;
+
+                // FIX MANCATO SCALO: Scaliamo i nuovi ingredienti estratti dal preferito
+                const addedIngredients = favMeal.ingredienti && favMeal.ingredienti.length > 0
+                    ? favMeal.ingredienti
+                    : [{ nome: favMeal.alimenti, calorie: favMeal.calorie, proteine: favMeal.proteine, carboidrati: favMeal.carboidrati, grassi: favMeal.grassi }];
+
+                this.scalaDispensa({ ...response.meal, ingredienti: addedIngredients });
+
                 this.handleMealClick(targetMealId);
             } catch (err) {
                 await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" });

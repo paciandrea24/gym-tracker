@@ -95,7 +95,10 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
     </div>
                             
                             <div class="flex items-center space-x-2 pl-3 border-l border-gray-100 flex-shrink-0">
-                                <button data-config-id="${ex.id}" class="config-ex-btn p-2 text-blue-500 hover:text-blue-700 bg-blue-50 rounded-full active:scale-95 transition-transform">
+    <button data-edit-ex-id="${ex.id}" class="edit-ex-btn p-2 text-yellow-500 hover:text-yellow-700 bg-yellow-50 rounded-full active:scale-95 transition-transform">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+    </button>
+    <button data-config-id="${ex.id}" class="config-ex-btn p-2 text-blue-500 hover:text-blue-700 bg-blue-50 rounded-full active:scale-95 transition-transform">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                                 </button>
                                 <button data-delete-id="${ex.id}" class="delete-btn p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-95 transition-transform">
@@ -228,14 +231,16 @@ export function renderDashboard(container, routine, history, currentTab, onTabSw
 
         // Configurazione bilanciere/moltiplicatore
         container.querySelectorAll('.config-ex-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('configExercise', { detail: btn.dataset.configId })); }));
+        container.querySelectorAll('.edit-ex-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('editRoutineExercise', { detail: btn.dataset.editExId })); }));
     } else if (currentTab === 'scheda' && !hasExercises) {
         document.getElementById('add-ex-btn').addEventListener('click', onAddExerciseClick);
     }
 }
 
-// --- RENDER VISTA SESSIONE ATTIVA ---
 export function renderActiveSession(container, session, routine, onExerciseClick, onEndSession) {
-    const todoIds = session.todo;
+    const todoIds = session.todo || [];
+    const completedExs = session.completed || [];
+
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-5 sticky top-0 z-10 flex justify-between items-center">
             <div>
@@ -254,21 +259,43 @@ export function renderActiveSession(container, session, routine, onExerciseClick
                     <h2 class="text-2xl font-black text-gray-900">Allenamento Finito!</h2>
                     <p class="text-gray-500 mt-2">Salva per registrare nello storico.</p>
                 </div>
-            ` : todoIds.map(id => {
-        const ex = routine.exercises.find(r => r.id === id);
+            ` : `
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-gray-200 pb-1">Da Fare</h2>
+                ${todoIds.map(id => {
+        const ex = routine.exercises.find(r => String(r.id) === String(id));
         if (!ex) return '';
         return `
-                    <button data-id="${ex.id}" class="session-ex-btn w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center active:scale-95 transition-transform text-left">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-800">${ex.name}</h3>
-                            <p class="text-sm font-medium text-gray-500 mt-1">Tocca per eseguire</p>
-                        </div>
-                        <div class="bg-gray-100 p-3 rounded-full text-gray-900">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-                        </div>
-                    </button>
-                `;
+                        <button data-id="${ex.id}" class="session-ex-btn w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center active:scale-95 transition-transform text-left">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">${ex.name}</h3>
+                                <p class="text-sm font-medium text-gray-500 mt-1">Tocca per eseguire</p>
+                            </div>
+                            <div class="bg-gray-100 p-3 rounded-full text-gray-900">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                            </div>
+                        </button>
+                    `;
     }).join('')}
+            `}
+            
+            ${completedExs.length > 0 ? `
+                <div class="mt-8">
+                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 border-b border-gray-200 pb-1">Completati (Tocca per modificare)</h2>
+                    <div class="space-y-3">
+                    ${completedExs.map(ex => `
+                        <button data-id="${ex.exerciseId}" class="session-ex-btn w-full bg-green-50 p-4 rounded-2xl shadow-sm border border-green-200 flex justify-between items-center active:scale-95 transition-transform text-left opacity-90">
+                            <div>
+                                <h3 class="text-base font-bold text-green-900">${ex.name}</h3>
+                                <p class="text-[11px] font-bold text-green-700 mt-0.5">✓ Serie salvate: ${ex.sets.length}</p>
+                            </div>
+                            <div class="bg-green-100 p-2 rounded-full text-green-700">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                            </div>
+                        </button>
+                    `).join('')}
+                    </div>
+                </div>
+            ` : ''}
         </main>
         
         <div class="fixed left-0 right-0 p-4 bg-gray-50/90 backdrop-blur-md border-t border-gray-200 max-w-md mx-auto z-20" style="bottom: calc(55px + env(safe-area-inset-bottom));">
@@ -282,69 +309,69 @@ export function renderActiveSession(container, session, routine, onExerciseClick
     document.getElementById('end-session-btn').addEventListener('click', onEndSession);
 }
 
-// --- RENDER FORM CREAZIONE ESERCIZIO ---
-// --- RENDER FORM CREAZIONE ESERCIZIO ---
-export function renderRoutineBuilder(container, onSave, onCancel) {
+export function renderRoutineBuilder(container, onSave, onCancel, existingEx = null) {
+    const isEdit = !!existingEx;
+
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
             <button id="cancel-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
             </button>
-            <h1 class="text-xl font-bold text-gray-900 truncate">Nuovo Esercizio</h1>
+            <h1 class="text-xl font-bold text-gray-900 truncate">${isEdit ? 'Modifica Esercizio' : 'Nuovo Esercizio'}</h1>
         </header>
         <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Nome Esercizio</label>
-                    <input type="text" id="ex-name" placeholder="Es. Panca Piana" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold focus:ring-2 focus:ring-gray-900 outline-none transition-all">
+                    <input type="text" id="ex-name" placeholder="Es. Panca Piana" value="${isEdit ? existingEx.name : ''}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold focus:ring-2 focus:ring-gray-900 outline-none transition-all">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Tipo Esercizio</label>
                     <select id="ex-type" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold focus:ring-2 focus:ring-gray-900 outline-none transition-all">
-                        <option value="sala-pesi">Sala pesi (Kg + Reps)</option>
-                        <option value="corpo-libero">Corpo Libero (Solo Reps)</option>
-                        <option value="cardio">Cardio (Minuti)</option>
+                        <option value="sala-pesi" ${isEdit && existingEx.type === 'sala-pesi' ? 'selected' : ''}>Sala pesi (Kg + Reps)</option>
+                        <option value="corpo-libero" ${isEdit && existingEx.type === 'corpo-libero' ? 'selected' : ''}>Corpo Libero (Solo Reps)</option>
+                        <option value="cardio" ${isEdit && existingEx.type === 'cardio' ? 'selected' : ''}>Cardio (Minuti)</option>
                     </select>
                 </div>
                 <div class="flex space-x-4">
-                    <div class="flex-1" id="box-sets">
+                    <div class="flex-1" id="box-sets" style="${isEdit && existingEx.type === 'cardio' ? 'display: none;' : ''}">
                         <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Serie</label>
-                        <input type="number" id="ex-sets" value="3" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
+                        <input type="number" id="ex-sets" value="${isEdit ? existingEx.targetSets : '3'}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
                     </div>
                     <div class="flex-1">
-                        <label class="block text-xs font-semibold text-gray-400 uppercase mb-2" id="label-reps">Reps Target</label>
-                        <input type="number" id="ex-reps" value="10" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
+                        <label class="block text-xs font-semibold text-gray-400 uppercase mb-2" id="label-reps">${isEdit && existingEx.type === 'cardio' ? 'Minuti Target' : 'Reps Target'}</label>
+                        <input type="number" id="ex-reps" value="${isEdit ? existingEx.targetReps : '10'}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
                     </div>
-                    <div class="flex-1" id="box-kg">
+                    <div class="flex-1" id="box-kg" style="${isEdit && (existingEx.type === 'cardio' || existingEx.type === 'corpo-libero') ? 'display: none;' : ''}">
                         <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Kg Base</label>
-                        <input type="number" id="ex-kg" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
+                        <input type="number" id="ex-kg" placeholder="0" value="${isEdit ? existingEx.baseKg : ''}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
                     </div>
                 </div>
 
-                <div id="box-rest" class="mt-4 pt-4 border-t border-gray-100">
+                <div id="box-rest" class="mt-4 pt-4 border-t border-gray-100" style="${isEdit && existingEx.type === 'cardio' ? 'display: none;' : ''}">
                     <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Recupero (Secondi)</label>
-                    <input type="number" id="ex-rest" value="90" step="15" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
+                    <input type="number" id="ex-rest" value="${isEdit ? (existingEx.restSeconds || 90) : '90'}" step="15" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold text-center focus:ring-2 focus:ring-gray-900 outline-none transition-all">
                 </div>
                 
-                <div id="box-equipment" class="space-y-3 pt-4 border-t border-gray-100">
+                <div id="box-equipment" class="space-y-3 pt-4 border-t border-gray-100" style="${isEdit && existingEx.type === 'sala-pesi' ? 'block' : 'none'}">
                     <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Setup Statistiche e Grafici</p>
                     <div class="flex space-x-3">
                         <div class="flex-1">
                             <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Moltiplicatore</label>
                             <select id="ex-multiplier" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-sm font-bold outline-none">
-                                <option value="1">x1 (Manubri / Totale)</option>
-                                <option value="2">x2 (Loggo un solo lato)</option>
+                                <option value="1" ${isEdit && existingEx.weightMultiplier === 1 ? 'selected' : ''}>x1 (Manubri / Totale)</option>
+                                <option value="2" ${isEdit && existingEx.weightMultiplier === 2 ? 'selected' : ''}>x2 (Loggo un solo lato)</option>
                             </select>
                         </div>
                         <div class="flex-1">
                             <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Bilanciere (Kg)</label>
-                            <input type="number" id="ex-barbell" placeholder="0" value="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-center text-sm font-bold outline-none">
+                            <input type="number" id="ex-barbell" placeholder="0" value="${isEdit ? (existingEx.barbellWeight || 0) : '0'}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-center text-sm font-bold outline-none">
                         </div>
                     </div>
                 </div>
             </div>
             <button id="save-ex-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-6">
-                Salva Esercizio
+                ${isEdit ? 'Salva Modifiche' : 'Salva Esercizio'}
             </button>
         </main>
     `;
@@ -354,13 +381,13 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
     const boxKg = document.getElementById('box-kg');
     const labelReps = document.getElementById('label-reps');
     const boxEquipment = document.getElementById('box-equipment');
-    const boxRest = document.getElementById('box-rest'); // NUOVO
+    const boxRest = document.getElementById('box-rest');
 
     typeSelect.addEventListener('change', (e) => {
         const val = e.target.value;
         boxKg.style.display = val === 'cardio' || val === 'corpo-libero' ? 'none' : 'block';
         boxSets.style.display = val === 'cardio' ? 'none' : 'block';
-        boxRest.style.display = val === 'cardio' ? 'none' : 'block'; // Il cardio non ha recupero
+        boxRest.style.display = val === 'cardio' ? 'none' : 'block';
         boxEquipment.style.display = val === 'sala-pesi' ? 'block' : 'none';
         labelReps.textContent = val === 'cardio' ? 'Minuti Target' : 'Reps Target';
     });
@@ -372,16 +399,15 @@ export function renderRoutineBuilder(container, onSave, onCancel) {
         const sets = type === 'cardio' ? 1 : parseInt(document.getElementById('ex-sets').value, 10);
         const reps = parseInt(document.getElementById('ex-reps').value, 10);
         const kg = parseFloat(document.getElementById('ex-kg').value) || 0;
-
-        const rest = parseInt(document.getElementById('ex-rest').value, 10) || 90; // NUOVO
-
+        const rest = parseInt(document.getElementById('ex-rest').value, 10) || 90;
         const mult = parseFloat(document.getElementById('ex-multiplier').value) || 1;
         const barbell = parseFloat(document.getElementById('ex-barbell').value) || 0;
 
         if (name && sets && reps) {
             onSave({
-                id: 'ex-' + Date.now(), name, type, targetSets: sets, targetReps: reps, baseKg: kg,
-                restSeconds: type === 'cardio' ? 0 : rest, // Salviamo i secondi!
+                id: isEdit ? existingEx.id : 'ex-' + Date.now(),
+                name, type, targetSets: sets, targetReps: reps, baseKg: kg,
+                restSeconds: type === 'cardio' ? 0 : rest,
                 weightMultiplier: type === 'sala-pesi' ? mult : 1,
                 barbellWeight: type === 'sala-pesi' ? barbell : 0
             });
@@ -796,7 +822,7 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
                                 <p class="text-[10px] font-bold text-gray-500 mt-1">${Number(ing.proteine).toFixed(1)}g P • ${Number(ing.carboidrati).toFixed(1)}g C • ${Number(ing.grassi).toFixed(1)}g G</p>
                             </div>
                             <div class="flex items-center flex-shrink-0">
-                                <span class="font-bold text-gray-900 text-sm mr-3">${Number(ing.calorie).toFixed(1)} kcal</span>
+                                <span class="font-bold text-gray-900 text-sm mr-3">${ing.grammi ? ing.grammi + 'g • ' : ''}${Number(ing.calorie).toFixed(1)} kcal</span>
                                 
                                 <button data-idx="${idx}" class="edit-ing-btn p-2 text-blue-500 hover:text-blue-700 bg-blue-50 rounded-full active:scale-110 transition-transform mr-2">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>

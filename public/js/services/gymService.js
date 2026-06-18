@@ -55,6 +55,8 @@ export function completeExerciseInSession(exercise, sessionData) {
     const session = getActiveSession();
     if (!session) return;
     session.todo = session.todo.filter(id => id !== exercise.id);
+    // FIX: Rimuove l'esercizio se era già nei completati, così lo sovrascrive
+    session.completed = session.completed.filter(c => String(c.exerciseId) !== String(exercise.id));
     session.completed.push({ exerciseId: exercise.id, name: exercise.name, type: exercise.type, sets: sessionData });
     localStorage.setItem('activeWorkoutSession', JSON.stringify(session));
 }
@@ -99,5 +101,16 @@ export async function getAllHistory() {
         return await res.json();
     } catch (e) {
         return [];
+    }
+}
+
+export async function updateExerciseInRoutine(routineId, updatedExercise) {
+    const routine = await getRoutine(routineId);
+    if (routine) {
+        const index = routine.exercises.findIndex(e => String(e.id) === String(updatedExercise.id));
+        if (index !== -1) {
+            routine.exercises[index] = updatedExercise;
+            await saveRoutine(routine);
+        }
     }
 }

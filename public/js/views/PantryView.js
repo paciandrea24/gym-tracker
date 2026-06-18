@@ -302,11 +302,15 @@ export class PantryView {
             });
             if (!qtyStr || qtyStr === false) return;
             const qty = parseInt(qtyStr) || 1;
-            const grammiDaAggiungere = qty * item.pesoConfezione;
+
+            // FIX BUG CORRUZIONE DATI (NaN): Ci assicuriamo che i valori siano sempre numeri validi
+            const pesoConf = parseFloat(item.pesoConfezione) || 0;
+            const grammiDaAggiungere = qty * pesoConf;
+
             await pantryService.updatePantryItem(item._id, {
-                quantitaConfezioni: item.quantitaConfezioni + qty,
-                grammiTotali: item.grammiTotali + grammiDaAggiungere,
-                grammiRimasti: item.grammiRimasti + grammiDaAggiungere
+                quantitaConfezioni: (item.quantitaConfezioni || 0) + qty,
+                grammiTotali: (parseFloat(item.grammiTotali) || 0) + grammiDaAggiungere,
+                grammiRimasti: (parseFloat(item.grammiRimasti) || 0) + grammiDaAggiungere
             });
             this.render();
         });

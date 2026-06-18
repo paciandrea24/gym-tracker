@@ -26,6 +26,7 @@ export class GymView {
         // Listener globale per la tara dei bilancieri (lo agganciamo una volta sola)
         if (!window._gymConfigListenerAdded) {
             window.addEventListener('configExercise', async (e) => this.handleConfigExercise(e.detail));
+            window.addEventListener('editRoutineExercise', async (e) => this.handleEditRoutineExercise(e.detail));
             window._gymConfigListenerAdded = true;
         }
     }
@@ -58,6 +59,18 @@ export class GymView {
             await gymService.createRoutine(name.trim());
             this.showRoutinesList();
         }
+    }
+
+    async handleEditRoutineExercise(exerciseId) {
+        const routine = await gymService.getRoutine(this.currentRoutineId);
+        const exToEdit = routine.exercises.find(e => String(e.id) === String(exerciseId));
+        if (!exToEdit) return;
+
+        ui.renderRoutineBuilder(this.container, async (updatedExercise) => {
+            this.container.innerHTML = `<p class="text-center mt-20 animate-pulse">Salvataggio in corso...</p>`;
+            await gymService.updateExerciseInRoutine(this.currentRoutineId, updatedExercise);
+            this.showDashboard();
+        }, () => this.showDashboard(), exToEdit);
     }
 
     async handleEditRoutineName(routineId, oldName) {
@@ -166,21 +179,29 @@ export class GymView {
 
         if (!this.currentExercise) return;
 
+        const session = gymService.getActiveSession();
         const draft = gymService.getDraft(exerciseId);
         this.currentLastSession = await gymService.getLastSession(this.currentRoutineId, exerciseId);
 
+        const completedEx = session.completed.find(e => String(e.exerciseId) === String(exerciseId));
+
         this.currentSessionData = [];
-        for (let i = 0; i < this.currentExercise.targetSets; i++) {
-            if (draft && draft[i]) {
-                this.currentSessionData.push({ ...draft[i], completed: draft[i].completed || false });
-            } else if (this.currentLastSession && this.currentLastSession.sets[i]) {
-                this.currentSessionData.push({ ...this.currentLastSession.sets[i], completed: false });
-            } else {
-                this.currentSessionData.push({
-                    kg: this.currentExercise.baseKg !== 0 ? this.currentExercise.baseKg : '',
-                    reps: this.currentExercise.targetReps,
-                    completed: false
-                });
+
+        if (completedEx) {
+            this.currentSessionData = JSON.parse(JSON.stringify(completedEx.sets));
+        } else {
+            for (let i = 0; i < this.currentExercise.targetSets; i++) {
+                if (draft && draft[i]) {
+                    this.currentSessionData.push({ ...draft[i], completed: draft[i].completed || false });
+                } else if (this.currentLastSession && this.currentLastSession.sets[i]) {
+                    this.currentSessionData.push({ ...this.currentLastSession.sets[i], completed: false });
+                } else {
+                    this.currentSessionData.push({
+                        kg: this.currentExercise.baseKg !== 0 ? this.currentExercise.baseKg : '',
+                        reps: this.currentExercise.targetReps,
+                        completed: false
+                    });
+                }
             }
         }
         this.renderActiveExerciseUI();
