@@ -1,14 +1,5 @@
 // public/js/services/userService.js
 
-export async function getStreak() {
-    const res = await fetch('/api/streak');
-    return await res.json();
-}
-
-export async function triggerStreak() {
-    const res = await fetch('/api/streak/trigger', { method: 'POST' });
-    return await res.json();
-}
 
 export async function getWater() {
     const res = await fetch('/api/water');

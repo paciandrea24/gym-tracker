@@ -132,6 +132,9 @@ export class NutritionView {
         const ingToRemove = meal.ingredienti[ingIdx];
         if (!ingToRemove) return;
 
+        // --- RIPRISTINO DISPENSA ---
+        await this.ripristinaDispensa(meal, [ingToRemove], "Ingrediente rimosso");
+
         meal.calorie = Math.max(0, parseFloat((meal.calorie - ingToRemove.calorie).toFixed(1)));
         meal.proteine = Math.max(0, parseFloat((meal.proteine - ingToRemove.proteine).toFixed(1)));
         meal.carboidrati = Math.max(0, parseFloat((meal.carboidrati - ingToRemove.carboidrati).toFixed(1)));
@@ -188,13 +191,13 @@ export class NutritionView {
         const newMealData = {
             pasto: favMeal.pasto, alimenti: favMeal.alimenti, calorie: favMeal.calorie,
             proteine: favMeal.proteine, carboidrati: favMeal.carboidrati, grassi: favMeal.grassi,
-            ingredienti: favMeal.ingredienti
+            // DEEP COPY: Crea una copia indipendente degli ingredienti
+            ingredienti: JSON.parse(JSON.stringify(favMeal.ingredienti))
         };
 
         try {
             await nutriService.saveMeal(newMealData);
             this.render();
-            userService.triggerStreak();
         } catch (e) { await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" }); }
     }
 
@@ -236,7 +239,6 @@ export class NutritionView {
                     const saved = await nutriService.saveMeal(mealData);
                     this.scalaDispensa(saved.meal);
                     this.render();
-                    userService.triggerStreak();
                 }
             } catch (e) {
                 await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" });
@@ -405,7 +407,6 @@ export class NutritionView {
                         this.scalaDispensa({ ...data.meal, ingredienti: newIngredients });
                     } else {
                         this.render();
-                        userService.triggerStreak();
                         this.scalaDispensa(data.meal);
                     }
                 } else {
@@ -430,12 +431,17 @@ export class NutritionView {
         const confirm = await modal.showModal({ type: 'confirm', title: 'Conferma Eliminazione', message: 'Vuoi eliminare questo pasto?', confirmText: 'Sì', cancelText: 'No' });
         if (!confirm) return;
         try {
+            // --- RIPRISTINO DISPENSA PASTO INTERO ---
+            const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
+            if (meal) {
+                const ingredientiDaRipristinare = meal.ingredienti && meal.ingredienti.length > 0
+                    ? meal.ingredienti
+                    : [{ nome: meal.alimenti, grammi: meal.grammi || 0 }];
+                await this.ripristinaDispensa(meal, ingredientiDaRipristinare, "Pasto eliminato");
+            }
+
             await nutriService.deleteMeal(mealId);
             this.render();
-            userService.getStreak().then(stats => {
-                const icon = document.getElementById('streak-icon');
-                if (icon && !stats.activeToday) icon.classList.add('grayscale');
-            });
         } catch (error) {
             await modal.showModal({ type: 'error', title: 'Errore', message: "Impossibile connettersi al server" });
         }
@@ -522,7 +528,6 @@ export class NutritionView {
                 await nutriService.saveMeal(mealDataToSave);
                 localStorage.removeItem('cachedAIRecommendations');
                 this.render();
-                userService.triggerStreak();
             } catch (e) {
                 await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" });
                 this.render();
@@ -563,6 +568,16 @@ export class NutritionView {
         const diffPro = newPro - ing.proteine;
         const diffCar = newCar - ing.carboidrati;
         const diffFat = newFat - ing.grassi;
+
+        // --- AGGIUSTAMENTO DISPENSA ---
+        const diffGrammi = nuoviGrammi - vecchiGrammi;
+        if (diffGrammi > 0) {
+            // Hai aumentato i grammi, consumiamo la differenza dalla dispensa
+            await pantryService.consumeFromPantry([{ nome: ing.nome, grammi: diffGrammi }], mealId, "Aumento grammi");
+        } else if (diffGrammi < 0) {
+            // Hai ridotto i grammi, ripristiniamo la differenza in dispensa!
+            await this.ripristinaDispensa(meal, [{ nome: ing.nome, grammi: Math.abs(diffGrammi) }], "Riduzione grammi");
+        }
 
         meal.calorie = Math.max(0, parseFloat((meal.calorie + diffCal).toFixed(1)));
         meal.proteine = Math.max(0, parseFloat((meal.proteine + diffPro).toFixed(1)));
@@ -607,7 +622,8 @@ export class NutritionView {
             targetMeal.alimenti += ", " + favMeal.alimenti;
 
             if (favMeal.ingredienti && favMeal.ingredienti.length > 0) {
-                targetMeal.ingredienti.push(...favMeal.ingredienti);
+                // DEEP COPY: Inserisce cloni indipendenti degli ingredienti
+                targetMeal.ingredienti.push(...JSON.parse(JSON.stringify(favMeal.ingredienti)));
             } else {
                 targetMeal.ingredienti.push({
                     nome: favMeal.alimenti, calorie: favMeal.calorie,
@@ -699,5 +715,24 @@ export class NutritionView {
             toast.classList.add('opacity-0');
             setTimeout(() => toast.remove(), 300);
         }, 4000);
+    }
+
+    async ripristinaDispensa(meal, ingredienti, motivo) {
+        if (!ingredienti || ingredienti.length === 0) return;
+        try {
+            const ingDaRipristinare = ingredienti.map(ing => {
+                let grammi = ing.grammi || 0;
+                if (!grammi) {
+                    const match = ing.nome.match(/(\d+[\.,]?\d*)\s*g\b/i);
+                    if (match) grammi = parseFloat(match[1].replace(',', '.'));
+                }
+                return { nome: ing.nome, grammi: grammi || 0 };
+            }).filter(i => i.nome && i.grammi > 0);
+
+            if (ingDaRipristinare.length === 0) return;
+            await pantryService.restoreToPantry(ingDaRipristinare, meal._id, motivo);
+        } catch (e) {
+            console.warn('Ripristino dispensa fallito:', e);
+        }
     }
 }

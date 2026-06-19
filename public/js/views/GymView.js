@@ -150,25 +150,6 @@ export class GymView {
         this.container.innerHTML = `<p class="text-center mt-20 animate-pulse font-bold text-gray-500">Salvataggio nel Database...</p>`;
         await gymService.endActiveSession();
 
-        try {
-            // Aggiorna l'icona della fiamma in background
-            const data = await userService.triggerStreak();
-            const icon = document.getElementById('streak-icon');
-            const countEl = document.getElementById('streak-count');
-            const container = document.getElementById('streak-container');
-
-            if (icon && countEl) {
-                countEl.textContent = data.currentStreak;
-                if (data.activeToday) {
-                    icon.classList.remove('text-gray-400', 'grayscale');
-                    countEl.classList.remove('text-gray-400');
-                    countEl.classList.add('text-orange-500');
-                    container.classList.remove('bg-gray-50', 'border-gray-100');
-                    container.classList.add('border-orange-200', 'bg-orange-50');
-                }
-            }
-        } catch (e) { }
-
         this.currentTab = 'storico';
         this.showDashboard();
     }

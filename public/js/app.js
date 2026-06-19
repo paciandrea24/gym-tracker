@@ -1,7 +1,6 @@
 import { HomeView } from './views/HomeView.js';
 import { GymView } from './views/GymView.js';
 import { NutritionView } from './views/NutritionView.js';
-import { FooddexView } from './views/FooddexView.js';
 import { PantryView } from './views/PantryView.js';
 
 const appContainer = document.getElementById('app');
@@ -55,8 +54,7 @@ function loadCurrentModule() {
                 document.getElementById('nav-home').className = `flex flex-col items-center justify-center w-[65px] h-full transition-colors text-gray-400 hover:text-gray-600`;
                 const nutritionView = new NutritionView(appContainer);
                 nutritionView.render(openAddMeal);
-            },
-            () => switchModule('fooddex')
+            }
         );
         homeView.render();
     } else if (currentAppModule === 'gym') {
@@ -65,9 +63,6 @@ function loadCurrentModule() {
     } else if (currentAppModule === 'nutrition') {
         const nutritionView = new NutritionView(appContainer);
         nutritionView.render();
-    } else if (currentAppModule === 'fooddex') {
-        const fooddexView = new FooddexView(appContainer, () => switchModule('home'));
-        fooddexView.render();
     } else if (currentAppModule === 'pantry') {
         const pantryView = new PantryView(appContainer);
         pantryView.render();
@@ -75,3 +70,58 @@ function loadCurrentModule() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// --- FUNZIONE DI SUPPORTO PER LA CHIAVE VAPID ---
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+// --- REGISTRAZIONE SERVICE WORKER E NOTIFICHE PUSH ---
+if ('serviceWorker' in navigator && 'PushManager' in window) {
+    window.addEventListener('load', async () => {
+        try {
+            const registration = await navigator.serviceWorker.register('/sw.js');
+            let subscription = await registration.pushManager.getSubscription();
+
+            if (!subscription) {
+                const response = await fetch('/api/vapid-public-key');
+                const vapidData = await response.json();
+
+                if (vapidData.publicKey) {
+                    // CHIEDIAMO ESPLICITAMENTE IL PERMESSO PRIMA DI REGISTRARE
+                    const permission = await Notification.requestPermission();
+
+                    if (permission === 'granted') {
+                        subscription = await registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey)
+                        });
+
+                        await fetch('/api/subscribe', {
+                            method: 'POST',
+                            body: JSON.stringify(subscription),
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        console.log('Sottoscrizione push attivata e salvata con successo! 🚀');
+                    } else {
+                        console.warn("L'utente (o il browser) ha bloccato le notifiche push.");
+                    }
+                }
+            }
+        } catch (error) {
+            // Un semplice avviso giallo invece di un errore rosso fatale
+            console.warn('Le notifiche push non sono state attivate (probabile blocco di sicurezza del browser):', error.message);
+        }
+    });
+}

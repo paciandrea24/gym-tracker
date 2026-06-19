@@ -88,3 +88,13 @@ export function determinaCategoria(nome, pro100, carbo100, grassi100, cal100) {
     }
     return 'Altro';
 }
+
+// Ripristina grammi nella dispensa
+export async function restoreToPantry(ingredienti, mealId, nomePasto) {
+    const res = await fetch('/api/pantry/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredienti, mealId, nomePasto })
+    });
+    return await res.json();
+}

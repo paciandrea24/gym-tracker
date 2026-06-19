@@ -685,14 +685,16 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
             // Medie settimanali (Totale diviso i giorni in cui ha mangiato in quella settimana)
             const avgCal = daysLogged > 0 ? (weekData.totals.cal / daysLogged).toFixed(0) : 0;
             const avgPro = daysLogged > 0 ? (weekData.totals.pro / daysLogged).toFixed(0) : 0;
+            const avgCar = daysLogged > 0 ? (weekData.totals.car / daysLogged).toFixed(0) : 0;
+            const avgFat = daysLogged > 0 ? (weekData.totals.grassi / daysLogged).toFixed(0) : 0;
 
             return `
                         <div>
                             <div class="mb-4 bg-indigo-50 border border-indigo-100 p-3 rounded-xl flex justify-between items-center shadow-sm">
                                 <div>
-                                    <h3 class="text-sm font-black text-indigo-900">${week}</h3>
-                                    <p class="text-[10px] font-bold text-indigo-500 uppercase mt-0.5">Media: ${avgCal} kcal • ${avgPro}g Pro / giorno</p>
-                                </div>
+    <h3 class="text-sm font-black text-indigo-900">${week}</h3>
+    <p class="text-[10px] font-bold text-indigo-500 uppercase mt-0.5">Media/giorno: ${avgCal} kcal • ${avgPro}g P • ${avgCar}g C • ${avgFat}g G</p>
+</div>
                             </div>
                             
                             <div class="space-y-4">
@@ -809,36 +811,54 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
     const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
     let ingredientsHtml = '';
-    // Cerca la riga: let ingredientsHtml = ''; in renderMealDetails e SOSTITUISCI il blocco if successivo con questo:
     if (meal.ingredienti && meal.ingredienti.length > 0) {
         ingredientsHtml = `
-            <div class="pt-6 border-t border-gray-100">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Ingredienti</h3>
-                <div class="space-y-3">
-                    ${meal.ingredienti.map((ing, idx) => `
-                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
-                            <div class="flex-1 truncate pr-2">
-                                <h4 class="text-sm font-bold text-gray-800 truncate">${ing.nome}</h4>
-                                <p class="text-[10px] font-bold text-gray-500 mt-1">${Number(ing.proteine).toFixed(1)}g P • ${Number(ing.carboidrati).toFixed(1)}g C • ${Number(ing.grassi).toFixed(1)}g G</p>
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Ingredienti</h3>
+            <div class="space-y-3">
+                ${meal.ingredienti.map((ing, idx) => `
+                    <div class="bg-white p-4 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-100 mb-3">
+                        
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="pr-2 flex-1">
+                                <h4 class="text-[15px] font-bold text-gray-800 leading-tight break-words">${ing.nome}</h4>
+                                ${ing.grammi ? `<p class="text-xs font-bold text-gray-400 mt-1">Peso: <span class="text-gray-600">${ing.grammi}g</span></p>` : ''}
                             </div>
-                            <div class="flex items-center flex-shrink-0">
-                                <span class="font-bold text-gray-900 text-sm mr-3">${ing.grammi ? ing.grammi + 'g • ' : ''}${Number(ing.calorie).toFixed(1)} kcal</span>
-                                
-                                <button data-idx="${idx}" class="edit-ing-btn p-2 text-blue-500 hover:text-blue-700 bg-blue-50 rounded-full active:scale-110 transition-transform mr-2">
+                            <div class="text-right flex-shrink-0 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                                <span class="text-sm font-black text-gray-900">${Number(ing.calorie).toFixed(1)} <span class="text-[10px] font-bold text-gray-400">kcal</span></span>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-end">
+                            
+                            <div class="flex gap-2">
+                                <div class="bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1.5">
+                                    <span class="text-[10px] font-black text-blue-500 uppercase">P</span>
+                                    <span class="text-xs font-black text-blue-700">${Number(ing.proteine).toFixed(1)}g</span>
+                                </div>
+                                <div class="bg-green-50 px-2.5 py-1.5 rounded-lg border border-green-100 flex items-center gap-1.5">
+                                    <span class="text-[10px] font-black text-green-500 uppercase">C</span>
+                                    <span class="text-xs font-black text-green-700">${Number(ing.carboidrati).toFixed(1)}g</span>
+                                </div>
+                                <div class="bg-yellow-50 px-2.5 py-1.5 rounded-lg border border-yellow-100 flex items-center gap-1.5">
+                                    <span class="text-[10px] font-black text-yellow-600 uppercase">G</span>
+                                    <span class="text-xs font-black text-yellow-700">${Number(ing.grassi).toFixed(1)}g</span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-1">
+                                <button data-idx="${idx}" class="edit-ing-btn p-2 text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 rounded-full active:scale-95 transition-all">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                                 </button>
-
-                                <button data-idx="${idx}" class="remove-ing-btn p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-full active:scale-110 transition-transform">
+                                <button data-idx="${idx}" class="remove-ing-btn p-2 text-gray-400 hover:text-red-600 bg-gray-50 hover:bg-red-50 rounded-full active:scale-95 transition-all">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                 </button>
                             </div>
+
                         </div>
-                    `).join('')}
-                </div>
+                    </div>
+                `).join('')}
             </div>`;
     }
-
-
 
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
@@ -852,53 +872,70 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
                 <svg class="w-6 h-6" fill="${meal.isFavorite ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.898 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
             </button>
         </header>
-        <main class="p-4 space-y-6 pb-24 safe-pb bg-gray-50">
+        
+        <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
             
-            <div class="bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-100">
+            <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
                 <div class="flex items-center justify-between mb-4">
-                    <span class="text-xs font-bold bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-wider">${meal.pasto}</span>
-                    <span class="text-xs text-gray-400 font-medium">${dateStr} - ${timeStr}</span>
+                    <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-md uppercase tracking-wider">${meal.pasto}</span>
+                    <span class="text-[11px] font-bold text-gray-400">${dateStr} • ${timeStr}</span>
                 </div>
-                <h2 class="text-2xl font-black text-gray-900 leading-tight">${meal.alimenti}</h2>
+                <h2 class="text-2xl font-black text-gray-900 leading-tight mb-4">${meal.alimenti}</h2>
                 
-                <div id="action-buttons" class="grid grid-cols-2 gap-2 my-5">
-                    <button id="add-voice-meal-btn" class="bg-gray-900 text-white font-bold text-xs py-3 rounded-xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-1">🎙️ Voce</button>
-                    <button id="add-scan-meal-btn" class="bg-blue-50 text-blue-700 border border-blue-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">📸 Scan</button>
-                    <button id="add-manual-meal-btn" class="bg-white text-gray-900 border border-gray-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">➕ Manuale</button>
-                    
-                    <button id="add-fav-to-meal-btn" class="bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-xs py-3 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">⭐ Preferiti</button>
-                </div>
-
-                <div id="scanner-container" class="hidden mb-6 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
-                    <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra il codice a barre</p>
-                    <video id="reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[250px]" autoplay playsinline></video>
-                    <button id="close-scanner-btn" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla Scansione</button>
+                <div class="flex justify-between items-end mb-4 border-b border-gray-100 pb-4">
+                    <div>
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Calorie Totali</p>
+                        <span class="text-3xl font-black text-gray-900">${Number(meal.calorie).toFixed(0)} <span class="text-sm font-bold text-gray-400">kcal</span></span>
+                    </div>
                 </div>
                 
-                <div class="space-y-6">
-                    <div class="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-widest">Calorie Totali</span>
-                        <span class="text-2xl font-black text-gray-900">${Number(meal.calorie).toFixed(1)} <span class="text-sm font-normal text-gray-500">kcal</span></span>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="text-center bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                        <p class="text-[10px] font-bold text-blue-500 uppercase">Proteine</p>
+                        <p class="text-lg font-black text-gray-800">${Number(meal.proteine).toFixed(1)}g</p>
                     </div>
-                    
-                    <div class="grid grid-cols-3 gap-2">
-                        <div class="bg-blue-50 p-2 sm:p-3 rounded-2xl flex flex-col justify-center items-center border border-blue-100">
-                            <p class="text-[9px] font-bold text-blue-400 uppercase mb-1 w-full text-center truncate">Proteine</p>
-                            <p class="text-lg sm:text-xl font-black text-blue-700">${Number(meal.proteine).toFixed(1)}g</p>
-                        </div>
-                        <div class="bg-green-50 p-2 sm:p-3 rounded-2xl flex flex-col justify-center items-center border border-green-100">
-                            <p class="text-[9px] font-bold text-green-500 uppercase mb-1 w-full text-center truncate">Carboidrati</p>
-                            <p class="text-lg sm:text-xl font-black text-green-700">${Number(meal.carboidrati).toFixed(1)}g</p>
-                        </div>
-                        <div class="bg-yellow-50 p-2 sm:p-3 rounded-2xl flex flex-col justify-center items-center border border-yellow-100">
-                            <p class="text-[9px] font-bold text-yellow-600 uppercase mb-1 w-full text-center truncate">Grassi</p>
-                            <p class="text-lg sm:text-xl font-black text-yellow-700">${Number(meal.grassi).toFixed(1)}g</p>
-                        </div>
+                    <div class="text-center bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                        <p class="text-[10px] font-bold text-green-500 uppercase">Carbo</p>
+                        <p class="text-lg font-black text-gray-800">${Number(meal.carboidrati).toFixed(1)}g</p>
                     </div>
-                    
-                    ${ingredientsHtml}
+                    <div class="text-center bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                        <p class="text-[10px] font-bold text-yellow-500 uppercase">Grassi</p>
+                        <p class="text-lg font-black text-gray-800">${Number(meal.grassi).toFixed(1)}g</p>
+                    </div>
                 </div>
             </div>
+
+            <div class="space-y-3">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Aggiungi Ingredienti</h3>
+                
+                <button id="add-voice-meal-btn" class="w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    VOCE
+                </button>
+                
+                <div id="action-buttons" class="flex space-x-2">
+                    <button id="add-manual-meal-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                        ➕ Manuale
+                    </button>
+                    <button id="add-scan-meal-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg> Scanner
+                    </button>
+                    <button id="add-fav-to-meal-btn" class="flex-1 bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                        ⭐ Preferiti
+                    </button>
+                </div>
+            </div>
+
+            <div id="scanner-container" class="hidden mb-6 bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
+                <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra il codice a barre</p>
+                <video id="reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[250px]" autoplay playsinline></video>
+                <button id="close-scanner-btn" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla Scansione</button>
+            </div>
+            
+            <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+                ${ingredientsHtml || '<p class="text-center text-sm font-medium text-gray-500 py-4">Nessun ingrediente dettagliato.</p>'}
+            </div>
+            
         </main>
     `;
 
@@ -1190,79 +1227,6 @@ export function renderEditGoalsForm(container, currentGoals, onSave, onCancel) {
     });
 }
 
-// --- RENDER MODALE STATISTICHE FIAMMA ---
-export function renderStreakModal(stats) {
-    const modalId = 'streak-modal';
-    let modal = document.getElementById(modalId);
-    if (modal) modal.remove();
-
-    modal = document.createElement('div');
-    modal.id = modalId;
-    modal.className = "fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
-
-    const message = stats.activeToday
-        ? "Sei on fire! 🔥 Non spezzare la catena!"
-        : "Accendi la fiamma oggi! Registra un pasto o un allenamento.";
-
-    modal.innerHTML = `
-        <div class="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl transform scale-95 transition-transform duration-300 relative border border-gray-100">
-            <button id="close-streak-btn" class="absolute top-4 right-4 z-50 text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-            
-            <div class="text-center mb-8 mt-4">
-                <div class="text-7xl mb-4 ${stats.activeToday ? 'animate-bounce drop-shadow-md' : 'grayscale opacity-50'}">🔥</div>
-                <h2 class="text-2xl font-black text-gray-900 tracking-tight">La Tua Costanza</h2>
-                <p class="text-sm font-medium text-gray-500 mt-2 px-4 leading-relaxed">${message}</p>
-            </div>
-            
-            <div class="space-y-3">
-                <div class="bg-orange-50 border border-orange-100 p-4 rounded-2xl flex justify-between items-center shadow-sm">
-                    <span class="font-bold text-orange-800">Fiamma Attuale</span>
-                    <span class="text-2xl font-black text-orange-600">${stats.currentStreak} <span class="text-sm font-bold text-orange-400">gg</span></span>
-                </div>
-                <div class="bg-gray-50 border border-gray-100 p-4 rounded-2xl flex justify-between items-center shadow-sm">
-                    <span class="font-bold text-gray-700">Record Personale</span>
-                    <span class="text-xl font-black text-gray-900">🏆 ${stats.longestStreak} <span class="text-sm font-bold text-gray-400">gg</span></span>
-                </div>
-                <div class="bg-gray-50 border border-gray-100 p-4 rounded-2xl flex justify-between items-center shadow-sm">
-                    <span class="font-bold text-gray-700">Giorni Totali</span>
-                    <span class="text-xl font-black text-gray-900">📅 ${stats.totalDaysActive} <span class="text-sm font-bold text-gray-400">gg</span></span>
-                </div>
-            </div>
-            
-            <button id="awesome-btn" class="w-full bg-gray-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg mt-8 active:scale-95 transition-transform">
-                Continua Così!
-            </button>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    // 1. AGGIUNGI QUESTA RIGA PER BLOCCARE LO SCROLL:
-    document.body.style.overflow = 'hidden';
-
-    // Animazione di entrata
-    requestAnimationFrame(() => {
-        modal.classList.remove('opacity-0');
-        modal.querySelector('div').classList.remove('scale-95');
-    });
-
-    const closeModal = () => {
-        modal.classList.add('opacity-0');
-        modal.querySelector('div').classList.add('scale-95'); // (o translate-y-full a seconda della modale)
-        setTimeout(() => {
-            modal.remove();
-
-            // 2. AGGIUNGI QUESTA RIGA PER RIPRISTINARLO:
-            document.body.style.overflow = '';
-
-        }, 300);
-    };
-
-    document.getElementById('close-streak-btn').addEventListener('click', closeModal);
-    document.getElementById('awesome-btn').addEventListener('click', closeModal);
-}
 
 // --- RENDER MODALE ANTEPRIMA PREFERITO ---
 export function renderFavoritePreviewModal(favMeal, onConfirm, onUnfavorite) {

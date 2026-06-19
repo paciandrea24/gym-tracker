@@ -257,6 +257,59 @@ app.post('/api/pantry/consume', async (req, res) => {
     }
 });
 
+// POST — ripristina grammi in dispensa (chiamato quando si elimina o riduce un ingrediente/pasto)
+app.post('/api/pantry/restore', async (req, res) => {
+    try {
+        const { ingredienti, mealId, nomePasto } = req.body;
+        const risultati = [];
+
+        for (const ing of ingredienti) {
+            if (!ing.nome || !ing.grammi || ing.grammi <= 0) continue;
+
+            const termini = ing.nome
+                .replace(/\(.*?\)/g, '')
+                .replace(/\d+\s*g\b/gi, '')
+                .trim()
+                .split(/\s+/)
+                .filter(t => t.length >= 4);
+
+            let pantryItem = null;
+            for (const termine of termini) {
+                pantryItem = await PantryItem.findOne({
+                    nome: { $regex: new RegExp(termine, 'i') },
+                    attivo: true // Troviamo il prodotto anche se era andato a 0 grammi
+                });
+                if (pantryItem) break;
+            }
+
+            if (pantryItem) {
+                const grammiDaRipristinare = ing.grammi;
+                // Ripristiniamo i grammi (senza superare il totale originariamente acquistato)
+                pantryItem.grammiRimasti = Math.min(pantryItem.grammiTotali, pantryItem.grammiRimasti + grammiDaRipristinare);
+                await pantryItem.save();
+
+                // Registriamo il ripristino con valore negativo nella cronologia
+                await new PantryUsage({
+                    pantryItemId: pantryItem._id,
+                    nomeItem: pantryItem.nome,
+                    grammiScalati: -grammiDaRipristinare,
+                    mealId: mealId || null,
+                    nomePasto: (nomePasto || 'Ripristino')
+                }).save();
+
+                risultati.push({
+                    nome: pantryItem.nome,
+                    grammiRipristinati: grammiDaRipristinare,
+                    grammiRimasti: pantryItem.grammiRimasti
+                });
+            }
+        }
+        res.json({ success: true, risultati });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // GET — lista articoli per l'AI (solo nome, grammi rimasti, macro)
 app.get('/api/pantry/for-ai', async (req, res) => {
     try {
@@ -268,58 +321,8 @@ app.get('/api/pantry/for-ai', async (req, res) => {
     }
 });
 
-// --- MODELLO DATABASE FOODDEX ---
-const FoodDexSchema = new mongoose.Schema({
-    barcode: { type: String, required: true, unique: true },
-    nome: String,
-    immagine: String,
-    calorie100: Number,
-    proteine100: Number,
-    carbo100: Number,
-    grassi100: Number,
-    pesoConfezione: Number,
-    tipoAlimento: String, // Es. "Lotta 🥊"
-    dataScoperta: { type: Date, default: Date.now }
-});
-const FoodDex = mongoose.model('FoodDex', FoodDexSchema);
 
-// --- API FOODDEX ---
-app.get('/api/fooddex', async (req, res) => {
-    try {
-        const items = await FoodDex.find().sort({ dataScoperta: -1 });
-        res.json(items);
-    } catch (e) { res.status(500).json([]); }
-});
 
-app.post('/api/fooddex', async (req, res) => {
-    try {
-        const item = req.body;
-        // Controlla se il codice a barre esiste già nel DB
-        const existing = await FoodDex.findOne({ barcode: item.barcode });
-
-        if (existing) {
-            // Già catturato! Restituisce true e impedisce il doppione
-            res.json({ success: true, alreadyCaught: true, item: existing });
-        } else {
-            // Nuovo alimento! Lo salva
-            const newItem = new FoodDex(item);
-            await newItem.save();
-            res.json({ success: true, alreadyCaught: false, item: newItem });
-        }
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-// --- MODELLO DATABASE PER LA FIAMMA (STREAK) ---
-const StreakSchema = new mongoose.Schema({
-    userId: { type: String, default: 'admin' },
-    currentStreak: { type: Number, default: 0 },
-    lastActiveDate: { type: String, default: '' },
-    longestStreak: { type: Number, default: 0 }, // NUOVO: Record Personale
-    totalDaysActive: { type: Number, default: 0 } // NUOVO: Giorni totali di utilizzo
-});
-const Streak = mongoose.model('Streak', StreakSchema);
 
 function getItalyDateStr(offsetDays = 0) {
     const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
@@ -337,77 +340,6 @@ function getItalyMidnight() {
     return new Date(midnightUTC.getTime() - offsetInMs);
 }
 
-// --- API: OTTIENI LO STATO DELLA FIAMMA ---
-app.get('/api/streak', async (req, res) => {
-    try {
-        const todayStr = getItalyDateStr(0);
-        const yesterdayStr = getItalyDateStr(-1);
-
-        let streak = await Streak.findOne({ userId: 'admin' });
-        if (!streak) {
-            return res.json({ currentStreak: 0, activeToday: false, longestStreak: 0, totalDaysActive: 0 });
-        }
-
-        let activeToday = (streak.lastActiveDate === todayStr);
-        let current = streak.currentStreak;
-
-        // Se l'ultima azione non è di oggi e nemmeno di ieri, la catena si è spezzata
-        if (!activeToday && streak.lastActiveDate !== yesterdayStr && streak.lastActiveDate !== '') {
-            current = 0;
-        }
-
-        res.json({
-            currentStreak: current,
-            activeToday,
-            longestStreak: streak.longestStreak,
-            totalDaysActive: streak.totalDaysActive
-        });
-    } catch (e) {
-        res.status(500).json({ error: "Errore streak" });
-    }
-});
-
-// --- API: INFIAMMA (TRIGGER) E AGGIORNA STATISTICHE ---
-app.post('/api/streak/trigger', async (req, res) => {
-    try {
-        const todayStr = getItalyDateStr(0);
-        const yesterdayStr = getItalyDateStr(-1);
-
-        let streak = await Streak.findOne({ userId: 'admin' });
-
-        if (!streak) {
-            streak = new Streak({
-                userId: 'admin', currentStreak: 1, lastActiveDate: todayStr,
-                longestStreak: 1, totalDaysActive: 1
-            });
-            await streak.save();
-            return res.json({ currentStreak: 1, activeToday: true, longestStreak: 1, totalDaysActive: 1 });
-        }
-
-        if (streak.lastActiveDate === todayStr) {
-            return res.json({ currentStreak: streak.currentStreak, activeToday: true, longestStreak: streak.longestStreak, totalDaysActive: streak.totalDaysActive });
-        }
-
-        if (streak.lastActiveDate === yesterdayStr) {
-            streak.currentStreak += 1;
-        } else {
-            streak.currentStreak = 1;
-        }
-
-        // AGGIORNAMENTO RECORD E GIORNI TOTALI
-        streak.totalDaysActive += 1;
-        if (streak.currentStreak > streak.longestStreak) {
-            streak.longestStreak = streak.currentStreak;
-        }
-
-        streak.lastActiveDate = todayStr;
-        await streak.save();
-
-        res.json({ currentStreak: streak.currentStreak, activeToday: true, longestStreak: streak.longestStreak, totalDaysActive: streak.totalDaysActive });
-    } catch (e) {
-        res.status(500).json({ error: "Errore salvataggio streak" });
-    }
-});
 
 // --- CONFIGURAZIONE NOTIFICHE PUSH ---
 if (process.env.PUBLIC_VAPID_KEY && process.env.PRIVATE_VAPID_KEY) {
@@ -545,7 +477,7 @@ app.get('/api/today-meals', async (req, res) => {
 // --- API: CONSIGLIERE NUTRIZIONALE BASATO SUI GUSTI (OPZIONE B) ---
 app.post('/api/recommend-meal', async (req, res) => {
     try {
-        const { question, goals, consumate } = req.body;
+        const { question, goals, consumate, giaMangiati } = req.body;
 
         // 1. Recupera gli ultimi 50 pasti per estrapolare la lista dei cibi abituali (i tuoi gusti)
         const recentMeals = await Meal.find().sort({ data: -1 }).limit(50);
@@ -564,6 +496,8 @@ app.post('/api/recommend-meal', async (req, res) => {
             generationConfig: { responseMimeType: "application/json" }
         });
 
+        const cibiEvitare = (giaMangiati && giaMangiati.length > 0) ? giaMangiati.join(', ') : 'Nessuno';
+
         const prompt = `Sei il mio nutrizionista personale AI. L'app è usata solo da me.
         I miei OBIETTIVI RIMANENTI per la giornata di oggi sono circa: ${rimanenti.calorie.toFixed(0)} kcal, ${rimanenti.proteine.toFixed(0)}g Proteine, ${rimanenti.carbo.toFixed(0)}g Carbo, ${rimanenti.grassi.toFixed(0)}g Grassi.
         
@@ -577,6 +511,7 @@ app.post('/api/recommend-meal', async (req, res) => {
         3. ATTENZIONE AGLI SPUNTINI: Se la richiesta è per uno "Spuntino", DEVI proporre ESCLUSIVAMENTE cibi veloci, snack, frutta, yogurt, gallette, proteine in polvere, affettati, frutta secca o barrette. ASSOLUTAMENTE NESSUN PIATTO CUCINATO.
         4. INGREDIENTI: Devi comporre i pasti usando QUASI ESCLUSIVAMENTE i cibi elencati nei miei GUSTI. Usa la fantasia per combinarli, ma NON propormi ricette con ingredienti elaborati che non ho mai mangiato, a meno che non manchi un macro specifico per raggiungere l'obiettivo (in quel caso aggiungi 1 solo ingrediente base extra).
         5. Genera 1 "variante" per ogni opzione (es: cambia una fonte proteica o di carbo pescando sempre dai miei gusti).
+        6. ATTENZIONE: Oggi ho GIA' MANGIATO questi alimenti: ${cibiEvitare}. È ASSOLUTAMENTE VIETATO suggerirli di nuovo nelle opzioni di oggi o nelle varianti. Scegli fonti alimentari diverse!
         
         Restituisci SOLO un array JSON con questa esatta struttura:
         [
@@ -681,29 +616,6 @@ app.delete('/api/meals/:id', async (req, res) => {
     try {
         await Meal.findByIdAndDelete(req.params.id);
 
-        // --- GESTIONE RIMOZIONE FIAMMA (EDGE CASE) ---
-        const todayMidnight = getItalyMidnight(); // <--- Sostituisci il vecchio startOfDay con questo
-
-        // Controlla se sono rimasti altri pasti loggati oggi
-        const pastiRimanentiOggi = await Meal.countDocuments({ data: { $gte: todayMidnight } });
-        // Controlla se c'è almeno un allenamento oggi (endTime è un timestamp numerico)
-        const workoutOggi = await History.countDocuments({ endTime: { $gte: todayMidnight.getTime() } });
-
-        // Se non ci sono più pasti e non ci sono allenamenti oggi...
-        if (pastiRimanentiOggi === 0 && workoutOggi === 0) {
-            const todayStr = getItalyDateStr(0);
-            let streak = await Streak.findOne({ userId: 'admin' });
-
-            // Se la fiamma era stata attivata oggi, facciamo "Rollback" (Marcia indietro)
-            if (streak && streak.lastActiveDate === todayStr) {
-                streak.currentStreak = Math.max(0, streak.currentStreak - 1);
-                streak.totalDaysActive = Math.max(0, streak.totalDaysActive - 1); // <-- AGGIUNGI QUESTA RIGA
-                streak.lastActiveDate = getItalyDateStr(-1);
-                await streak.save();
-            }
-        }
-        // ---------------------------------------------
-
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false });
@@ -759,6 +671,11 @@ app.post('/api/subscribe', async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false });
     }
+});
+
+// --- API CHIAVE VAPID PUBBLICA ---
+app.get('/api/vapid-public-key', (req, res) => {
+    res.json({ publicKey: process.env.PUBLIC_VAPID_KEY });
 });
 
 // --- ROTTA SEGRETA PER CRON-JOB (Notifiche Intelligenti) ---

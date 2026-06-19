@@ -45,7 +45,6 @@ export class PantryView {
         const esauriti = this.items.filter(i => i.esaurito).length;
         const inAllerta = scarseScorete + esauriti;
 
-        // Filtraggio
         let filtered = [...this.items];
         if (this.filtroCategoria !== 'Tutti') {
             filtered = filtered.filter(i => i.categoria === this.filtroCategoria);
@@ -59,42 +58,44 @@ export class PantryView {
             : filtered.map(item => this.renderItemCard(item)).join('');
 
         this.container.innerHTML = `
-            <header class="bg-white shadow-sm pt-14 pb-4 px-5 sticky top-0 z-10 flex justify-between items-center">
-                <h1 class="text-2xl font-black text-gray-900 tracking-tight">La Mia Dispensa</h1>
+            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-900 tracking-tight">La Mia Dispensa</h1>
             </header>
 
-            <main class="p-4 space-y-5 pb-32 safe-pb bg-gray-50 min-h-screen">
+            <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50 min-h-screen">
                 
                 <div class="bg-gray-900 text-white p-5 rounded-[24px] shadow-xl flex justify-between items-center">
                     <div>
-                        <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Prodotti Totali</p>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Prodotti</p>
                         <h2 class="text-4xl font-black">${totale}</h2>
                     </div>
                     <div class="text-right flex flex-col gap-2">
-                        <div class="bg-white/10 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-sm">
-                            <p class="text-[10px] font-bold text-orange-400 uppercase tracking-widest">⚠️ ${scarseScorete} In esaurimento</p>
+                        <div class="bg-white/10 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex items-center justify-between gap-3">
+                            <span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest">In esaurimento</span>
+                            <span class="text-sm font-black text-orange-400">${scarseScorete}</span>
                         </div>
-                        <div class="bg-white/10 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-sm">
-                            <p class="text-[10px] font-bold text-red-400 uppercase tracking-widest">🔴 ${esauriti} Esauriti</p>
+                        <div class="bg-white/10 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex items-center justify-between gap-3">
+                            <span class="text-[10px] font-bold text-red-400 uppercase tracking-widest">Esauriti</span>
+                            <span class="text-sm font-black text-red-400">${esauriti}</span>
                         </div>
                     </div>
                 </div>
 
-                <div id="action-buttons" class="grid grid-cols-3 gap-2">
-                    <button id="shopping-list-btn" class="bg-yellow-50 text-yellow-700 border border-yellow-200 font-black text-[13px] py-3 rounded-[20px] shadow-sm active:scale-95 transition-transform flex flex-col justify-center items-center gap-1">
-                        <span class="text-2xl mb-1">🛒</span> Spesa
+                <div id="action-buttons" class="flex space-x-2">
+                    <button id="voice-add-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                        ➕ Manuale
                     </button>
-                    <button id="scan-add-btn" class="bg-blue-50 text-blue-700 border border-blue-200 font-black text-[13px] py-3 rounded-[20px] shadow-sm active:scale-95 transition-transform flex flex-col justify-center items-center gap-1">
-                        <span class="text-2xl mb-1">📸</span> Scanner
+                    <button id="scan-add-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                        📸 Scanner
                     </button>
-                    <button id="voice-add-btn" class="bg-white text-gray-900 border border-gray-200 font-black text-[13px] py-3 rounded-[20px] shadow-sm active:scale-95 transition-transform flex flex-col justify-center items-center gap-1">
-                        <span class="text-2xl mb-1">🎙️</span> Manuale
+                    <button id="shopping-list-btn" class="flex-1 bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                        🛒 Spesa
                     </button>
                 </div>
 
-                <div id="scanner-container" class="hidden bg-gray-900 p-2 rounded-[24px] shadow-xl border border-gray-800">
+                <div id="scanner-container" class="hidden bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
                     <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider mt-2">Inquadra il codice a barre</p>
-                    <video id="pantry-reader-video" class="w-full rounded-[18px] overflow-hidden mb-3 bg-black min-h-[220px]" autoplay playsinline></video>
+                    <video id="pantry-reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[220px]" autoplay playsinline></video>
                     <div class="flex gap-2">
                         <div class="bg-gray-800 rounded-xl px-3 py-2 flex items-center border border-gray-700">
                             <label class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mr-2">Q.TÀ</label>
@@ -121,14 +122,14 @@ export class PantryView {
                         ${['Tutti', ...CATEGORIE].map(cat => {
             const active = this.filtroCategoria === cat;
             const style = CATEGORIA_STYLE[cat];
-            return `<button data-cat="${cat}" class="cat-filter flex-shrink-0 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all ${active ? 'bg-gray-800 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200'}">
+            return `<button data-cat="${cat}" class="cat-filter flex-shrink-0 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all ${active ? 'bg-gray-800 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200'}">
                                 ${style ? style.icon + ' ' : ''}${cat}
                             </button>`;
         }).join('')}
                     </div>
                 </div>
 
-                <div class="space-y-3">
+                <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 space-y-3">
                     ${itemsHtml}
                 </div>
             </main>
@@ -148,33 +149,32 @@ export class PantryView {
         if (item.esaurito) {
             barColor = 'bg-gray-300';
             borderClass = 'border-red-200';
-            statusBadge = `<span class="text-[9px] font-black bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-md uppercase tracking-wider">Esaurito</span>`;
+            statusBadge = `<span class="flex-shrink-0 text-[9px] font-black bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-md uppercase tracking-wider">Esaurito</span>`;
         } else if (item.scortaBassa) {
             barColor = 'bg-orange-400';
             borderClass = 'border-orange-200';
-            statusBadge = `<span class="text-[9px] font-black bg-orange-50 text-orange-600 border border-orange-100 px-2 py-0.5 rounded-md uppercase tracking-wider animate-pulse">Scorta bassa</span>`;
+            statusBadge = `<span class="flex-shrink-0 text-[9px] font-black bg-orange-50 text-orange-600 border border-orange-100 px-2 py-0.5 rounded-md uppercase tracking-wider animate-pulse">Scorta bassa</span>`;
         }
 
         return `
-            <div class="pantry-item-card bg-white rounded-[20px] border ${borderClass} shadow-[0_4px_15px_rgb(0,0,0,0.02)] p-4 cursor-pointer active:scale-95 transition-transform flex gap-4 items-center" data-id="${item._id}">
-                
+            <div class="pantry-item-card bg-gray-50 p-4 rounded-xl border ${borderClass} shadow-sm mb-3 cursor-pointer active:scale-95 transition-transform flex gap-4 items-center" data-id="${item._id}">
                 ${item.immagine
-                ? `<img src="${item.immagine}" class="w-16 h-16 object-cover rounded-[16px] border border-gray-100 shadow-sm flex-shrink-0">`
-                : `<div class="w-16 h-16 ${style.bg} rounded-[16px] flex items-center justify-center text-3xl flex-shrink-0 border ${style.border}">${style.icon}</div>`
+                ? `<img src="${item.immagine}" class="w-14 h-14 object-cover rounded-xl border border-gray-200 flex-shrink-0">`
+                : `<div class="w-14 h-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl border ${style.border} flex-shrink-0">${style.icon}</div>`
             }
                 
-                <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-start mb-0.5">
-                        <h3 class="font-bold text-gray-900 text-[16px] leading-tight truncate pr-2">${item.nome}</h3>
-                    </div>
-                    
-                    <div class="flex justify-between items-end mb-2">
-                        <p class="text-sm font-black text-gray-800">${item.grammiRimasti}g <span class="text-[10px] font-medium text-gray-400">/ ${item.grammiTotali}g</span></p>
+                <div class="flex-1 min-w-0 pr-1">
+                    <div class="flex justify-between items-start mb-1">
+                        <h4 class="text-[14px] font-bold text-gray-800 break-words leading-tight pr-2">${item.nome}</h4>
                         ${statusBadge}
                     </div>
+                    
+                    <div class="flex justify-between items-end mt-2">
+                        <p class="text-sm font-black text-gray-900">${item.grammiRimasti}g <span class="text-[10px] font-medium text-gray-400">/ ${item.grammiTotali}g</span></p>
+                    </div>
 
-                    <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                        <div class="${barColor} h-2 rounded-full transition-all" style="width: ${percRounded}%"></div>
+                    <div class="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                        <div class="${barColor} h-1.5 rounded-full transition-all" style="width: ${percRounded}%"></div>
                     </div>
                 </div>
             </div>
@@ -199,16 +199,18 @@ export class PantryView {
         const usageHtml = usage.length === 0
             ? `<div class="text-center py-6 text-gray-400 font-medium">Nessun utilizzo registrato.</div>`
             : usage.map(u => `
-                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between mb-3">
-                    <div class="flex-1 pr-3">
-                        <h4 class="text-sm font-bold text-gray-800">${u.nomePasto}</h4>
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
+                    <div class="flex-1 pr-2">
+                        <h4 class="text-sm font-bold text-gray-800 break-words">${u.nomePasto}</h4>
+                        <p class="text-[10px] font-bold text-gray-500 mt-1">
                             ${new Date(u.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })} • 
                             ${new Date(u.data).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                     </div>
-                    <div class="bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
-                        <span class="font-black text-gray-900 text-sm">-${u.grammiScalati}g</span>
+                    <div class="flex-shrink-0">
+                        <span class="font-bold text-gray-900 text-sm bg-white px-2 py-1 rounded shadow-sm border border-gray-100">
+                            ${u.grammiScalati > 0 ? `-${u.grammiScalati}g` : `+${Math.abs(u.grammiScalati)}g`}
+                        </span>
                     </div>
                 </div>
             `).join('');
@@ -216,7 +218,7 @@ export class PantryView {
         this.container.innerHTML = `
             <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
                 <div class="flex items-center">
-                    <button id="back-detail-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2 active:scale-90 transition-transform">
+                    <button id="back-detail-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                     </button>
                     <h1 class="text-xl font-bold text-gray-900 truncate">Prodotto</h1>
@@ -226,65 +228,62 @@ export class PantryView {
                 </button>
             </header>
 
-            <main class="p-4 space-y-6 pb-32 safe-pb bg-gray-50">
+            <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
                 
-                <div class="bg-white p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+                <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-[10px] font-bold ${style.bg} ${style.text} px-2.5 py-1 rounded-md uppercase tracking-wider border ${style.border}">${item.categoria}</span>
+                    </div>
+
                     <div class="flex flex-col items-center mb-6">
                         ${item.immagine
                 ? `<img src="${item.immagine}" class="w-24 h-24 object-cover rounded-[20px] border border-gray-100 shadow-sm mb-4">`
                 : `<div class="w-24 h-24 ${style.bg} rounded-[20px] flex items-center justify-center text-5xl border ${style.border} mb-4 shadow-inner">${style.icon}</div>`
             }
-                        <span class="text-[10px] font-bold ${style.bg} ${style.text} px-3 py-1 rounded-full uppercase tracking-widest mb-2 border ${style.border}">${item.categoria}</span>
                         <h2 class="text-2xl font-black text-gray-900 text-center leading-tight">${item.nome}</h2>
                     </div>
 
-                    <div class="bg-gray-50 p-5 rounded-[20px] border border-gray-100 mb-6">
-                        <div class="flex justify-between items-end mb-2">
-                            <div>
-                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Disponibilità</p>
-                                <p class="text-4xl font-black text-gray-900 leading-none mt-1">${item.grammiRimasti}<span class="text-lg font-bold text-gray-400">g</span></p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Acquistato</p>
-                                <p class="text-lg font-black text-gray-600 mt-1">${item.grammiTotali} g</p>
-                            </div>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2 mt-4 overflow-hidden">
-                            <div class="${barColor} h-2 rounded-full transition-all" style="width: ${Math.max(0, Math.min(100, perc))}%"></div>
+                    <div class="flex justify-between items-end mb-4 border-b border-gray-100 pb-4">
+                        <div>
+                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Disponibilità</p>
+                            <p class="text-3xl font-black text-gray-900 leading-none">${item.grammiRimasti}<span class="text-lg font-bold text-gray-400">g</span> <span class="text-sm font-medium text-gray-400">/ ${item.grammiTotali}g</span></p>
                         </div>
                     </div>
-
-                    <div class="grid grid-cols-2 gap-3 mb-6">
-                        <button id="restock-btn" data-id="${item._id}" class="bg-gray-900 text-white font-bold text-[14px] py-4 rounded-xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-2">
-                            ➕ Rifornisci
-                        </button>
-                        <button id="edit-grams-btn" data-id="${item._id}" class="bg-white text-gray-900 border border-gray-200 font-bold text-[14px] py-4 rounded-xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-2">
-                            ✏️ Modifica
-                        </button>
+                    
+                    <div class="w-full bg-gray-100 rounded-full h-2 mb-6 overflow-hidden">
+                        <div class="${barColor} h-2 rounded-full transition-all" style="width: ${Math.max(0, Math.min(100, perc))}%"></div>
                     </div>
 
-                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 pt-4 border-t border-gray-100">Valori Nutrizionali (su 100g)</p>
-                    <div class="grid grid-cols-4 gap-2">
-                        <div class="bg-gray-50 p-2 sm:p-3 rounded-[16px] flex flex-col justify-center items-center border border-gray-100">
-                            <p class="text-[9px] font-bold text-gray-400 uppercase mb-1 w-full text-center">Kcal</p>
+                    <div class="grid grid-cols-4 gap-2 mb-6">
+                        <div class="bg-gray-50 p-3 rounded-2xl flex flex-col justify-center items-center border border-gray-100">
+                            <p class="text-[10px] font-bold text-gray-400 uppercase mb-1">Kcal</p>
                             <p class="text-sm sm:text-base font-black text-gray-900">${item.calorie100}</p>
                         </div>
-                        <div class="bg-blue-50 p-2 sm:p-3 rounded-[16px] flex flex-col justify-center items-center border border-blue-100">
-                            <p class="text-[9px] font-bold text-blue-400 uppercase mb-1 w-full text-center">Pro</p>
+                        <div class="bg-blue-50 p-3 rounded-2xl flex flex-col justify-center items-center border border-blue-100">
+                            <p class="text-[10px] font-bold text-blue-500 uppercase mb-1">P</p>
                             <p class="text-sm sm:text-base font-black text-blue-700">${item.proteine100}g</p>
                         </div>
-                        <div class="bg-green-50 p-2 sm:p-3 rounded-[16px] flex flex-col justify-center items-center border border-green-100">
-                            <p class="text-[9px] font-bold text-green-500 uppercase mb-1 w-full text-center">Car</p>
+                        <div class="bg-green-50 p-3 rounded-2xl flex flex-col justify-center items-center border border-green-100">
+                            <p class="text-[10px] font-bold text-green-500 uppercase mb-1">C</p>
                             <p class="text-sm sm:text-base font-black text-green-700">${item.carbo100}g</p>
                         </div>
-                        <div class="bg-yellow-50 p-2 sm:p-3 rounded-[16px] flex flex-col justify-center items-center border border-yellow-100">
-                            <p class="text-[9px] font-bold text-yellow-600 uppercase mb-1 w-full text-center">Fat</p>
+                        <div class="bg-yellow-50 p-3 rounded-2xl flex flex-col justify-center items-center border border-yellow-100">
+                            <p class="text-[10px] font-bold text-yellow-600 uppercase mb-1">G</p>
                             <p class="text-sm sm:text-base font-black text-yellow-700">${item.grassi100}g</p>
                         </div>
                     </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="restock-btn" data-id="${item._id}" class="bg-gray-900 text-white font-bold text-sm py-4 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                            ➕ Rifornisci
+                        </button>
+                        <button id="edit-grams-btn" data-id="${item._id}" class="bg-white text-gray-900 border border-gray-200 font-bold text-sm py-4 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
+                            ✏️ Modifica
+                        </button>
+                    </div>
                 </div>
 
-                <div class="pt-2">
+                <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 pt-5">
                     <h3 class="text-xs font-bold text-gray-800 uppercase tracking-widest mb-3 px-1">Cronologia Utilizzi</h3>
                     ${usageHtml}
                 </div>
@@ -292,6 +291,8 @@ export class PantryView {
         `;
 
         document.getElementById('back-detail-btn').addEventListener('click', () => this.render());
+
+        // I listener (restock-btn, edit-grams-btn, delete-item-btn) rimangono ESATTAMENTE gli stessi
 
         document.getElementById('restock-btn').addEventListener('click', async () => {
             const qtyStr = await modal.showModal({
@@ -365,10 +366,10 @@ export class PantryView {
             });
         });
 
-        // Tasto Lista della Spesa
+        // NUOVO CODICE:
         const shoppingBtn = document.getElementById('shopping-list-btn');
         if (shoppingBtn) {
-            shoppingBtn.addEventListener('click', () => this.showShoppingListModal());
+            shoppingBtn.addEventListener('click', () => this.showShoppingList());
         }
 
         // Tasto Scanner
@@ -415,124 +416,112 @@ export class PantryView {
         if (actionBtns) actionBtns.classList.remove('hidden');
     }
 
-    // ─── NUOVO: MODALE LISTA DELLA SPESA AUTOMATICA ─────────────────────────────
-    showShoppingListModal() {
+    // ─── NUOVO: PAGINA LISTA DELLA SPESA FULL-SCREEN PER IL SUPERMERCATO ───
+    // ─── NUOVO: PAGINA LISTA DELLA SPESA FULL-SCREEN CON MODIFICA PESO E SOVRASCRITTURA ───
+    showShoppingList() {
         const toBuy = this.items.filter(i => i.scortaBassa || i.esaurito);
 
-        const modalId = 'shopping-list-modal';
-        let m = document.getElementById(modalId);
-        if (m) m.remove();
-
-        m = document.createElement('div');
-        m.id = modalId;
-        m.className = "fixed inset-0 z-[99999] flex items-end justify-center bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
-
         const itemsHtml = toBuy.length === 0
-            ? `<div class="text-center py-10">
+            ? `<div class="text-center py-20 bg-white m-4 rounded-[24px] border border-gray-100 shadow-sm">
                  <div class="text-6xl mb-4">🛒</div>
                  <p class="text-gray-900 font-black text-xl mb-1">Niente da comprare!</p>
                  <p class="text-gray-500 font-medium">La tua dispensa è al top. 🚀</p>
                </div>`
             : toBuy.map((item) => `
-                <div class="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-3 gap-3">
                     <div class="flex items-center gap-3 flex-1 min-w-0">
-                        <input type="checkbox" id="buy-${item._id}" value="${item._id}" class="shopping-cb w-6 h-6 text-yellow-500 bg-white border-gray-300 rounded focus:ring-yellow-500 active:scale-90 transition-transform" checked>
-                        <div class="flex-1 min-w-0">
-                            <label for="buy-${item._id}" class="font-bold text-gray-900 text-[15px] truncate block leading-tight cursor-pointer">${item.nome}</label>
-                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">${item.pesoConfezione}g per singola conf.</p>
+                        <input type="checkbox" id="buy-${item._id}" value="${item._id}" class="shopping-cb w-6 h-6 text-yellow-500 bg-white border-gray-300 rounded focus:ring-yellow-500 active:scale-90 transition-transform cursor-pointer">
+                        <div class="flex-1 min-w-0 pl-1">
+                            <label for="buy-${item._id}" class="font-bold text-gray-800 text-[15px] truncate block leading-tight cursor-pointer">${item.nome}</label>
+                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Predefinito: ${item.pesoConfezione}g</p>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 flex-shrink-0 ml-2">
-                        <label class="text-[10px] font-bold text-gray-400 uppercase">Q.tà</label>
-                        <input type="number" id="qty-${item._id}" value="1" min="1" max="99" class="w-12 bg-white border border-gray-200 rounded-xl p-2 text-center font-black text-gray-900 outline-none focus:ring-2 focus:ring-yellow-400 transition-all">
+                    
+                    <div class="flex items-center gap-3 flex-shrink-0 justify-between sm:justify-end w-full sm:w-auto">
+                        <div class="flex items-center gap-1">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase">Peso (g)</label>
+                            <input type="number" id="weight-${item._id}" value="${item.pesoConfezione}" class="w-16 bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold text-gray-900 outline-none focus:ring-2 focus:ring-yellow-400 transition-all">
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase">Q.tà</label>
+                            <input type="number" id="qty-${item._id}" value="1" min="1" max="99" class="w-12 bg-white border border-gray-200 rounded-xl p-2 text-center font-black text-gray-900 outline-none focus:ring-2 focus:ring-yellow-400 transition-all">
+                        </div>
                     </div>
                 </div>
             `).join('');
 
-        m.innerHTML = `
-            <div class="bg-white w-full max-w-md rounded-t-[2rem] p-6 shadow-2xl transform translate-y-full transition-transform duration-300 max-h-[90vh] flex flex-col">
-                <div class="flex justify-between items-center mb-6 flex-shrink-0">
-                    <h2 class="text-xl font-black text-gray-900 flex items-center gap-2"><span class="text-2xl">🛒</span> Lista Spesa</h2>
-                    <button id="close-shopping-modal" class="text-gray-400 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        this.container.innerHTML = `
+            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
+                <div class="flex items-center">
+                    <button id="back-shopping-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2 active:scale-90 transition-transform">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                     </button>
+                    <h1 class="text-xl font-bold text-gray-900 truncate">Lista della Spesa</h1>
                 </div>
+            </header>
 
-                <div class="overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden pb-2">
-                    ${toBuy.length > 0 ? `<p class="text-xs font-bold text-gray-500 mb-5 leading-relaxed bg-yellow-50 text-yellow-700 p-3 rounded-xl border border-yellow-100">L'app ha rilevato che i seguenti prodotti scarseggiano. Spunta quelli che hai comprato per aggiungerli alla dispensa.</p>` : ''}
+            <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50 min-h-screen">
+                ${toBuy.length > 0 ? `<p class="text-xs font-bold text-gray-500 mb-2 leading-relaxed bg-yellow-50 text-yellow-700 p-4 rounded-2xl border border-yellow-100 shadow-sm">Modifica il peso della confezione se differisce dal solito, spunta l'articolo e caricalo in dispensa.</p>` : ''}
+                
+                <div class="space-y-1">
                     ${itemsHtml}
                 </div>
 
                 ${toBuy.length > 0 ? `
-                    <div class="pt-4 mt-2 border-t border-gray-100 flex-shrink-0">
-                        <button id="confirm-shopping-btn" class="w-full bg-yellow-400 text-yellow-900 font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgba(250,204,21,0.3)] active:scale-95 transition-all flex justify-center items-center gap-2">
-                            ✅ Rifornisci i selezionati
+                    <div class="pt-2">
+                        <button id="confirm-shopping-btn" class="w-full bg-yellow-400 text-yellow-900 font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgba(250,204,21,0.2)] active:scale-95 transition-all flex justify-center items-center gap-2">
+                            ✅ Carica nel Database
                         </button>
                     </div>
                 ` : ''}
-            </div>
+            </main>
         `;
 
-        document.body.appendChild(m);
-        document.body.style.overflow = 'hidden';
-
-        requestAnimationFrame(() => {
-            m.classList.remove('opacity-0');
-            m.querySelector('div').classList.remove('translate-y-full');
-        });
-
-        const closeModal = () => {
-            m.classList.add('opacity-0');
-            m.querySelector('div').classList.add('translate-y-full');
-            setTimeout(() => {
-                m.remove();
-                document.body.style.overflow = '';
-            }, 300);
-        };
-
-        document.getElementById('close-shopping-modal').addEventListener('click', closeModal);
+        document.getElementById('back-shopping-btn').addEventListener('click', () => this.render());
 
         const confirmBtn = document.getElementById('confirm-shopping-btn');
         if (confirmBtn) {
             confirmBtn.addEventListener('click', async () => {
-                const checkboxes = m.querySelectorAll('.shopping-cb:checked');
+                const checkboxes = this.container.querySelectorAll('.shopping-cb:checked');
                 if (checkboxes.length === 0) {
-                    await modal.showModal({ type: 'alert', title: 'Attenzione', message: 'Seleziona almeno un prodotto spuntando la casella.' });
+                    await modal.showModal({ type: 'alert', title: 'Carrello Vuoto', message: 'Spunta almeno un prodotto che hai messo nel carrello prima di rifornire.' });
                     return;
                 }
 
-                // Disabilita pulsante e mostra loading
                 confirmBtn.innerHTML = '⏳ Aggiornamento in corso...';
                 confirmBtn.classList.replace('bg-yellow-400', 'bg-gray-200');
                 confirmBtn.classList.replace('text-yellow-900', 'text-gray-500');
-                confirmBtn.classList.remove('shadow-[0_8px_20px_rgba(250,204,21,0.3)]');
                 confirmBtn.disabled = true;
 
-                // Prepara tutte le richieste PUT
                 const updatePromises = Array.from(checkboxes).map(async (cb) => {
                     const itemId = cb.value;
                     const item = this.items.find(i => String(i._id) === String(itemId));
-                    const qtyInput = document.getElementById(`qty-${itemId}`);
+                    const qtyInput = this.container.querySelector(`#qty-${itemId}`);
+                    const weightInput = this.container.querySelector(`#weight-${itemId}`);
+
                     const qty = parseInt(qtyInput.value) || 1;
+                    // Estrae il peso modificato manualmente (es: 300g reali della vaschetta di carne)
+                    const customWeight = parseFloat(weightInput.value) || item.pesoConfezione;
 
                     if (item) {
-                        const grammiDaAggiungere = qty * item.pesoConfezione;
+                        const totalNewWeight = qty * customWeight;
+
+                        // EFFETTUA LA SOVRASCRITTURA COMPLETA DEI VALORI TARGET
                         return pantryService.updatePantryItem(itemId, {
-                            quantitaConfezioni: item.quantitaConfezioni + qty,
-                            grammiTotali: item.grammiTotali + grammiDaAggiungere,
-                            grammiRimasti: item.grammiRimasti + grammiDaAggiungere
+                            pesoConfezione: customWeight,
+                            quantitaConfezioni: qty,       // Sovrascrive la quantità
+                            grammiTotali: totalNewWeight,   // Sovrascrive il totale target (i 300g dell'esempio)
+                            grammiRimasti: totalNewWeight   // Sovrascrive i grammi rimasti correnti
                         });
                     }
                 });
 
                 try {
                     await Promise.all(updatePromises);
-                    closeModal();
-                    await modal.showModal({ type: 'success', title: 'Dispensa Aggiornata', message: 'I prodotti selezionati sono stati riforniti con successo! 🎉' });
+                    await modal.showModal({ type: 'success', title: 'Fatto!', message: 'La dispensa è stata aggiornata e resettata con i nuovi valori reali! 🛒' });
                     this.render();
                 } catch (e) {
-                    await modal.showModal({ type: 'error', title: 'Errore', message: 'Si è verificato un errore durante il rifornimento.' });
-                    closeModal();
+                    await modal.showModal({ type: 'error', title: 'Errore', message: 'Si è verificato un errore durante il caricamento delle scorte.' });
                     this.render();
                 }
             });
