@@ -98,3 +98,14 @@ export async function restoreToPantry(ingredienti, mealId, nomePasto) {
     });
     return await res.json();
 }
+
+// public/js/services/pantryService.js (Aggiungi in fondo)
+
+export async function addToOpenFoodFacts(productData) {
+    const res = await fetch('/api/pantry/add-to-off', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productData)
+    });
+    return await res.json();
+}

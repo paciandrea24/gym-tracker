@@ -541,13 +541,26 @@ export class PantryView {
             const data = await pantryService.fetchOpenFoodFacts(barcode);
 
             if (data.status !== 1) {
-                await modal.showModal({
-                    type: 'error', title: 'Non trovato',
-                    message: 'Prodotto non trovato nel database mondiale. Aggiungilo manualmente.'
+                // IL PRODOTTO NON ESISTE. Chiediamo all'utente se vuole aggiungerlo.
+                const vuoiAggiungere = await modal.showModal({
+                    type: 'confirm',
+                    title: 'Prodotto non trovato',
+                    message: `Il codice a barre ${barcode} è corretto, ma nessuno ha mai inserito i valori nutrizionali nel database mondiale.\n\nVuoi aggiungerlo tu a Open Food Facts e alla tua dispensa?`,
+                    confirmText: 'Sì, inserisco i dati',
+                    cancelText: 'Annulla'
                 });
-                return this.render();
+
+                if (vuoiAggiungere) {
+                    // Passiamo il codice a barre al form di aggiunta manuale
+                    const result = await this.showManualAddForm(barcode);
+                    if (result) this.render();
+                    return;
+                } else {
+                    return this.render();
+                }
             }
 
+            // ... (Da qui in poi resta uguale il codice originale per quando lo trova)
             const p = data.product;
             const n = p.nutriments || {};
 
@@ -624,7 +637,7 @@ export class PantryView {
         if (result) this.render();
     }
 
-    showManualAddForm() {
+    showManualAddForm(prefillBarcode = '') {
         return new Promise((resolve) => {
             const modalId = 'manual-add-modal';
             let m = document.getElementById(modalId);
@@ -785,12 +798,31 @@ export class PantryView {
                 }
 
                 try {
+                    // 1. Salvataggio LOCALE nella dispensa
                     await pantryService.addPantryItem({
-                        barcode: '',
+                        barcode: prefillBarcode, // Passiamo il barcode locale (o vuoto se è 100% manuale)
                         nome, immagine: '',
                         calorie100: cal, proteine100: pro, carbo100: carbo, grassi100: fat,
                         pesoConfezione: peso, quantitaConfezioni: qty, categoria
                     });
+
+                    // 2. Se abbiamo un barcode in pancia (veniamo dallo scanner che ha dato 404)
+                    // inviamo silenziosamente i dati al database mondiale di Open Food Facts
+                    if (prefillBarcode && cal > 0) {
+                        try {
+                            await pantryService.addToOpenFoodFacts({
+                                barcode: prefillBarcode,
+                                nome: nome,
+                                calorie100: cal,
+                                proteine100: pro,
+                                carbo100: carbo,
+                                grassi100: fat
+                            });
+                        } catch (errOff) {
+                            console.warn("L'invio a Open Food Facts è fallito, ma il salvataggio locale ha avuto successo.", errOff);
+                        }
+                    }
+
                     closeModal(true);
                 } catch (e) {
                     await modal.showModal({ type: 'error', title: 'Errore', message: 'Errore nel salvataggio.' });

@@ -1,4 +1,22 @@
+// public/js/components/scanner.js
+
 let codeReader = null;
+
+// Funzione matematica per verificare i codici EAN/UPC in una frazione di millisecondo
+function isValidBarcode(barcode) {
+    if (!/^\d{8,14}$/.test(barcode)) return false;
+    let sum = 0;
+    const digits = barcode.split('').map(Number);
+    const checkDigit = digits.pop(); // Prende l'ultimo numero (il checksum)
+
+    // Moltiplica alternativamente per 3 e per 1 partendo da destra
+    digits.reverse().forEach((digit, index) => {
+        sum += digit * (index % 2 === 0 ? 3 : 1);
+    });
+
+    const calculatedCheck = (10 - (sum % 10)) % 10;
+    return calculatedCheck === checkDigit;
+}
 
 export async function startScanner(videoElementId, onSuccess, onError) {
     if (!codeReader) {
@@ -7,14 +25,11 @@ export async function startScanner(videoElementId, onSuccess, onError) {
             ZXing.BarcodeFormat.EAN_13,
             ZXing.BarcodeFormat.EAN_8,
             ZXing.BarcodeFormat.UPC_A,
-            ZXing.BarcodeFormat.UPC_E,
-            ZXing.BarcodeFormat.CODE_128
+            ZXing.BarcodeFormat.UPC_E
         ]);
 
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
         codeReader = new ZXing.BrowserMultiFormatReader(hints);
-
-        // Abbassato a 100ms per una reattività estrema
         codeReader.timeBetweenDecodingAttempts = 100;
     }
 
@@ -37,11 +52,9 @@ export async function startScanner(videoElementId, onSuccess, onError) {
             codeReader.decodeFromVideoDevice(selectedDeviceId, videoElementId, (result, err) => {
                 if (result) {
                     const barcode = result.getText().trim();
-                    const isValidLength = barcode.length >= 8 && barcode.length <= 14;
-                    const isNumeric = /^\d+$/.test(barcode);
 
-                    if (isValidLength && isNumeric) {
-                        // SCATTO IMMEDIATO: Appena becca un codice valido, ferma tutto e lo cerca
+                    // CONTROLLO CHECKSUM: Se il codice letto a causa del mosso è matematicamente impossibile, lo ignora!
+                    if (isValidBarcode(barcode)) {
                         stopScanner();
                         onSuccess(barcode);
                     }
