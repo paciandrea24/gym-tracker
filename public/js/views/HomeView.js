@@ -172,14 +172,15 @@ export class HomeView {
 
             <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50 min-h-screen">
                 <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Registra Peso di Oggi</label>
-                    <div class="flex gap-2">
-                        <input type="number" id="new-weight-input" step="0.1" inputmode="decimal" placeholder="es. 75.4" value="${logs.length > 0 ? logs[0].weight : ''}" class="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-black text-center text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                        <button id="save-weight-btn" class="bg-gray-900 hover:bg-gray-800 text-white font-bold text-sm px-6 rounded-xl active:scale-95 transition-transform shadow-md">
-                            Salva
-                        </button>
-                    </div>
-                </div>
+    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Registra Peso di Oggi</label>
+    <div class="flex w-full gap-2">
+        <input type="number" id="new-weight-input" step="0.1" inputmode="decimal" placeholder="es. 75.4" value="${logs.length > 0 ? logs[0].weight : ''}" class="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-black text-center text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+        
+        <button id="save-weight-btn" class="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white font-bold text-sm px-6 rounded-xl active:scale-95 transition-transform shadow-md">
+            Salva
+        </button>
+    </div>
+</div>
 
                 <div class="grid grid-cols-3 gap-2">
                     <div class="text-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
