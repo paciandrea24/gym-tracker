@@ -1,14 +1,14 @@
 // public/js/components/scanner.js
 
 let codeReader = null;
+let lastScannedCode = null;
+let scanCount = 0;
 
 export async function startScanner(videoElementId, onSuccess, onError) {
     if (!codeReader) {
         const hints = new Map();
 
-        // LA MAGIA È QUI: Abbiamo rimosso ZXing.BarcodeFormat.CODE_128.
-        // In questo modo lo scanner ignorerà le scritte (ingredienti, ecc.) 
-        // e cercherà SOLO i veri codici a barre dei prodotti alimentari.
+        // Manteniamo solo i veri codici alimentari (EAN e UPC)
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
             ZXing.BarcodeFormat.EAN_13,
             ZXing.BarcodeFormat.EAN_8,
@@ -19,9 +19,12 @@ export async function startScanner(videoElementId, onSuccess, onError) {
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
         codeReader = new ZXing.BrowserMultiFormatReader(hints);
 
-        // Lo impostiamo al minimo (100ms) per una lettura letteralmente istantanea
+        // Lo scanner scatta un fotogramma ogni 100ms
         codeReader.timeBetweenDecodingAttempts = 100;
     }
+
+    lastScannedCode = null;
+    scanCount = 0;
 
     try {
         const videoInputDevices = await codeReader.listVideoInputDevices();
@@ -29,7 +32,6 @@ export async function startScanner(videoElementId, onSuccess, onError) {
         if (videoInputDevices && videoInputDevices.length > 0) {
             let selectedDeviceId = videoInputDevices[0].deviceId;
 
-            // Cerca la fotocamera posteriore ottimale
             for (let i = 0; i < videoInputDevices.length; i++) {
                 let label = videoInputDevices[i].label.toLowerCase();
                 if (label.includes("back") || label.includes("posteriore") || label.includes("environment")) {
@@ -44,11 +46,22 @@ export async function startScanner(videoElementId, onSuccess, onError) {
                 if (result) {
                     const barcode = result.getText().trim();
 
-                    // Unico, semplice controllo di sicurezza: 
-                    // i codici alimentari hanno tra le 8 e le 13 cifre e sono SOLO numeri.
+                    // Solo numeri tra 8 e 13 cifre
                     if (/^\d{8,13}$/.test(barcode)) {
-                        stopScanner();
-                        onSuccess(barcode);
+
+                        // DEBOUNCE: Chiediamo 2 letture identiche consecutive.
+                        // Ci metterà circa 0.1s e filtrerà il 100% degli errori di lettura "a metà"
+                        if (barcode === lastScannedCode) {
+                            scanCount++;
+                            if (scanCount >= 2) {
+                                stopScanner();
+                                onSuccess(barcode);
+                            }
+                        } else {
+                            // Se cambia, azzera il contatore (era un'allucinazione o un codice a metà)
+                            lastScannedCode = barcode;
+                            scanCount = 1;
+                        }
                     }
                 }
             });
@@ -66,4 +79,6 @@ export function stopScanner() {
     if (codeReader) {
         codeReader.reset();
     }
+    lastScannedCode = null;
+    scanCount = 0;
 }
