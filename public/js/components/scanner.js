@@ -2,25 +2,13 @@
 
 let codeReader = null;
 
-// Funzione matematica per verificare i codici EAN/UPC in una frazione di millisecondo
-function isValidBarcode(barcode) {
-    if (!/^\d{8,14}$/.test(barcode)) return false;
-    let sum = 0;
-    const digits = barcode.split('').map(Number);
-    const checkDigit = digits.pop(); // Prende l'ultimo numero (il checksum)
-
-    // Moltiplica alternativamente per 3 e per 1 partendo da destra
-    digits.reverse().forEach((digit, index) => {
-        sum += digit * (index % 2 === 0 ? 3 : 1);
-    });
-
-    const calculatedCheck = (10 - (sum % 10)) % 10;
-    return calculatedCheck === checkDigit;
-}
-
 export async function startScanner(videoElementId, onSuccess, onError) {
     if (!codeReader) {
         const hints = new Map();
+
+        // LA MAGIA È QUI: Abbiamo rimosso ZXing.BarcodeFormat.CODE_128.
+        // In questo modo lo scanner ignorerà le scritte (ingredienti, ecc.) 
+        // e cercherà SOLO i veri codici a barre dei prodotti alimentari.
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
             ZXing.BarcodeFormat.EAN_13,
             ZXing.BarcodeFormat.EAN_8,
@@ -30,6 +18,8 @@ export async function startScanner(videoElementId, onSuccess, onError) {
 
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
         codeReader = new ZXing.BrowserMultiFormatReader(hints);
+
+        // Lo impostiamo al minimo (100ms) per una lettura letteralmente istantanea
         codeReader.timeBetweenDecodingAttempts = 100;
     }
 
@@ -39,6 +29,7 @@ export async function startScanner(videoElementId, onSuccess, onError) {
         if (videoInputDevices && videoInputDevices.length > 0) {
             let selectedDeviceId = videoInputDevices[0].deviceId;
 
+            // Cerca la fotocamera posteriore ottimale
             for (let i = 0; i < videoInputDevices.length; i++) {
                 let label = videoInputDevices[i].label.toLowerCase();
                 if (label.includes("back") || label.includes("posteriore") || label.includes("environment")) {
@@ -53,8 +44,9 @@ export async function startScanner(videoElementId, onSuccess, onError) {
                 if (result) {
                     const barcode = result.getText().trim();
 
-                    // CONTROLLO CHECKSUM: Se il codice letto a causa del mosso è matematicamente impossibile, lo ignora!
-                    if (isValidBarcode(barcode)) {
+                    // Unico, semplice controllo di sicurezza: 
+                    // i codici alimentari hanno tra le 8 e le 13 cifre e sono SOLO numeri.
+                    if (/^\d{8,13}$/.test(barcode)) {
                         stopScanner();
                         onSuccess(barcode);
                     }
