@@ -360,24 +360,23 @@ app.post('/api/pantry/add-to-off', async (req, res) => {
         });
         const data = await offResponse.json();
 
-        // --- 2. INVIO FOTO (SE PRESENTE) ---
-        // Se l'utente ha scattato una foto, la processiamo
+        // --- 2. INVIO FOTO ---
         if (foto && (data.status === 1 || data.status_code === 1)) {
-            // Estraiamo i dati grezzi dal Base64 inviato dal frontend
             const base64Data = foto.split(',')[1];
             const mimeMatch = foto.match(/data:(.*?);/);
             const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
 
-            // Creiamo un Blob per inviarlo come file a OFF (Supportato nativamente da Node 18+)
             const buffer = Buffer.from(base64Data, 'base64');
             const blob = new Blob([buffer], { type: mimeType });
 
             const formData = new FormData();
             formData.append('code', barcode);
-            formData.append('imagefield', 'front'); // Diciamo a OFF che è la foto frontale
+            formData.append('imagefield', 'front');
             formData.append('user_id', user);
             formData.append('password', pass);
-            formData.append('imagedata', blob, 'front.jpg');
+
+            // 👇 ECCO LA CORREZIONE: OFF esige questo nome esatto! 👇
+            formData.append('imgupload_front', blob, 'front.jpg');
 
             await fetch('https://world.openfoodfacts.org/cgi/product_image_upload.pl', {
                 method: 'POST',
