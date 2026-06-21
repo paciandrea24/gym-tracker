@@ -823,11 +823,36 @@ export class PantryView {
                 saveBtn.disabled = true;
 
                 // Converte l'immagine in Base64 se l'utente l'ha caricata
+                // Converte e COMPRIME l'immagine se l'utente l'ha caricata
                 if (fotoInput && fotoInput.files.length > 0) {
                     const file = fotoInput.files[0];
-                    fotoBase64 = await new Promise((res) => {
+                    fotoBase64 = await new Promise((resolve) => {
                         const reader = new FileReader();
-                        reader.onload = (e) => res(e.target.result);
+                        reader.onload = (event) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                // Creiamo una tela virtuale per ridimensionare la foto
+                                const canvas = document.createElement('canvas');
+                                let width = img.width;
+                                let height = img.height;
+                                const max_size = 800; // Impostiamo un lato massimo di 800 pixel
+
+                                if (width > height) {
+                                    if (width > max_size) { height *= max_size / width; width = max_size; }
+                                } else {
+                                    if (height > max_size) { width *= max_size / height; height = max_size; }
+                                }
+
+                                canvas.width = width;
+                                canvas.height = height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0, width, height);
+
+                                // Esportiamo la foto rimpicciolita e compressa al 70% in JPEG
+                                resolve(canvas.toDataURL('image/jpeg', 0.7));
+                            };
+                            img.src = event.target.result;
+                        };
                         reader.readAsDataURL(file);
                     });
                 }
