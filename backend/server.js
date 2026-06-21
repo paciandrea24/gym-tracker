@@ -323,11 +323,12 @@ app.get('/api/pantry/for-ai', async (req, res) => {
 
 // Aggiungi questo in backend/server.js (zona API DISPENSA)
 
+// Sostituisci questo blocco in backend/server.js
+
 app.post('/api/pantry/add-to-off', async (req, res) => {
     try {
-        const { barcode, nome, calorie100, proteine100, carbo100, grassi100 } = req.body;
+        const { barcode, nome, marca, foto, calorie100, proteine100, carbo100, grassi100 } = req.body;
 
-        // Verifica di avere le credenziali nel .env
         const user = process.env.OFF_USER;
         const pass = process.env.OFF_PASS;
 
@@ -335,14 +336,14 @@ app.post('/api/pantry/add-to-off', async (req, res) => {
             return res.status(500).json({ success: false, error: "Credenziali OFF non configurate nel server" });
         }
 
-        // Formatta i dati come richiesto da Open Food Facts (x-www-form-urlencoded)
+        // --- 1. INVIO DATI TESTUALI E MACRO ---
         const params = new URLSearchParams();
         params.append('code', barcode);
         params.append('user_id', user);
         params.append('password', pass);
         params.append('product_name', nome);
+        if (marca) params.append('brands', marca);
 
-        // Valori nutrizionali
         params.append('nutriment_energy-kcal', calorie100);
         params.append('nutriment_energy-kcal_unit', 'kcal');
         params.append('nutriment_proteins', proteine100);
@@ -352,15 +353,37 @@ app.post('/api/pantry/add-to-off', async (req, res) => {
         params.append('nutriment_fat', grassi100);
         params.append('nutriment_fat_unit', 'g');
 
-        // Effettua la chiamata POST al database mondiale
         const offResponse = await fetch('https://world.openfoodfacts.org/cgi/product_jqm2.pl', {
             method: 'POST',
             body: params
         });
-
         const data = await offResponse.json();
 
-        // OFF risponde con status 1 se l'inserimento o l'aggiornamento è andato a buon fine
+        // --- 2. INVIO FOTO (SE PRESENTE) ---
+        // Se l'utente ha scattato una foto, la processiamo
+        if (foto && (data.status === 1 || data.status_code === 1)) {
+            // Estraiamo i dati grezzi dal Base64 inviato dal frontend
+            const base64Data = foto.split(',')[1];
+            const mimeMatch = foto.match(/data:(.*?);/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
+            // Creiamo un Blob per inviarlo come file a OFF (Supportato nativamente da Node 18+)
+            const buffer = Buffer.from(base64Data, 'base64');
+            const blob = new Blob([buffer], { type: mimeType });
+
+            const formData = new FormData();
+            formData.append('code', barcode);
+            formData.append('imagefield', 'front'); // Diciamo a OFF che è la foto frontale
+            formData.append('user_id', user);
+            formData.append('password', pass);
+            formData.append('imagedata', blob, 'front.jpg');
+
+            await fetch('https://world.openfoodfacts.org/cgi/product_image_upload.pl', {
+                method: 'POST',
+                body: formData
+            });
+        }
+
         if (data.status === 1 || data.status_code === 1) {
             res.json({ success: true });
         } else {

@@ -647,16 +647,21 @@ export class PantryView {
             m.id = modalId;
             m.className = "fixed inset-0 z-[99999] flex items-end justify-center bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
 
+            // Se stiamo aggiungendo un codice nuovo a OFF, mostriamo i campi aggiuntivi
+            const isAddingToOFF = prefillBarcode !== '';
+
             m.innerHTML = `
                 <div class="bg-white w-full max-w-md rounded-t-[2rem] p-6 shadow-2xl transform translate-y-full transition-transform duration-300 max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
                     <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-xl font-black text-gray-900">Aggiungi Manuale</h2>
+                        <h2 class="text-xl font-black text-gray-900">Aggiungi Prodotto</h2>
                         <button id="close-manual-modal" class="text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                         </button>
                     </div>
+
+                    ${isAddingToOFF ? `<div class="mb-4 bg-blue-50 text-blue-700 p-3 rounded-xl border border-blue-100 text-xs font-bold flex gap-2"><span class="text-lg">🌍</span> Stai contribuendo al database mondiale Open Food Facts! Più dati inserisci, meglio è.</div>` : ''}
 
                     <div class="space-y-4 pb-6">
                         <div>
@@ -670,7 +675,18 @@ export class PantryView {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-3">
+                        ${isAddingToOFF ? `
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Marca (Opzionale)</label>
+                            <input type="text" id="m-marca" placeholder="es. Barilla, Mulino Bianco..." class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 transition-all">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Foto Fronte Confezione (Opzionale)</label>
+                            <input type="file" id="m-foto" accept="image/*" capture="environment" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold text-gray-500 outline-none focus:ring-2 focus:ring-gray-900 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-gray-900 file:text-white hover:file:bg-gray-800">
+                        </div>
+                        ` : ''}
+
+                        <div class="grid grid-cols-2 gap-3 pt-2">
                             <div>
                                 <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Peso conf. (g)</label>
                                 <input type="number" id="m-peso" placeholder="es. 125"
@@ -691,7 +707,7 @@ export class PantryView {
                         </div>
 
                         <div class="border-t border-gray-100 pt-4 mt-2">
-                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Valori Nutrizionali (per 100g) <span class="normal-case font-medium text-gray-300">(opzionali)</span></p>
+                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Valori Nutrizionali (per 100g) <span class="normal-case font-medium text-gray-300">(richiesti per OFF)</span></p>
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Calorie</label>
@@ -744,21 +760,19 @@ export class PantryView {
 
             document.getElementById('close-manual-modal').addEventListener('click', () => closeModal(false));
 
+            // Logica dettatura vocale (rimane inalterata)
             const voiceBtn = document.getElementById('voice-nome-btn');
             const originalVoiceHtml = voiceBtn.innerHTML;
-
             voiceBtn.addEventListener('click', () => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition) {
                     modal.showModal({ type: 'error', title: 'Errore', message: 'Riconoscimento vocale non supportato' });
                     return;
                 }
-
                 const rec = new SpeechRecognition();
                 rec.lang = 'it-IT';
                 rec.continuous = false;
                 rec.interimResults = false;
-
                 voiceBtn.innerHTML = '⏳';
                 voiceBtn.classList.replace('bg-gray-900', 'bg-red-500');
                 voiceBtn.classList.add('animate-pulse');
@@ -782,6 +796,7 @@ export class PantryView {
                 rec.start();
             });
 
+            // SALVATAGGIO
             document.getElementById('save-manual-btn').addEventListener('click', async () => {
                 const nome = document.getElementById('m-nome').value.trim();
                 const peso = parseFloat(document.getElementById('m-peso').value) || 0;
@@ -792,40 +807,63 @@ export class PantryView {
                 const carbo = parseFloat(document.getElementById('m-carbo').value) || 0;
                 const fat = parseFloat(document.getElementById('m-fat').value) || 0;
 
-                if (!nome || peso <= 0) {
-                    await modal.showModal({ type: 'error', title: 'Campi mancanti', message: 'Inserisci almeno il nome e il peso della confezione.' });
+                const marcaInput = document.getElementById('m-marca');
+                const marca = marcaInput ? marcaInput.value.trim() : '';
+
+                const fotoInput = document.getElementById('m-foto');
+                let fotoBase64 = null;
+
+                if (!nome || peso <= 0 || cal <= 0) {
+                    await modal.showModal({ type: 'error', title: 'Campi mancanti', message: 'Assicurati di inserire Nome, Peso e Calorie.' });
                     return;
+                }
+
+                const saveBtn = document.getElementById('save-manual-btn');
+                saveBtn.innerHTML = "⏳ Salvataggio...";
+                saveBtn.disabled = true;
+
+                // Converte l'immagine in Base64 se l'utente l'ha caricata
+                if (fotoInput && fotoInput.files.length > 0) {
+                    const file = fotoInput.files[0];
+                    fotoBase64 = await new Promise((res) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => res(e.target.result);
+                        reader.readAsDataURL(file);
+                    });
                 }
 
                 try {
                     // 1. Salvataggio LOCALE nella dispensa
                     await pantryService.addPantryItem({
-                        barcode: prefillBarcode, // Passiamo il barcode locale (o vuoto se è 100% manuale)
+                        barcode: prefillBarcode,
                         nome, immagine: '',
                         calorie100: cal, proteine100: pro, carbo100: carbo, grassi100: fat,
                         pesoConfezione: peso, quantitaConfezioni: qty, categoria
                     });
 
-                    // 2. Se abbiamo un barcode in pancia (veniamo dallo scanner che ha dato 404)
-                    // inviamo silenziosamente i dati al database mondiale di Open Food Facts
+                    // 2. Invio a Open Food Facts con marca e foto
                     if (prefillBarcode && cal > 0) {
                         try {
                             await pantryService.addToOpenFoodFacts({
                                 barcode: prefillBarcode,
                                 nome: nome,
+                                marca: marca,
+                                foto: fotoBase64,
                                 calorie100: cal,
                                 proteine100: pro,
                                 carbo100: carbo,
                                 grassi100: fat
                             });
                         } catch (errOff) {
-                            console.warn("L'invio a Open Food Facts è fallito, ma il salvataggio locale ha avuto successo.", errOff);
+                            console.warn("L'invio a OFF è fallito", errOff);
                         }
                     }
 
                     closeModal(true);
                 } catch (e) {
                     await modal.showModal({ type: 'error', title: 'Errore', message: 'Errore nel salvataggio.' });
+                    saveBtn.innerHTML = "Riprova";
+                    saveBtn.disabled = false;
                 }
             });
         });
