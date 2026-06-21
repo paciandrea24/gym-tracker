@@ -88,40 +88,78 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // --- REGISTRAZIONE SERVICE WORKER E NOTIFICHE PUSH ---
+// --- REGISTRAZIONE SERVICE WORKER BASE (DA LASCIARE AL CARICAMENTO) ---
 if ('serviceWorker' in navigator && 'PushManager' in window) {
     window.addEventListener('load', async () => {
         try {
-            const registration = await navigator.serviceWorker.register('/sw.js');
-            let subscription = await registration.pushManager.getSubscription();
-
-            if (!subscription) {
-                const response = await fetch('/api/vapid-public-key');
-                const vapidData = await response.json();
-
-                if (vapidData.publicKey) {
-                    // CHIEDIAMO ESPLICITAMENTE IL PERMESSO PRIMA DI REGISTRARE
-                    const permission = await Notification.requestPermission();
-
-                    if (permission === 'granted') {
-                        subscription = await registration.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey)
-                        });
-
-                        await fetch('/api/subscribe', {
-                            method: 'POST',
-                            body: JSON.stringify(subscription),
-                            headers: { 'Content-Type': 'application/json' }
-                        });
-                        console.log('Sottoscrizione push attivata e salvata con successo! 🚀');
-                    } else {
-                        console.warn("L'utente (o il browser) ha bloccato le notifiche push.");
-                    }
-                }
-            }
+            await navigator.serviceWorker.register('/sw.js');
+            console.log('Service Worker registrato con successo.');
         } catch (error) {
-            // Un semplice avviso giallo invece di un errore rosso fatale
-            console.warn('Le notifiche push non sono state attivate (probabile blocco di sicurezza del browser):', error.message);
+            console.warn('Errore SW:', error.message);
         }
     });
+}
+
+// --- EASTER EGG: 5 TAP SULLA NAV BAR PER ATTIVARE LE NOTIFICHE ---
+let navTapCount = 0;
+let navTapTimeout;
+
+document.addEventListener('DOMContentLoaded', () => {
+    const navBar = document.querySelector('nav');
+    if (navBar) {
+        navBar.addEventListener('click', async () => {
+            navTapCount++;
+            clearTimeout(navTapTimeout);
+
+            if (navTapCount >= 5) {
+                navTapCount = 0;
+                await requestPushPermissions();
+            } else {
+                // Se non fai il tap successivo entro 1 secondo, il contatore si azzera
+                navTapTimeout = setTimeout(() => { navTapCount = 0; }, 1000);
+            }
+        });
+    }
+});
+
+async function requestPushPermissions() {
+    if (!('serviceWorker' in navigator && 'PushManager' in window)) {
+        alert("Il tuo browser non supporta le notifiche push.");
+        return;
+    }
+
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+
+        if (subscription) {
+            alert("✅ Le notifiche sono già attive!");
+            return;
+        }
+
+        // Ora siamo dentro un evento "click", quindi iOS farà comparire il popup!
+        const permission = await Notification.requestPermission();
+
+        if (permission === 'granted') {
+            const response = await fetch('/api/vapid-public-key');
+            const vapidData = await response.json();
+
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey)
+            });
+
+            await fetch('/api/subscribe', {
+                method: 'POST',
+                body: JSON.stringify(subscription),
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            alert("🚀 Notifiche attivate con successo! Ora riceverai gli avvisi dal cronjob.");
+        } else {
+            alert("❌ Permesso negato. Devi attivare le notifiche per questa PWA dalle Impostazioni del tuo iPhone.");
+        }
+    } catch (error) {
+        alert("Errore durante l'attivazione: " + error.message);
+    }
 }
