@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import webpush from 'web-push';
 
 dotenv.config();
+console.log("Prime lettere della chiave API:", process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 8) : "CHIAVE NON TROVATA");
 
 const app = express();
 app.use(cors());
