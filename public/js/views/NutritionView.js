@@ -1,12 +1,12 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js';
-import * as userService from '../services/userService.js';
-import * as scanner from '../components/scanner.js';
-import * as modal from '../components/modal.js';
-import * as ui from '../ui.js?v=20';
-import { exportToCSV } from '../utils.js?v=20';
-import * as pantryService from '../services/pantryService.js';
+import * as nutriService from '../services/nutriService.js?v=21';
+import * as userService from '../services/userService.js?v=21';
+import * as scanner from '../components/scanner.js?v=21';
+import * as modal from '../components/modal.js?v=21';
+import * as ui from '../ui.js?v=21';
+import { exportToCSV } from '../utils.js?v=21';
+import * as pantryService from '../services/pantryService.js?v=21';
 
 // Cache localStorage: nomeNormalizzato → pantryItemId (o null = "non scalare")
 const PANTRY_CACHE_KEY = 'pantryMatchCache';

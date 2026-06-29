@@ -610,7 +610,10 @@ app.get('/api/today-meals', async (req, res) => {
 // --- API: NUTRIZIONISTA AI BASATO SULLA DISPENSA ---
 app.post('/api/recommend-meal', async (req, res) => {
     try {
-        const { question, goals, consumate, giaMangiati, dispensa } = req.body;
+        const { question, goals, consumate, giaMangiati } = req.body;
+
+        const dispensa = await PantryItem.find({ attivo: true, grammiRimasti: { $gt: 0 } })
+            .select('nome grammiRimasti calorie100 proteine100 carbo100 grassi100 categoria');
 
         if (!dispensa || dispensa.length === 0) {
             return res.status(400).json({ success: false, error: 'Dispensa vuota: aggiungi prodotti per ricevere consigli.' });
