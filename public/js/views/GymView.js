@@ -4,7 +4,7 @@ import * as gymService from '../services/gymService.js';
 import * as modal from '../components/modal.js';
 import * as userService from '../services/userService.js';
 import * as ui from '../ui.js?v=20';
-import { debounce } from '../utils.js?v=20';
+import { debounce, exportToCSV } from '../utils.js?v=20';
 
 export class GymView {
     constructor(container) {
@@ -27,6 +27,7 @@ export class GymView {
         if (!window._gymConfigListenerAdded) {
             window.addEventListener('configExercise', async (e) => this.handleConfigExercise(e.detail));
             window.addEventListener('editRoutineExercise', async (e) => this.handleEditRoutineExercise(e.detail));
+            window.addEventListener('exportGymCSV', () => this.handleExportCSV());
             window._gymConfigListenerAdded = true;
         }
     }
@@ -93,6 +94,45 @@ export class GymView {
         this.currentRoutineId = routineId;
         this.currentTab = 'scheda';
         this.showDashboard();
+    }
+
+    async handleExportCSV() {
+        if (!this.currentRoutineId) return;
+
+        // Recuperiamo la scheda attuale e il suo storico
+        const routine = await gymService.getRoutine(this.currentRoutineId);
+        const history = await gymService.getHistoryForRoutine(this.currentRoutineId);
+
+        if (!history || history.length === 0) {
+            alert("Nessun dato da esportare per questa scheda.");
+            return;
+        }
+
+        const rows = [];
+
+        // Estraiamo i dati per formattare righe pulite per Excel/CSV
+        history.forEach(session => {
+            const dataStr = new Date(session.endTime).toLocaleDateString('it-IT');
+
+            session.exercises.forEach(ex => {
+                ex.sets.forEach((set, idx) => {
+                    rows.push({
+                        Data: dataStr,
+                        Scheda: routine.name,
+                        Esercizio: ex.name,
+                        Tipo: ex.type === 'cardio' ? 'Cardio' : (ex.type === 'corpo-libero' ? 'Corpo Libero' : 'Pesi'),
+                        Serie: idx + 1,
+                        Kg: set.kg || 0,
+                        Reps_o_Minuti: set.reps || 0
+                    });
+                });
+            });
+        });
+
+        // Nome file dinamico basato sul nome della scheda
+        const nomeFile = `storico_palestra_${routine.name.replace(/\s+/g, '_').toLowerCase()}.csv`;
+
+        exportToCSV(nomeFile, rows);
     }
 
     async showDashboard() {
