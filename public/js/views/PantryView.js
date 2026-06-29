@@ -3,6 +3,7 @@
 import * as pantryService from '../services/pantryService.js';
 import * as scanner from '../components/scanner.js';
 import * as modal from '../components/modal.js';
+import { searchFoodTable } from '../data/foodTable.js';
 
 const CATEGORIE = ['Proteina', 'Carboidrato', 'Latticino', 'Verdura', 'Frutta', 'Condimento/Grassi', 'Altro'];
 
@@ -668,10 +669,18 @@ export class PantryView {
                             <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nome prodotto</label>
                             <div class="flex gap-2">
                                 <input type="text" id="m-nome" placeholder="es. Mozzarella, Bresaola..."
-                                    class="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 transition-all">
+                                    class="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 transition-all"
+                                    autocomplete="off">
                                 <button id="voice-nome-btn" class="bg-gray-900 text-white p-4 rounded-xl active:scale-95 transition-transform shadow-md flex items-center justify-center min-w-[56px]" title="Dettare nome">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
                                 </button>
+                            </div>
+                            <!-- Dropdown autocompletamento tabella CREA -->
+                            <div id="food-autocomplete" class="hidden mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-50"></div>
+                            <!-- Badge valori CREA -->
+                            <div id="crea-badge" class="hidden mt-2 flex items-center gap-1.5 text-[11px] font-bold text-green-700 bg-green-50 border border-green-100 px-3 py-1.5 rounded-lg w-fit">
+                                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                Valori CREA (ufficiali italiani)
                             </div>
                         </div>
 
@@ -758,10 +767,10 @@ export class PantryView {
                 }, 300);
             };
 
-            document.getElementById('close-manual-modal').addEventListener('click', () => closeModal(false));
+            m.querySelector('#close-manual-modal').addEventListener('click', () => closeModal(false));
 
             // Logica dettatura vocale (rimane inalterata)
-            const voiceBtn = document.getElementById('voice-nome-btn');
+            const voiceBtn = m.querySelector('#voice-nome-btn');
             const originalVoiceHtml = voiceBtn.innerHTML;
             voiceBtn.addEventListener('click', () => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -779,7 +788,7 @@ export class PantryView {
 
                 rec.onresult = (e) => {
                     const text = e.results[0][0].transcript;
-                    document.getElementById('m-nome').value = text;
+                    m.querySelector('#m-nome').value = text;
                     voiceBtn.innerHTML = '✅';
                     voiceBtn.classList.remove('animate-pulse');
                     voiceBtn.classList.replace('bg-red-500', 'bg-green-500');
@@ -796,21 +805,89 @@ export class PantryView {
                 rec.start();
             });
 
-            // SALVATAGGIO
-            document.getElementById('save-manual-btn').addEventListener('click', async () => {
-                const nome = document.getElementById('m-nome').value.trim();
-                const peso = parseFloat(document.getElementById('m-peso').value) || 0;
-                const qty = parseInt(document.getElementById('m-qty').value) || 1;
-                const categoria = document.getElementById('m-categoria').value;
-                const cal = parseFloat(document.getElementById('m-cal').value) || 0;
-                const pro = parseFloat(document.getElementById('m-pro').value) || 0;
-                const carbo = parseFloat(document.getElementById('m-carbo').value) || 0;
-                const fat = parseFloat(document.getElementById('m-fat').value) || 0;
+            // ─── AUTOCOMPLETAMENTO TABELLA CREA ───────────────────────────────────
+            const nomeInput = m.querySelector('#m-nome');
+            const autocompleteDiv = m.querySelector('#food-autocomplete');
+            const creaBadge = m.querySelector('#crea-badge');
+            let selectedFromCREA = false;
 
-                const marcaInput = document.getElementById('m-marca');
+            const fillFromCREA = (voce) => {
+                nomeInput.value = voce.nome;
+                m.querySelector('#m-cal').value = voce.calorie100;
+                m.querySelector('#m-pro').value = voce.proteine100;
+                m.querySelector('#m-carbo').value = voce.carbo100;
+                m.querySelector('#m-fat').value = voce.grassi100;
+                // Imposta la categoria nel select
+                const sel = m.querySelector('#m-categoria');
+                if (sel) {
+                    for (let opt of sel.options) {
+                        if (opt.value === voce.categoria) { sel.value = voce.categoria; break; }
+                    }
+                }
+                autocompleteDiv.classList.add('hidden');
+                autocompleteDiv.innerHTML = '';
+                creaBadge.classList.remove('hidden');
+                selectedFromCREA = true;
+            };
+
+            nomeInput.addEventListener('input', () => {
+                // Se l'utente ritocca il campo a mano dopo aver selezionato, togli il badge
+                if (selectedFromCREA) {
+                    creaBadge.classList.add('hidden');
+                    selectedFromCREA = false;
+                }
+
+                const risultati = searchFoodTable(nomeInput.value);
+                if (risultati.length === 0) {
+                    autocompleteDiv.classList.add('hidden');
+                    autocompleteDiv.innerHTML = '';
+                    return;
+                }
+
+                autocompleteDiv.innerHTML = risultati.map((v, i) => `
+                    <button type="button" data-idx="${i}"
+                        class="crea-suggestion w-full text-left px-4 py-3 text-[13px] font-semibold text-gray-800 hover:bg-indigo-50 active:bg-indigo-100 border-b border-gray-100 last:border-b-0 flex justify-between items-center gap-2">
+                        <span>${v.nome}</span>
+                        <span class="text-[11px] font-bold text-indigo-500 flex-shrink-0">${v.calorie100} kcal · ${v.proteine100}g P</span>
+                    </button>
+                `).join('');
+
+                autocompleteDiv.classList.remove('hidden');
+
+                // Salva i risultati per recuperarli al click
+                autocompleteDiv._risultati = risultati;
+            });
+
+            autocompleteDiv.addEventListener('click', (e) => {
+                const btn = e.target.closest('.crea-suggestion');
+                if (!btn) return;
+                const idx = parseInt(btn.dataset.idx);
+                const voce = autocompleteDiv._risultati[idx];
+                if (voce) fillFromCREA(voce);
+            });
+
+            // Chiudi dropdown cliccando fuori
+            document.addEventListener('click', (e) => {
+                if (!nomeInput.contains(e.target) && !autocompleteDiv.contains(e.target)) {
+                    autocompleteDiv.classList.add('hidden');
+                }
+            }, { once: false });
+
+            // SALVATAGGIO
+            m.querySelector('#save-manual-btn').addEventListener('click', async () => {
+                const nome = m.querySelector('#m-nome').value.trim();
+                const peso = parseFloat(m.querySelector('#m-peso').value) || 0;
+                const qty = parseInt(m.querySelector('#m-qty').value) || 1;
+                const categoria = m.querySelector('#m-categoria').value;
+                const cal = parseFloat(m.querySelector('#m-cal').value) || 0;
+                const pro = parseFloat(m.querySelector('#m-pro').value) || 0;
+                const carbo = parseFloat(m.querySelector('#m-carbo').value) || 0;
+                const fat = parseFloat(m.querySelector('#m-fat').value) || 0;
+
+                const marcaInput = m.querySelector('#m-marca');
                 const marca = marcaInput ? marcaInput.value.trim() : '';
 
-                const fotoInput = document.getElementById('m-foto');
+                const fotoInput = m.querySelector('#m-foto');
                 let fotoBase64 = null;
 
                 if (!nome || peso <= 0 || cal <= 0) {
@@ -818,7 +895,7 @@ export class PantryView {
                     return;
                 }
 
-                const saveBtn = document.getElementById('save-manual-btn');
+                const saveBtn = m.querySelector('#save-manual-btn');
                 saveBtn.innerHTML = "⏳ Salvataggio...";
                 saveBtn.disabled = true;
 

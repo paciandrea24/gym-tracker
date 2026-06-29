@@ -33,8 +33,20 @@ export async function deletePantryItem(id) {
     return await res.json();
 }
 
-// Scala grammi dalla dispensa dopo aver salvato un pasto
-// ingredienti: [{ nome: string, grammi: number }]
+// Risolve i match dispensa senza scalare nulla
+// ingredienti: [{ nome, grammi }]
+// Ritorna: [{ nome, grammi, exact: {_id,nome,grammiRimasti}|null, candidates: [...] }]
+export async function resolveMatches(ingredienti) {
+    const res = await fetch('/api/pantry/resolve-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredienti })
+    });
+    return await res.json();
+}
+
+// Scala grammi dalla dispensa usando pantryItemId esplicito
+// ingredienti: [{ nome: string, grammi: number, pantryItemId: string }]
 export async function consumeFromPantry(ingredienti, mealId, nomePasto) {
     const res = await fetch('/api/pantry/consume', {
         method: 'POST',

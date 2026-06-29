@@ -1578,8 +1578,8 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null
                         <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-gray-100 pb-1">Ingredienti</p>
                         <ul class="space-y-2">
                             ${data.ingredienti.map(ing => `
-                                <li class="flex justify-between items-center text-[13px]">
-                                    <span class="font-medium text-gray-700 pr-2">${ing.nome}</span>
+                                <li class="flex justify-between items-center text-[13px] gap-2">
+                                    <span class="font-medium text-gray-700 leading-tight">${ing.nome}${ing.grammi ? ` <span class="text-[11px] font-bold text-indigo-500">${ing.grammi}g</span>` : ''}</span>
                                     <span class="font-bold text-gray-900 flex-shrink-0">${ing.calorie} <span class="text-[10px] font-normal text-gray-400">kcal</span></span>
                                 </li>
                             `).join('')}

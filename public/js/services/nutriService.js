@@ -65,10 +65,10 @@ export async function analyzeVoice(text, mealId = null) {
     return await res.json();
 }
 
-export async function recommendMeal(question, goals, consumate, giaMangiati = []) {
+export async function recommendMeal(question, goals, consumate, giaMangiati = [], dispensa = []) {
     const res = await fetch('/api/recommend-meal', {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, goals, consumate, giaMangiati })
+        body: JSON.stringify({ question, goals, consumate, giaMangiati, dispensa })
     });
     return await res.json();
 }

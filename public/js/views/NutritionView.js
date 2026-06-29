@@ -8,6 +8,31 @@ import * as ui from '../ui.js?v=20';
 import { exportToCSV } from '../utils.js?v=20';
 import * as pantryService from '../services/pantryService.js';
 
+// Cache localStorage: nomeNormalizzato → pantryItemId (o null = "non scalare")
+const PANTRY_CACHE_KEY = 'pantryMatchCache';
+
+function _normalizzaChiave(nome) {
+    return nome.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/\s+/g, ' ').trim();
+}
+
+function getCachedMatch(nome) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(PANTRY_CACHE_KEY) || '{}');
+        const key = _normalizzaChiave(nome);
+        return key in cache ? cache[key] : undefined; // undefined = non in cache
+    } catch { return undefined; }
+}
+
+function setCachedMatch(nome, pantryItemId) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(PANTRY_CACHE_KEY) || '{}');
+        cache[_normalizzaChiave(nome)] = pantryItemId; // null = "non scalare"
+        localStorage.setItem(PANTRY_CACHE_KEY, JSON.stringify(cache));
+    } catch {}
+}
+
 export class NutritionView {
     constructor(container) {
         this.container = container;
@@ -504,8 +529,14 @@ export class NutritionView {
             const currentType = match ? match[1] : 'Pasto';
 
             try {
-                // NOVITÀ: Passiamo l'array dei cibi già mangiati
-                const data = await nutriService.recommendMeal(question, goals, consumate, giaMangiatiArray);
+                // Recupera dispensa con valori reali
+                const dispensa = await pantryService.getPantryForAI();
+                if (!dispensa || dispensa.length === 0) {
+                    await modal.showModal({ type: 'alert', title: 'Dispensa vuota', message: 'Aggiungi prodotti in dispensa per ricevere consigli personalizzati basati su ciò che hai in casa.' });
+                    return;
+                }
+
+                const data = await nutriService.recommendMeal(question, goals, consumate, giaMangiatiArray, dispensa);
                 if (data.success && data.recommendations) {
                     try {
                         localStorage.setItem('cachedAIRecommendations', JSON.stringify({
@@ -664,30 +695,64 @@ export class NutritionView {
     async scalaDispensa(meal) {
         if (!meal) return;
         try {
-            let ingredienti = [];
+            let ingredientiGrezzi = [];
             if (meal.ingredienti && meal.ingredienti.length > 0) {
-                ingredienti = meal.ingredienti.map(ing => {
-                    // 1. Grammi espliciti salvati (manuale/scanner)
+                ingredientiGrezzi = meal.ingredienti.map(ing => {
                     let grammi = ing.grammi || 0;
-
-                    // 2. Estrai dal nome se l'AI ha scritto "Cracker (100g)"
                     if (!grammi) {
-                        const match = ing.nome.match(/(\d+[\.,]?\d*)\s*g\b/i);
-                        if (match) grammi = parseFloat(match[1].replace(',', '.'));
+                        const m = ing.nome.match(/(\d+[\.,]?\d*)\s*g\b/i);
+                        if (m) grammi = parseFloat(m[1].replace(',', '.'));
                     }
-
-                    // 3. Fallback: non scalare (meglio 0 che un numero inventato)
                     return { nome: ing.nome, grammi: grammi || 0 };
-                });
+                }).filter(i => i.nome && i.grammi > 0);
             } else {
-                ingredienti = [{ nome: meal.alimenti, grammi: meal.grammi || 0 }];
+                ingredientiGrezzi = [{ nome: meal.alimenti, grammi: meal.grammi || 0 }];
             }
 
-            ingredienti = ingredienti.filter(i => i.nome && i.grammi > 0);
-            if (ingredienti.length === 0) return;
+            if (ingredientiGrezzi.length === 0) return;
+
+            // 1. Chiedi al backend di classificare ogni ingrediente
+            const resolved = await pantryService.resolveMatches(ingredientiGrezzi);
+            if (!resolved || !Array.isArray(resolved)) return;
+
+            const daScalare = [];
+
+            for (const item of resolved) {
+                const cached = getCachedMatch(item.nome);
+
+                if (item.exact) {
+                    // Match univoco → scala in automatico
+                    daScalare.push({ nome: item.nome, grammi: item.grammi, pantryItemId: item.exact._id });
+                    setCachedMatch(item.nome, item.exact._id);
+
+                } else if (item.candidates.length > 0) {
+                    let pantryItemId;
+
+                    if (cached !== undefined) {
+                        // Usa scelta memorizzata (incluso null = "non scalare")
+                        pantryItemId = cached;
+                    } else {
+                        // Mostra modale di scelta
+                        pantryItemId = await modal.showChoiceModal({
+                            title: `"${item.nome}"`,
+                            message: 'A quale prodotto in dispensa corrisponde?',
+                            options: item.candidates,
+                            allowNone: true
+                        });
+                        setCachedMatch(item.nome, pantryItemId);
+                    }
+
+                    if (pantryItemId) {
+                        daScalare.push({ nome: item.nome, grammi: item.grammi, pantryItemId });
+                    }
+                }
+                // nessun match → salta silenziosamente
+            }
+
+            if (daScalare.length === 0) return;
 
             const result = await pantryService.consumeFromPantry(
-                ingredienti, meal._id, `${meal.pasto}: ${meal.alimenti}`
+                daScalare, meal._id, `${meal.pasto}: ${meal.alimenti}`
             );
 
             if (result.avvisi && result.avvisi.length > 0) {
@@ -723,10 +788,12 @@ export class NutritionView {
             const ingDaRipristinare = ingredienti.map(ing => {
                 let grammi = ing.grammi || 0;
                 if (!grammi) {
-                    const match = ing.nome.match(/(\d+[\.,]?\d*)\s*g\b/i);
-                    if (match) grammi = parseFloat(match[1].replace(',', '.'));
+                    const m = ing.nome.match(/(\d+[\.,]?\d*)\s*g\b/i);
+                    if (m) grammi = parseFloat(m[1].replace(',', '.'));
                 }
-                return { nome: ing.nome, grammi: grammi || 0 };
+                // Usa pantryItemId dalla cache (impostato durante lo scalaggio)
+                const pantryItemId = getCachedMatch(ing.nome) || undefined;
+                return { nome: ing.nome, grammi: grammi || 0, pantryItemId };
             }).filter(i => i.nome && i.grammi > 0);
 
             if (ingDaRipristinare.length === 0) return;
