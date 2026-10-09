@@ -6,6 +6,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import webpush from 'web-push';
+import {
+    ricalcolaPasto, totaliDaIngredienti, riepilogoConsumo, senzaCollegamentiPrep, risolviRiferimentiPrep
+} from './mealPrep.js';
+import { tokenizza, classificaMatch } from './matching.js';
 
 dotenv.config();
 console.log("Prime lettere della chiave API:", process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 8) : "CHIAVE NON TROVATA");
@@ -25,7 +29,12 @@ mongoose.connect(process.env.MONGO_URI)
 
 // --- SCHEMI DATABASE ---
 const IngredientSchema = new mongoose.Schema({
-    nome: String, calorie: Number, proteine: Number, grassi: Number, carboidrati: Number, grammi: Number
+    nome: String, calorie: Number, proteine: Number, grassi: Number, carboidrati: Number, grammi: Number,
+    // Solo per le porzioni di un meal prep: i valori li calcola il server da MealPrep
+    prepId: { type: mongoose.Schema.Types.ObjectId, ref: 'MealPrep' },
+    prepGrammi: Number,
+    prepPorzioni: Number,
+    prepDaCompletare: Boolean
 });
 
 const MealSchema = new mongoose.Schema({
@@ -35,6 +44,21 @@ const MealSchema = new mongoose.Schema({
     data: { type: Date, default: Date.now }
 });
 const Meal = mongoose.model('Meal', MealSchema);
+
+// --- SCHEMA MEAL PREP (lotto cucinato che dura più giorni) ---
+const MealPrepSchema = new mongoose.Schema({
+    nome: { type: String, required: true },
+    ingredienti: [IngredientSchema],                  // crudi, scalati dalla dispensa all'inserimento
+    calorie: { type: Number, default: 0 },            // totali dell'intero lotto
+    proteine: { type: Number, default: 0 },
+    carboidrati: { type: Number, default: 0 },
+    grassi: { type: Number, default: 0 },
+    pesoTotaleCotto: { type: Number, default: 0 },    // 0 = non ancora pesato
+    porzioniPreviste: { type: Number, default: 0 },   // 0 = non impostato
+    attiva: { type: Boolean, default: true },
+    dataCreazione: { type: Date, default: Date.now }
+});
+const MealPrep = mongoose.model('MealPrep', MealPrepSchema);
 
 // Nuovi schemi per la Palestra
 const RoutineSchema = new mongoose.Schema({
@@ -88,47 +112,6 @@ const PantryUsageSchema = new mongoose.Schema({
 });
 const PantryUsage = mongoose.model('PantryUsage', PantryUsageSchema);
 
-
-// ============================================================
-// HELPER MATCHING DISPENSA
-// ============================================================
-
-const STOPWORDS_IT = new Set(['di', 'della', 'del', 'dello', 'dei', 'degli', 'delle', 'con', 'e', 'al', 'alla', 'allo', 'ai', 'agli', 'alle', 'la', 'il', 'lo', 'i', 'le', 'gli', 'un', 'una', 'uno', 'da', 'in', 'a', 'su', 'per', 'tra', 'fra']);
-
-function normalizzaNome(str) {
-    if (!str) return '';
-    return str
-        .toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .replace(/\(.*?\)/g, ' ')
-        .replace(/\d+\s*g\b/gi, ' ')
-        .replace(/[^a-z\s]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-}
-
-function tokenizza(str) {
-    return normalizzaNome(str)
-        .split(' ')
-        .filter(t => t.length >= 3 && !STOPWORDS_IT.has(t));
-}
-
-function classificaMatch(nomeMangiato, nomePantry) {
-    const tokEaten = tokenizza(nomeMangiato);
-    const tokPantry = tokenizza(nomePantry);
-    if (tokEaten.length === 0 || tokPantry.length === 0) return 'none';
-
-    const setEaten = new Set(tokEaten);
-    const setPantry = new Set(tokPantry);
-
-    // Exact: stessi token (ordine irrilevante)
-    if (setEaten.size === setPantry.size && [...setEaten].every(t => setPantry.has(t))) return 'exact';
-
-    // Candidate: almeno un token in comune
-    if (tokEaten.some(t => setPantry.has(t))) return 'candidate';
-
-    return 'none';
-}
 
 // ============================================================
 // API DISPENSA
@@ -489,33 +472,77 @@ const Subscription = mongoose.model('Subscription', SubscriptionSchema);
 
 // --- API NUTRIZIONE ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 
-app.post('/api/analyze-meal', async (req, res) => {
-    try {
-        // Aggiungiamo mealId per capire se è un'aggiunta
-        const { text, mealId } = req.body;
-        console.log("🗣️ Testo ricevuto dall'app:", text);
+// Chiama Gemini in modalità JSON. Su errori temporanei (troppe richieste, servizio sovraccarico)
+// riprova con attesa crescente invece di fallire subito: succedeva con due vocali ravvicinati.
+async function generaJSON(prompt, tentativi = 3) {
+    const model = genAI.getGenerativeModel({
+        model: GEMINI_MODEL,
+        generationConfig: { responseMimeType: "application/json" }
+    });
+    for (let i = 1; ; i++) {
+        try {
+            const result = await model.generateContent(prompt);
+            return result.response.text();
+        } catch (error) {
+            const status = error.status || 0;
+            const temporaneo = status === 429 || status === 500 || status === 503;
+            console.error(`❌ Gemini tentativo ${i}/${tentativi} (status ${status}):`, error.message);
+            if (!temporaneo || i >= tentativi) {
+                const err = new Error(status === 429
+                    ? "Troppe richieste all'AI in poco tempo: riprova tra qualche secondo."
+                    : status === 503
+                        ? "Il servizio AI è momentaneamente sovraccarico: riprova tra poco."
+                        : "L'AI non è riuscita a elaborare la richiesta.");
+                err.dettaglio = error.message;
+                throw err;
+            }
+            await new Promise(r => setTimeout(r, 1500 * i));
+        }
+    }
+}
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-3.1-flash-lite",
-            generationConfig: { responseMimeType: "application/json" }
-        });
+function estraiJSON(testo, apertura, chiusura) {
+    const start = testo.indexOf(apertura);
+    const end = testo.lastIndexOf(chiusura);
+    if (start === -1 || end === -1) throw new Error("L'AI non ha formattato correttamente i dati.");
+    return JSON.parse(testo.substring(start, end + 1));
+}
 
-        const dizionarioPersonale = `
+// Trasforma un testo dettato in { pasto, alimenti, ingredienti[] }.
+// prepsAttive: preparazioni che l'AI deve riconoscere invece di stimarne i valori.
+async function analizzaTesto(text, prepsAttive = []) {
+    const refMap = {};
+    const righePrep = prepsAttive.map((p, i) => {
+        const ref = `P${i + 1}`;
+        refMap[ref] = String(p._id);
+        return `- ${ref}: "${p.nome}"`;
+    }).join('\n');
+
+    const regolaPrep = prepsAttive.length === 0 ? '' : `
+        6. L'utente ha queste PREPARAZIONI già cucinate (meal prep), di cui mangia una parte:
+${righePrep}
+           Se nomina chiaramente uno di questi piatti, NON stimarne i valori: inserisci l'ingrediente con
+           "prepRef" (es. "P1") e "prepGrammi" SOLO se ha detto esplicitamente i grammi, altrimenti
+           "prepPorzioni" ("una porzione" = 1, "mezza porzione" = 0.5, quantità non detta = 1).
+           Per questi ingredienti metti calorie, proteine, grassi e carboidrati a 0: li calcola l'app.`;
+
+    const dizionarioPersonale = `
         - Pan Bauletto: 277 kcal, 7.5g pro, 50g carbo, 4g grassi
         - Latte parzialmente scremato: 46 kcal, 3.4g pro, 4.8g carbo, 1.5g grassi
         - Pasta Barilla: 359 kcal, 14g pro, 70g carbo, 2g grassi
         - Yogurt Greco Fage 0%: 54 kcal, 10.3g pro, 3g carbo, 0g grassi
         `;
 
-        const prompt = `Sei un assistente nutrizionale per un'app. L'utente detterà un pasto. Testo: "${text}"
+    const prompt = `Sei un assistente nutrizionale per un'app. L'utente detterà un pasto. Testo: "${text}"
 
         REGOLE:
         1. Se l'utente detta valori espliciti, usali.
         2. Altrimenti usa il dizionario per i calcoli su 100g: ${dizionarioPersonale}
         3. Altrimenti stima tu.
         4. Nel campo "nome" di ogni ingrediente scrivi SOLO il nome dell'alimento, senza quantità o grammi.
-        5. Metti sempre i grammi consumati nel campo "grammi" (numero intero, es. 150). Se non specificati, stimali.
+        5. Metti sempre i grammi consumati nel campo "grammi" (numero intero, es. 150). Se non specificati, stimali.${regolaPrep}
 
         Restituisci SOLO un JSON con questa esatta struttura:
         {
@@ -537,51 +564,74 @@ app.post('/api/analyze-meal', async (req, res) => {
           ]
         }`;
 
-        const result = await model.generateContent(prompt);
-        let jsonText = result.response.text();
-        jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const data = estraiJSON(await generaJSON(prompt), '{', '}');
+    let ingredienti = risolviRiferimentiPrep(Array.isArray(data.ingredienti) ? data.ingredienti : [], refMap);
 
-        const mealData = JSON.parse(jsonText);
+    if (ingredienti.length === 0) {
+        ingredienti = [{
+            nome: data.alimenti, calorie: data.calorie, proteine: data.proteine,
+            carboidrati: data.carboidrati, grassi: data.grassi
+        }];
+    }
 
-        // SE C'È UN MEAL ID -> AGGIORNO IL PASTO ESISTENTE
+    // Le porzioni di meal prep ricevono i valori reali; i totali diventano la somma degli ingredienti
+    const preps = new Map(prepsAttive.map(p => [String(p._id), p]));
+    ricalcolaPasto({ ingredienti }, preps);
+
+    return { pasto: data.pasto || 'Pasto', alimenti: data.alimenti || 'Pasto', ingredienti };
+}
+
+// Carica le preparazioni citate dagli ingredienti dei pasti, indicizzate per id stringa
+async function caricaPrepsCitate(meals) {
+    const ids = new Set();
+    for (const m of meals) for (const ing of m.ingredienti || []) if (ing.prepId) ids.add(String(ing.prepId));
+    if (ids.size === 0) return new Map();
+    const preps = await MealPrep.find({ _id: { $in: [...ids] } }).lean();
+    return new Map(preps.map(p => [String(p._id), p]));
+}
+
+// Riallinea le porzioni di meal prep di un pasto (oggetto semplice, prima di salvarlo)
+async function normalizzaPorzioni(meal) {
+    ricalcolaPasto(meal, await caricaPrepsCitate([meal]));
+    return meal;
+}
+
+app.post('/api/analyze-meal', async (req, res) => {
+    try {
+        const { text, mealId } = req.body;
+        console.log("🗣️ Testo ricevuto dall'app:", text);
+
+        const prepsAttive = await MealPrep.find({ attiva: true }).select('nome calorie proteine carboidrati grassi pesoTotaleCotto porzioniPreviste').lean();
+        const mealData = await analizzaTesto(text, prepsAttive);
+        const totaliNuovi = totaliDaIngredienti(mealData.ingredienti);
+
+        // SE C'È UN MEAL ID -> AGGIUNGO AL PASTO ESISTENTE
         if (mealId) {
             const existingMeal = await Meal.findById(mealId);
             if (!existingMeal) throw new Error("Pasto non trovato");
 
-            existingMeal.calorie = parseFloat((existingMeal.calorie + mealData.calorie).toFixed(1));
-            existingMeal.proteine = parseFloat((existingMeal.proteine + mealData.proteine).toFixed(1));
-            existingMeal.carboidrati = parseFloat((existingMeal.carboidrati + mealData.carboidrati).toFixed(1));
-            existingMeal.grassi = parseFloat((existingMeal.grassi + mealData.grassi).toFixed(1));
-
-            if (mealData.ingredienti && mealData.ingredienti.length > 0) {
-                existingMeal.ingredienti.push(...mealData.ingredienti);
-            } else {
-                existingMeal.ingredienti.push({
-                    nome: mealData.alimenti,
-                    calorie: mealData.calorie, proteine: mealData.proteine,
-                    carboidrati: mealData.carboidrati, grassi: mealData.grassi
-                });
+            for (const k of ['calorie', 'proteine', 'carboidrati', 'grassi']) {
+                existingMeal[k] = parseFloat(((existingMeal[k] || 0) + totaliNuovi[k]).toFixed(1));
             }
+            existingMeal.ingredienti.push(...mealData.ingredienti);
             existingMeal.alimenti += ", " + mealData.alimenti;
 
             await existingMeal.save();
             return res.json({ success: true, meal: existingMeal });
         }
-        // ALTRIMENTI -> CREO UN NUOVO PASTO (Comportamento Originale)
-        else {
-            const newMeal = new Meal(mealData);
-            await newMeal.save();
-            res.json({ success: true, meal: newMeal });
-        }
+
+        const newMeal = new Meal({ ...mealData, ...totaliNuovi });
+        await newMeal.save();
+        res.json({ success: true, meal: newMeal });
     } catch (error) {
-        console.error("❌ ERRORE API GEMINI:", error.message);
+        console.error("❌ ERRORE ANALISI VOCALE:", error.dettaglio || error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 app.post('/api/meals', async (req, res) => {
     try {
-        const newMeal = new Meal(req.body);
+        const newMeal = new Meal(await normalizzaPorzioni(req.body));
         await newMeal.save();
         res.json({ success: true, meal: newMeal });
     } catch (error) {
@@ -592,10 +642,182 @@ app.post('/api/meals', async (req, res) => {
 // NUOVA ROTTA: Aggiorna un pasto esistente (usata per Scanner e inserimenti manuali in pasto esistente)
 app.put('/api/meals/:id', async (req, res) => {
     try {
-        const meal = await Meal.findByIdAndUpdate(req.params.id, req.body, { new: true, returnDocument: 'after' });
+        const meal = await Meal.findByIdAndUpdate(req.params.id, await normalizzaPorzioni(req.body), { returnDocument: 'after' });
         res.json({ success: true, meal });
     } catch (error) {
         res.status(500).json({ success: false });
+    }
+});
+
+// ============================================================
+// API MEAL PREP
+// ============================================================
+
+// Porzioni registrate nei pasti, raggruppate per preparazione
+async function porzioniPerPrep(prepIds) {
+    const meals = await Meal.find({ 'ingredienti.prepId': { $in: prepIds } }).sort({ data: -1 }).lean();
+    const gruppi = new Map(prepIds.map(id => [String(id), []]));
+    for (const meal of meals) {
+        for (const ing of meal.ingredienti) {
+            if (!ing.prepId || !gruppi.has(String(ing.prepId))) continue;
+            gruppi.get(String(ing.prepId)).push({
+                mealId: meal._id, data: meal.data, pasto: meal.pasto,
+                prepGrammi: ing.prepGrammi || 0, prepPorzioni: ing.prepPorzioni || 0,
+                grammi: ing.grammi || 0, prepDaCompletare: !!ing.prepDaCompletare,
+                calorie: ing.calorie, proteine: ing.proteine, carboidrati: ing.carboidrati, grassi: ing.grassi
+            });
+        }
+    }
+    return gruppi;
+}
+
+async function prepConRiepilogo(prep, porzioni) {
+    const p = prep.toObject ? prep.toObject() : prep;
+    return { ...p, porzioni, riepilogo: riepilogoConsumo(p, porzioni) };
+}
+
+// Ricalcola tutti i pasti che contengono porzioni di questa preparazione
+async function ricalcolaPastiCollegati(prep) {
+    const preps = new Map([[String(prep._id), prep.toObject ? prep.toObject() : prep]]);
+    const meals = await Meal.find({ 'ingredienti.prepId': prep._id });
+    let aggiornati = 0;
+    for (const meal of meals) {
+        if (ricalcolaPasto(meal, preps)) {
+            await meal.save();
+            aggiornati++;
+        }
+    }
+    return aggiornati;
+}
+
+function aggiornaTotaliLotto(prep) {
+    Object.assign(prep, totaliDaIngredienti(prep.ingredienti));
+}
+
+app.get('/api/preps', async (req, res) => {
+    try {
+        const filtro = req.query.stato === 'tutte' ? {} : { attiva: true };
+        const preps = await MealPrep.find(filtro).sort({ attiva: -1, dataCreazione: -1 }).lean();
+        const gruppi = await porzioniPerPrep(preps.map(p => p._id));
+        res.json(await Promise.all(preps.map(p => prepConRiepilogo(p, gruppi.get(String(p._id))))));
+    } catch (e) {
+        res.status(500).json([]);
+    }
+});
+
+app.get('/api/preps/:id', async (req, res) => {
+    try {
+        const prep = await MealPrep.findById(req.params.id).lean();
+        if (!prep) return res.status(404).json({ success: false, error: 'Preparazione non trovata' });
+        const gruppi = await porzioniPerPrep([prep._id]);
+        res.json({ success: true, prep: await prepConRiepilogo(prep, gruppi.get(String(prep._id))) });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/preps', async (req, res) => {
+    try {
+        const nome = (req.body.nome || '').trim();
+        if (!nome) return res.status(400).json({ success: false, error: 'Dai un nome alla preparazione.' });
+        const prep = new MealPrep({ nome });
+        await prep.save();
+        res.json({ success: true, prep: await prepConRiepilogo(prep, []) });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Modifica nome, ingredienti, peso cotto, porzioni previste o stato: ricalcola i pasti collegati
+app.put('/api/preps/:id', async (req, res) => {
+    try {
+        const prep = await MealPrep.findById(req.params.id);
+        if (!prep) return res.status(404).json({ success: false, error: 'Preparazione non trovata' });
+
+        const { nome, ingredienti, pesoTotaleCotto, porzioniPreviste, attiva } = req.body;
+        if (typeof nome === 'string' && nome.trim()) prep.nome = nome.trim();
+        if (Array.isArray(ingredienti)) prep.ingredienti = senzaCollegamentiPrep(ingredienti);
+        if (pesoTotaleCotto !== undefined) prep.pesoTotaleCotto = Math.max(0, Number(pesoTotaleCotto) || 0);
+        if (porzioniPreviste !== undefined) prep.porzioniPreviste = Math.max(0, Number(porzioniPreviste) || 0);
+        if (typeof attiva === 'boolean') prep.attiva = attiva;
+        aggiornaTotaliLotto(prep);
+        await prep.save();
+
+        const pastiAggiornati = await ricalcolaPastiCollegati(prep);
+        const gruppi = await porzioniPerPrep([prep._id]);
+        res.json({ success: true, pastiAggiornati, prep: await prepConRiepilogo(prep, gruppi.get(String(prep._id))) });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Eliminabile solo se nessuna porzione è stata registrata (altrimenti si conclude)
+app.delete('/api/preps/:id', async (req, res) => {
+    try {
+        const usata = await Meal.exists({ 'ingredienti.prepId': req.params.id });
+        if (usata) {
+            return res.status(409).json({ success: false, error: 'Hai già registrato porzioni di questa preparazione: puoi solo concluderla.' });
+        }
+        await MealPrep.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Aggiunge ingredienti dettati a voce alla preparazione
+app.post('/api/preps/:id/analyze', async (req, res) => {
+    try {
+        const prep = await MealPrep.findById(req.params.id);
+        if (!prep) return res.status(404).json({ success: false, error: 'Preparazione non trovata' });
+
+        const { ingredienti } = await analizzaTesto(req.body.text);
+        prep.ingredienti.push(...ingredienti);
+        aggiornaTotaliLotto(prep);
+        await prep.save();
+
+        await ricalcolaPastiCollegati(prep);
+        const gruppi = await porzioniPerPrep([prep._id]);
+        res.json({ success: true, nuoviIngredienti: ingredienti, prep: await prepConRiepilogo(prep, gruppi.get(String(prep._id))) });
+    } catch (e) {
+        console.error("❌ ERRORE ANALISI VOCALE PREP:", e.dettaglio || e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Registra una porzione: in un pasto esistente (mealId) o in un nuovo pasto (pasto)
+app.post('/api/preps/:id/portion', async (req, res) => {
+    try {
+        const prep = await MealPrep.findById(req.params.id).lean();
+        if (!prep) return res.status(404).json({ success: false, error: 'Preparazione non trovata' });
+
+        const { mealId, pasto } = req.body;
+        const prepGrammi = Math.max(0, Number(req.body.prepGrammi) || 0);
+        const prepPorzioni = prepGrammi > 0 ? 0 : Math.max(0, Number(req.body.prepPorzioni) || 0);
+        if (!prepGrammi && !prepPorzioni) {
+            return res.status(400).json({ success: false, error: 'Indica i grammi o le porzioni.' });
+        }
+
+        const ing = { nome: prep.nome, prepId: prep._id, prepGrammi, prepPorzioni };
+        const preps = new Map([[String(prep._id), prep]]);
+        let meal;
+
+        if (mealId) {
+            meal = await Meal.findById(mealId);
+            if (!meal) return res.status(404).json({ success: false, error: 'Pasto non trovato' });
+            meal.ingredienti.push(ing);
+            meal.alimenti = meal.alimenti ? `${meal.alimenti}, ${prep.nome}` : prep.nome;
+        } else {
+            meal = new Meal({
+                pasto: pasto || 'Pasto', alimenti: prep.nome,
+                calorie: 0, proteine: 0, carboidrati: 0, grassi: 0, ingredienti: [ing]
+            });
+        }
+        ricalcolaPasto(meal, preps);
+        await meal.save();
+        res.json({ success: true, meal });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
@@ -717,7 +939,8 @@ const FavoriteMeal = mongoose.model('FavoriteMeal', FavoriteMealSchema);
 // Aggiunge una copia slegata del pasto ai preferiti
 app.post('/api/favorites', async (req, res) => {
     try {
-        const newFav = new FavoriteMeal(req.body);
+        // Il preferito è una foto dei valori: le porzioni di meal prep perdono il collegamento
+        const newFav = new FavoriteMeal({ ...req.body, ingredienti: senzaCollegamentiPrep(req.body.ingredienti) });
         await newFav.save();
         res.json({ success: true, favorite: newFav });
     } catch (error) {

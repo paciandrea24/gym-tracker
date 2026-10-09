@@ -1,37 +1,21 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=21';
-import * as userService from '../services/userService.js?v=21';
-import * as scanner from '../components/scanner.js?v=21';
-import * as modal from '../components/modal.js?v=21';
-import * as ui from '../ui.js?v=21';
-import { exportToCSV } from '../utils.js?v=21';
-import * as pantryService from '../services/pantryService.js?v=21';
+import * as nutriService from '../services/nutriService.js?v=22';
+import * as scanner from '../components/scanner.js?v=22';
+import * as modal from '../components/modal.js?v=22';
+import * as voice from '../components/voice.js?v=22';
+import * as ui from '../ui.js?v=22';
+import { exportToCSV } from '../utils.js?v=22';
+import * as pantryService from '../services/pantryService.js?v=22';
+import * as pantrySync from '../services/pantrySync.js?v=22';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=22';
 
-// Cache localStorage: nomeNormalizzato → pantryItemId (o null = "non scalare")
-const PANTRY_CACHE_KEY = 'pantryMatchCache';
-
-function _normalizzaChiave(nome) {
-    return nome.toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .replace(/\s+/g, ' ').trim();
-}
-
-function getCachedMatch(nome) {
-    try {
-        const cache = JSON.parse(localStorage.getItem(PANTRY_CACHE_KEY) || '{}');
-        const key = _normalizzaChiave(nome);
-        return key in cache ? cache[key] : undefined; // undefined = non in cache
-    } catch { return undefined; }
-}
-
-function setCachedMatch(nome, pantryItemId) {
-    try {
-        const cache = JSON.parse(localStorage.getItem(PANTRY_CACHE_KEY) || '{}');
-        cache[_normalizzaChiave(nome)] = pantryItemId; // null = "non scalare"
-        localStorage.setItem(PANTRY_CACHE_KEY, JSON.stringify(cache));
-    } catch {}
-}
+// Ogni cambio di sezione crea una nuova NutritionView: gli eventi globali vanno sempre
+// all'istanza corrente (prima restavano legati alla prima, con dati vecchi).
+let vistaAttiva = null;
+window.addEventListener('editIngredient', (e) => vistaAttiva?.handleEditIngredient(e.detail));
+window.addEventListener('openFavSelector', (e) => vistaAttiva?.handleOpenFavSelector(e.detail));
+window.addEventListener('exportNutritionCSV', () => vistaAttiva?.handleExportCSV());
 
 export class NutritionView {
     constructor(container) {
@@ -40,15 +24,7 @@ export class NutritionView {
         this.currentMealsData = [];
         this.currentFavorites = [];
         this.activeScannerTargetMealId = null;
-        this.isRecording = false;
-        this.currentRecognition = null;
-
-        if (!window._nutriListenersAdded) {
-            window.addEventListener('editIngredient', (e) => this.handleEditIngredient(e.detail));
-            window.addEventListener('openFavSelector', (e) => this.handleOpenFavSelector(e.detail));
-            window.addEventListener('exportNutritionCSV', () => this.handleExportCSV());
-            window._nutriListenersAdded = true;
-        }
+        vistaAttiva = this;
     }
 
     async render(openAddMeal = false) {
@@ -78,8 +54,8 @@ export class NutritionView {
                 (dateStr) => this.handleDailyHistoryClick(dateStr)
             );
 
-            const favoritesPageBtn = document.getElementById('favorites-page-btn');
-            if (favoritesPageBtn) favoritesPageBtn.addEventListener('click', () => this.showFavoritesPage());
+            document.getElementById('favorites-page-btn')?.addEventListener('click', () => this.showFavoritesPage());
+            document.getElementById('prep-btn')?.addEventListener('click', () => this.showMealPrep());
 
             if (openAddMeal) this.handleManualMealClick();
         } catch (error) {
@@ -89,6 +65,10 @@ export class NutritionView {
 
     showFavoritesPage() {
         ui.renderFavoritesPage(this.container, this.currentFavorites, () => this.render(), (id) => this.handlePreviewFavorite(id));
+    }
+
+    showMealPrep() {
+        new MealPrepView(this.container, () => this.render()).renderList();
     }
 
     handleDailyHistoryClick(dateStr) {
@@ -142,9 +122,25 @@ export class NutritionView {
                 () => this.handleScanClick(mealId),
                 () => this.handleCloseScanner(),
                 (ingIdx) => this.handleRemoveIngredient(mealId, ingIdx),
-                () => this.handleManualMealClick(mealId)
+                () => this.handleManualMealClick(mealId),
+                () => this.handleAddPrepPortion(mealId)
             );
         }
+    }
+
+    handleAddPrepPortion(mealId) {
+        openPortionSheet({
+            mealId,
+            onDone: (meal) => {
+                this.sostituisciPasto(meal);
+                this.handleMealClick(mealId);
+            }
+        });
+    }
+
+    sostituisciPasto(meal) {
+        const idx = this.currentMealsData.findIndex(m => String(m._id) === String(meal._id));
+        if (idx > -1) this.currentMealsData[idx] = meal;
     }
 
     async handleRemoveIngredient(mealId, ingIdx) {
@@ -157,8 +153,8 @@ export class NutritionView {
         const ingToRemove = meal.ingredienti[ingIdx];
         if (!ingToRemove) return;
 
-        // --- RIPRISTINO DISPENSA ---
-        await this.ripristinaDispensa(meal, [ingToRemove], "Ingrediente rimosso");
+        // --- RIPRISTINO DISPENSA (le porzioni di meal prep vengono ignorate) ---
+        await pantrySync.ripristinaDispensa(meal, [ingToRemove], "Ingrediente rimosso");
 
         meal.calorie = Math.max(0, parseFloat((meal.calorie - ingToRemove.calorie).toFixed(1)));
         meal.proteine = Math.max(0, parseFloat((meal.proteine - ingToRemove.proteine).toFixed(1)));
@@ -170,8 +166,7 @@ export class NutritionView {
         try {
             this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Aggiornamento in corso...</div>`;
             const response = await nutriService.updateMeal(mealId, meal);
-            const idx = this.currentMealsData.findIndex(m => String(m._id) === String(mealId));
-            if (idx > -1) this.currentMealsData[idx] = response.meal;
+            this.sostituisciPasto(response.meal);
             this.handleMealClick(mealId);
         } catch (e) {
             await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" });
@@ -221,8 +216,9 @@ export class NutritionView {
         };
 
         try {
-            await nutriService.saveMeal(newMealData);
+            const saved = await nutriService.saveMeal(newMealData);
             this.render();
+            pantrySync.scalaDispensa(saved.meal);
         } catch (e) { await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" }); }
     }
 
@@ -252,17 +248,15 @@ export class NutritionView {
                     updatedMeal.ingredienti.push(mealData.ingredienti[0]);
 
                     const response = await nutriService.updateMeal(targetMealId, updatedMeal);
-                    const idx = this.currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
-                    if (idx > -1) this.currentMealsData[idx] = response.meal;
+                    this.sostituisciPasto(response.meal);
 
                     // FIX DOPPIO SCALO: Passiamo alla dispensa SOLO l'ingrediente appena aggiunto
-                    const partialMeal = { ...response.meal, ingredienti: [mealData.ingredienti[0]] };
-                    this.scalaDispensa(partialMeal);
+                    pantrySync.scalaDispensa({ ...response.meal, ingredienti: [mealData.ingredienti[0]] });
 
                     this.handleMealClick(targetMealId);
                 } else {
                     const saved = await nutriService.saveMeal(mealData);
-                    this.scalaDispensa(saved.meal);
+                    pantrySync.scalaDispensa(saved.meal);
                     this.render();
                 }
             } catch (e) {
@@ -296,8 +290,8 @@ export class NutritionView {
                 this.handleCloseScanner();
                 this.fetchProductFromBarcode(barcode);
             },
-            (errorMsg) => {
-                alert(errorMsg);
+            async (errorMsg) => {
+                await modal.showModal({ type: 'error', title: 'Scanner', message: errorMsg });
                 this.handleCloseScanner();
             }
         );
@@ -314,30 +308,11 @@ export class NutritionView {
     async fetchProductFromBarcode(barcode) {
         this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-blue-600">Codice rilevato! Ricerca nel database...</div>`;
         try {
-            const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-            const data = await res.json();
-
-            if (data.status === 1) {
-                const p = data.product;
-                const name = p.product_name || "Prodotto Sconosciuto";
-                const n = p.nutriments || {};
-                let cal = n['energy-kcal_100g'];
-
-                if (cal === undefined || cal === null) {
-                    if (n['energy-kj_100g']) cal = n['energy-kj_100g'] / 4.184;
-                    else if (n['energy_100g']) cal = n['energy_100g'] / 4.184;
-                    else cal = 0;
-                }
-                if (cal > 900) cal = cal / 4.184;
-                cal = parseFloat(Number(cal).toFixed(1));
-
-                const pro = n['proteins_100g'] || 0;
-                const carbo = n['carbohydrates_100g'] || 0;
-                const fat = n['fat_100g'] || 0;
-
-                this.openPreFilledManualMeal(name, cal, pro, carbo, fat, this.activeScannerTargetMealId);
+            const prodotto = await pantryService.cercaProdottoOFF(barcode);
+            if (prodotto) {
+                this.openPreFilledManualMeal(prodotto, this.activeScannerTargetMealId);
             } else {
-                await modal.showModal({ type: 'error', title: 'Non Trovato', message: "Spiacente, prodotto non trovato nel database mondiale." });
+                await modal.showModal({ type: 'error', title: 'Non Trovato', message: `Spiacente, il codice ${barcode} non è nel database mondiale.` });
                 if (this.activeScannerTargetMealId) this.handleMealClick(this.activeScannerTargetMealId); else this.render();
             }
         } catch (e) {
@@ -346,123 +321,53 @@ export class NutritionView {
         }
     }
 
-    openPreFilledManualMeal(name, cal, pro, carbo, fat, targetMealId = null) {
+    openPreFilledManualMeal(prodotto, targetMealId = null) {
         this.handleManualMealClick(targetMealId);
-        setTimeout(() => {
-            const al = document.getElementById('m-alimenti');
-            if (al) {
-                al.value = name;
-                document.getElementById('m-cal-100').value = cal;
-                document.getElementById('m-pro-100').value = pro;
-                document.getElementById('m-carbo-100').value = carbo;
-                document.getElementById('m-fat-100').value = fat;
-                document.getElementById('m-peso').focus();
-            }
-        }, 100);
+        const al = document.getElementById('m-alimenti');
+        if (al) {
+            al.value = prodotto.nome;
+            document.getElementById('m-cal-100').value = prodotto.calorie100;
+            document.getElementById('m-pro-100').value = prodotto.proteine100;
+            document.getElementById('m-carbo-100').value = prodotto.carbo100;
+            document.getElementById('m-fat-100').value = prodotto.grassi100;
+            document.getElementById('m-peso').focus();
+        }
     }
 
-    async handleMicRecord(targetMealId = null) {
-        const btnId = targetMealId ? 'add-voice-meal-btn' : 'mic-btn';
-        const micBtn = document.getElementById(btnId);
+    handleMicRecord(targetMealId = null) {
+        const micBtn = document.getElementById(targetMealId ? 'add-voice-meal-btn' : 'mic-btn');
         if (!micBtn) return;
 
-        // FIX BUG MICROFONO: Salviamo il testo originale solo se non stiamo già registrando
-        if (!this.isRecording) {
-            this.originalMicBtnHtml = micBtn.innerHTML;
-        }
-        const originalBtnHtml = this.originalMicBtnHtml;
+        voice.toggleVoice(micBtn, async (testo) => {
+            const data = await nutriService.analyzeVoice(testo, targetMealId);
+            if (!data.success) throw new Error(data.error || "Analisi non riuscita.");
 
-        if (this.isRecording && this.currentRecognition) {
-            this.currentRecognition.stop();
-            return;
-        }
+            if (targetMealId) {
+                // FIX DOPPIO SCALO: scaliamo solo gli ingredienti nuovi trovati dalla voce
+                const oldMeal = this.currentMealsData.find(m => String(m._id) === String(targetMealId));
+                const oldIngCount = oldMeal && oldMeal.ingredienti ? oldMeal.ingredienti.length : 0;
 
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            await modal.showModal({ type: 'error', title: 'Non supportato', message: "Il riconoscimento vocale non è supportato in questo browser." });
-            return;
-        }
-
-        this.currentRecognition = new SpeechRecognition();
-        this.currentRecognition.lang = 'it-IT';
-        this.currentRecognition.continuous = true;
-        this.currentRecognition.interimResults = false;
-
-        let finalTranscript = "";
-        this.isRecording = true;
-
-        micBtn.innerHTML = "⏹️ Ascoltando... Clicca per terminare";
-        micBtn.classList.add("animate-pulse", "bg-red-600");
-
-        this.currentRecognition.start();
-
-        this.currentRecognition.onresult = (event) => {
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + " ";
+                this.sostituisciPasto(data.meal);
+                this.handleMealClick(targetMealId);
+                pantrySync.scalaDispensa({ ...data.meal, ingredienti: data.meal.ingredienti.slice(oldIngCount) });
+            } else {
+                this.render();
+                pantrySync.scalaDispensa(data.meal);
             }
-        };
-
-        this.currentRecognition.onend = async () => {
-            this.isRecording = false;
-
-            if (!finalTranscript.trim()) {
-                micBtn.innerHTML = originalBtnHtml;
-                micBtn.classList.remove("animate-pulse", "bg-red-600", "bg-orange-500");
-                return;
-            }
-
-            micBtn.innerHTML = "⏳ Analisi in corso...";
-            micBtn.classList.remove("animate-pulse", "bg-red-600");
-            micBtn.classList.add("bg-orange-500");
-
-            try {
-                const data = await nutriService.analyzeVoice(finalTranscript, targetMealId);
-                if (data.success) {
-                    if (targetMealId) {
-                        // FIX DOPPIO SCALO: Troviamo quanti ingredienti c'erano prima per scalare solo quelli nuovi
-                        const oldMeal = this.currentMealsData.find(m => String(m._id) === String(targetMealId));
-                        const oldIngCount = oldMeal && oldMeal.ingredienti ? oldMeal.ingredienti.length : 0;
-
-                        const idx = this.currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
-                        if (idx > -1) this.currentMealsData[idx] = data.meal;
-                        this.handleMealClick(targetMealId);
-
-                        // Scaliamo SOLO i nuovi ingredienti trovati dalla voce
-                        const newIngredients = data.meal.ingredienti.slice(oldIngCount);
-                        this.scalaDispensa({ ...data.meal, ingredienti: newIngredients });
-                    } else {
-                        this.render();
-                        this.scalaDispensa(data.meal);
-                    }
-                } else {
-                    throw new Error(data.error);
-                }
-            } catch (error) {
-                await modal.showModal({ type: 'error', title: 'Errore', message: error.message });
-                micBtn.innerHTML = originalBtnHtml;
-                micBtn.classList.remove("bg-orange-500");
-            }
-        };
-
-        this.currentRecognition.onerror = (event) => {
-            if (event.error !== 'aborted') alert("Errore microfono: " + event.error);
-            this.isRecording = false;
-            micBtn.innerHTML = originalBtnHtml;
-            micBtn.classList.remove("animate-pulse", "bg-red-600", "bg-orange-500");
-        };
+        });
     }
 
     async handleDeleteMeal(mealId) {
         const confirm = await modal.showModal({ type: 'confirm', title: 'Conferma Eliminazione', message: 'Vuoi eliminare questo pasto?', confirmText: 'Sì', cancelText: 'No' });
         if (!confirm) return;
         try {
-            // --- RIPRISTINO DISPENSA PASTO INTERO ---
+            // --- RIPRISTINO DISPENSA PASTO INTERO (le porzioni di meal prep vengono ignorate) ---
             const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
             if (meal) {
                 const ingredientiDaRipristinare = meal.ingredienti && meal.ingredienti.length > 0
                     ? meal.ingredienti
                     : [{ nome: meal.alimenti, grammi: meal.grammi || 0 }];
-                await this.ripristinaDispensa(meal, ingredientiDaRipristinare, "Pasto eliminato");
+                await pantrySync.ripristinaDispensa(meal, ingredientiDaRipristinare, "Pasto eliminato");
             }
 
             await nutriService.deleteMeal(mealId);
@@ -499,7 +404,7 @@ export class NutritionView {
         let consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
         const todayStr = new Date().toDateString();
 
-        // NOVITÀ: Raccogliamo tutto ciò che hai mangiato oggi
+        // Cosa hai già mangiato oggi: l'AI lo usa per variare, non come divieto assoluto
         let giaMangiati = new Set();
 
         this.currentMealsData.forEach(meal => {
@@ -509,7 +414,6 @@ export class NutritionView {
                 consumate.carbo += Number(meal.carboidrati) || 0;
                 consumate.grassi += Number(meal.grassi) || 0;
 
-                // Estrai gli alimenti per non farli riproporre all'AI
                 if (meal.ingredienti && meal.ingredienti.length > 0) {
                     meal.ingredienti.forEach(ing => {
                         // Pulisce il nome (es: "Pollo (150g)" diventa "pollo")
@@ -529,14 +433,7 @@ export class NutritionView {
             const currentType = match ? match[1] : 'Pasto';
 
             try {
-                // Recupera dispensa con valori reali
-                const dispensa = await pantryService.getPantryForAI();
-                if (!dispensa || dispensa.length === 0) {
-                    await modal.showModal({ type: 'alert', title: 'Dispensa vuota', message: 'Aggiungi prodotti in dispensa per ricevere consigli personalizzati basati su ciò che hai in casa.' });
-                    return;
-                }
-
-                const data = await nutriService.recommendMeal(question, goals, consumate, giaMangiatiArray, dispensa);
+                const data = await nutriService.recommendMeal(question, goals, consumate, giaMangiatiArray);
                 if (data.success && data.recommendations) {
                     try {
                         localStorage.setItem('cachedAIRecommendations', JSON.stringify({
@@ -545,20 +442,28 @@ export class NutritionView {
                     } catch (e) { }
                     callbackResults(data.recommendations);
                 } else {
-                    await modal.showModal({ type: 'error', title: 'Errore', message: data.error || "Impossibile elaborare i consigli. Riprova." });
+                    document.getElementById('ai-modal')?.remove();
+                    document.documentElement.style.overflow = '';
+                    document.body.style.overflow = '';
+                    await modal.showModal({ type: 'error', title: 'Nutrizionista AI', message: data.error || "Impossibile elaborare i consigli. Riprova." });
                     this.render();
                 }
             } catch (error) {
-                await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione al server." });
+                document.getElementById('ai-modal')?.remove();
+                document.documentElement.style.overflow = '';
+                document.body.style.overflow = '';
+                await modal.showModal({ type: 'error', title: 'Errore', message: error.message || "Errore di connessione al server." });
                 this.render();
             }
 
         }, async (mealDataToSave) => {
             this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Salvataggio pasto in corso...</div>`;
             try {
-                await nutriService.saveMeal(mealDataToSave);
+                const saved = await nutriService.saveMeal(mealDataToSave);
+                if (!saved.success) throw new Error(saved.error);
                 localStorage.removeItem('cachedAIRecommendations');
                 this.render();
+                pantrySync.scalaDispensa(saved.meal);
             } catch (e) {
                 await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" });
                 this.render();
@@ -570,6 +475,9 @@ export class NutritionView {
         const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
         if (!meal) return;
         const ing = meal.ingredienti[ingIdx];
+        if (!ing) return;
+
+        if (ing.prepId) return this.handleEditPrepPortion(meal, ing);
 
         const vecchiGrammi = ing.grammi || 100; // Valore base di sicurezza
 
@@ -582,7 +490,7 @@ export class NutritionView {
 
         if (res === null || res === false) return;
 
-        const nuoviGrammi = parseFloat(res);
+        const nuoviGrammi = parseFloat(String(res).replace(',', '.'));
         if (isNaN(nuoviGrammi) || nuoviGrammi <= 0) {
             return modal.showModal({ type: 'error', title: 'Errore', message: "Valore non valido." });
         }
@@ -601,13 +509,12 @@ export class NutritionView {
         const diffFat = newFat - ing.grassi;
 
         // --- AGGIUSTAMENTO DISPENSA ---
+        // (prima l'aumento passava dal server senza pantryItemId e veniva scartato in silenzio)
         const diffGrammi = nuoviGrammi - vecchiGrammi;
         if (diffGrammi > 0) {
-            // Hai aumentato i grammi, consumiamo la differenza dalla dispensa
-            await pantryService.consumeFromPantry([{ nome: ing.nome, grammi: diffGrammi }], mealId, "Aumento grammi");
+            await pantrySync.scalaDispensa({ ...meal, ingredienti: [{ nome: ing.nome, grammi: diffGrammi }] });
         } else if (diffGrammi < 0) {
-            // Hai ridotto i grammi, ripristiniamo la differenza in dispensa!
-            await this.ripristinaDispensa(meal, [{ nome: ing.nome, grammi: Math.abs(diffGrammi) }], "Riduzione grammi");
+            await pantrySync.ripristinaDispensa(meal, [{ nome: ing.nome, grammi: Math.abs(diffGrammi) }], "Riduzione grammi");
         }
 
         meal.calorie = Math.max(0, parseFloat((meal.calorie + diffCal).toFixed(1)));
@@ -624,12 +531,39 @@ export class NutritionView {
         try {
             this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Ricalcolo valori...</div>`;
             const response = await nutriService.updateMeal(mealId, meal);
-            const idx = this.currentMealsData.findIndex(m => String(m._id) === String(mealId));
-            if (idx > -1) this.currentMealsData[idx] = response.meal;
+            this.sostituisciPasto(response.meal);
             this.handleMealClick(mealId);
         } catch (e) {
             await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" });
             this.handleMealClick(mealId);
+        }
+    }
+
+    // Porzione di meal prep: si cambia la quantità, i valori li ricalcola il server dalla preparazione
+    async handleEditPrepPortion(meal, ing) {
+        const inGrammi = ing.prepGrammi > 0;
+        const res = await modal.showModal({
+            type: 'prompt',
+            title: `Modifica: ${ing.nome}`,
+            message: inGrammi ? 'Quanti grammi hai preso?' : 'Quante porzioni? (es. 1 o 0,5)',
+            inputValue: String(inGrammi ? ing.prepGrammi : ing.prepPorzioni).replace('.', ',')
+        });
+        if (res === null || res === false) return;
+
+        const valore = parseFloat(String(res).replace(',', '.'));
+        if (isNaN(valore) || valore <= 0) {
+            return modal.showModal({ type: 'error', title: 'Errore', message: "Valore non valido." });
+        }
+        if (inGrammi) ing.prepGrammi = valore; else ing.prepPorzioni = valore;
+
+        try {
+            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Ricalcolo valori...</div>`;
+            const response = await nutriService.updateMeal(meal._id, meal);
+            this.sostituisciPasto(response.meal);
+            this.handleMealClick(meal._id);
+        } catch (e) {
+            await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" });
+            this.handleMealClick(meal._id);
         }
     }
 
@@ -664,15 +598,14 @@ export class NutritionView {
 
             try {
                 const response = await nutriService.updateMeal(targetMealId, targetMeal);
-                const idx = this.currentMealsData.findIndex(m => String(m._id) === String(targetMealId));
-                if (idx > -1) this.currentMealsData[idx] = response.meal;
+                this.sostituisciPasto(response.meal);
 
                 // FIX MANCATO SCALO: Scaliamo i nuovi ingredienti estratti dal preferito
                 const addedIngredients = favMeal.ingredienti && favMeal.ingredienti.length > 0
                     ? favMeal.ingredienti
                     : [{ nome: favMeal.alimenti, calorie: favMeal.calorie, proteine: favMeal.proteine, carboidrati: favMeal.carboidrati, grassi: favMeal.grassi }];
 
-                this.scalaDispensa({ ...response.meal, ingredienti: addedIngredients });
+                pantrySync.scalaDispensa({ ...response.meal, ingredienti: addedIngredients });
 
                 this.handleMealClick(targetMealId);
             } catch (err) {
@@ -690,116 +623,5 @@ export class NutritionView {
             Proteine: m.proteine, Carboidrati: m.carboidrati, Grassi: m.grassi
         }));
         exportToCSV('storico_nutrizione.csv', rows);
-    }
-
-    async scalaDispensa(meal) {
-        if (!meal) return;
-        try {
-            let ingredientiGrezzi = [];
-            if (meal.ingredienti && meal.ingredienti.length > 0) {
-                ingredientiGrezzi = meal.ingredienti.map(ing => {
-                    let grammi = ing.grammi || 0;
-                    if (!grammi) {
-                        const m = ing.nome.match(/(\d+[\.,]?\d*)\s*g\b/i);
-                        if (m) grammi = parseFloat(m[1].replace(',', '.'));
-                    }
-                    return { nome: ing.nome, grammi: grammi || 0 };
-                }).filter(i => i.nome && i.grammi > 0);
-            } else {
-                ingredientiGrezzi = [{ nome: meal.alimenti, grammi: meal.grammi || 0 }];
-            }
-
-            if (ingredientiGrezzi.length === 0) return;
-
-            // 1. Chiedi al backend di classificare ogni ingrediente
-            const resolved = await pantryService.resolveMatches(ingredientiGrezzi);
-            if (!resolved || !Array.isArray(resolved)) return;
-
-            const daScalare = [];
-
-            for (const item of resolved) {
-                const cached = getCachedMatch(item.nome);
-
-                if (item.exact) {
-                    // Match univoco → scala in automatico
-                    daScalare.push({ nome: item.nome, grammi: item.grammi, pantryItemId: item.exact._id });
-                    setCachedMatch(item.nome, item.exact._id);
-
-                } else if (item.candidates.length > 0) {
-                    let pantryItemId;
-
-                    if (cached !== undefined) {
-                        // Usa scelta memorizzata (incluso null = "non scalare")
-                        pantryItemId = cached;
-                    } else {
-                        // Mostra modale di scelta
-                        pantryItemId = await modal.showChoiceModal({
-                            title: `"${item.nome}"`,
-                            message: 'A quale prodotto in dispensa corrisponde?',
-                            options: item.candidates,
-                            allowNone: true
-                        });
-                        setCachedMatch(item.nome, pantryItemId);
-                    }
-
-                    if (pantryItemId) {
-                        daScalare.push({ nome: item.nome, grammi: item.grammi, pantryItemId });
-                    }
-                }
-                // nessun match → salta silenziosamente
-            }
-
-            if (daScalare.length === 0) return;
-
-            const result = await pantryService.consumeFromPantry(
-                daScalare, meal._id, `${meal.pasto}: ${meal.alimenti}`
-            );
-
-            if (result.avvisi && result.avvisi.length > 0) {
-                result.avvisi.forEach(av => this.showPantryToast(av));
-            }
-        } catch (e) {
-            console.warn('Scalaggio dispensa fallito:', e);
-        }
-    }
-
-    showPantryToast(avviso) {
-        const toast = document.createElement('div');
-        toast.className = "fixed top-4 left-1/2 -translate-x-1/2 z-[999999] bg-orange-500 text-white font-bold text-sm px-4 py-3 rounded-2xl shadow-xl max-w-xs text-center opacity-0 transition-all duration-300";
-
-        if (avviso.esaurito) {
-            toast.classList.replace('bg-orange-500', 'bg-red-500');
-            toast.innerHTML = `🔴 "${avviso.nome}" è esaurito dalla dispensa!`;
-        } else {
-            toast.innerHTML = `⚠️ "${avviso.nome}" in esaurimento (${avviso.grammiRimasti}g rimasti)`;
-        }
-
-        document.body.appendChild(toast);
-        requestAnimationFrame(() => toast.classList.remove('opacity-0'));
-        setTimeout(() => {
-            toast.classList.add('opacity-0');
-            setTimeout(() => toast.remove(), 300);
-        }, 4000);
-    }
-
-    async ripristinaDispensa(meal, ingredienti, motivo) {
-        if (!ingredienti || ingredienti.length === 0) return;
-        try {
-            const ingDaRipristinare = ingredienti.map(ing => {
-                let grammi = ing.grammi || 0;
-                if (!grammi) {
-                    const m = ing.nome.match(/(\d+[\.,]?\d*)\s*g\b/i);
-                    if (m) grammi = parseFloat(m[1].replace(',', '.'));
-                }
-                // Usa pantryItemId dalla cache (impostato durante lo scalaggio)
-                const pantryItemId = getCachedMatch(ing.nome) || undefined;
-                return { nome: ing.nome, grammi: grammi || 0, pantryItemId };
-            }).filter(i => i.nome && i.grammi > 0);
-
-            if (ingDaRipristinare.length === 0) return;
-            await pantryService.restoreToPantry(ingDaRipristinare, meal._id, motivo);
-        } catch (e) {
-            console.warn('Ripristino dispensa fallito:', e);
-        }
     }
 }

@@ -1,9 +1,9 @@
 // public/js/views/PantryView.js
 
-import * as pantryService from '../services/pantryService.js?v=21';
-import * as scanner from '../components/scanner.js?v=21';
-import * as modal from '../components/modal.js?v=21';
-import { searchFoodTable } from '../data/foodTable.js?v=21';
+import * as pantryService from '../services/pantryService.js?v=22';
+import * as scanner from '../components/scanner.js?v=22';
+import * as modal from '../components/modal.js?v=22';
+import { searchFoodTable } from '../data/foodTable.js?v=22';
 
 const CATEGORIE = ['Proteina', 'Carboidrato', 'Latticino', 'Verdura', 'Frutta', 'Condimento/Grassi', 'Altro'];
 

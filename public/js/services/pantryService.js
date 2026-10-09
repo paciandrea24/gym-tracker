@@ -66,6 +66,32 @@ export async function fetchOpenFoodFacts(barcode) {
     return await res.json();
 }
 
+// Valori per 100 g di un prodotto Open Food Facts (kcal ricavate dai kJ se mancano)
+export function valoriDaOFF(product) {
+    const n = product.nutriments || {};
+    let cal = n['energy-kcal_100g'];
+    if (cal === undefined || cal === null) {
+        if (n['energy-kj_100g']) cal = n['energy-kj_100g'] / 4.184;
+        else if (n['energy_100g']) cal = n['energy_100g'] / 4.184;
+        else cal = 0;
+    }
+    if (cal > 900) cal = cal / 4.184;
+
+    return {
+        nome: product.product_name || 'Prodotto Sconosciuto',
+        calorie100: parseFloat(Number(cal).toFixed(1)),
+        proteine100: parseFloat(n['proteins_100g'] || 0),
+        carbo100: parseFloat(n['carbohydrates_100g'] || 0),
+        grassi100: parseFloat(n['fat_100g'] || 0)
+    };
+}
+
+// null se il prodotto non è nel database
+export async function cercaProdottoOFF(barcode) {
+    const data = await fetchOpenFoodFacts(barcode);
+    return data.status === 1 ? valoriDaOFF(data.product) : null;
+}
+
 // Determina la categoria automaticamente dai dati nutrizionali
 export function determinaCategoria(nome, pro100, carbo100, grassi100, cal100) {
     const nomeLower = nome.toLowerCase();

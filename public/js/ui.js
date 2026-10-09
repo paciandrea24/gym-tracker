@@ -1,4 +1,5 @@
-import { formatDate, getWeekLabel } from './utils.js?v=20';
+import { formatDate, getWeekLabel } from './utils.js?v=22';
+import { etichettaPorzione } from './services/mealPrepService.js?v=22';
 
 // --- RENDER LISTA SCHEDE (HOME) ---
 export function renderRoutinesList(container, routines, onOpenRoutine, onCreateRoutine, onEditRoutineName, onDeleteRoutine) {
@@ -538,6 +539,18 @@ export function updateFeedback(setId, status) {
     else statusEl.className = 'text-xs text-gray-400 font-medium transition-colors';
 }
 
+// Riga di 4 azioni per aggiungere cibo (dashboard nutrizione e dettaglio pasto)
+function azioniPastoHtml(ids) {
+    const btn = (id, colori, icona, label) => `
+        <button id="${id}" class="${colori} border font-bold text-[12px] py-2.5 rounded-2xl shadow-sm active:scale-95 transition-transform flex flex-col justify-center items-center gap-0.5">
+            <span class="text-lg leading-none">${icona}</span>${label}
+        </button>`;
+    return btn(ids.manuale, 'bg-white text-gray-900 border-gray-200', '➕', 'Manuale')
+        + btn(ids.scanner, 'bg-blue-50 text-blue-700 border-blue-200', '📷', 'Scanner')
+        + btn(ids.preferiti, 'bg-yellow-50 text-yellow-700 border-yellow-200', '⭐', 'Preferiti')
+        + btn(ids.prep, 'bg-orange-50 text-orange-700 border-orange-200', '🍲', 'Prep');
+}
+
 // --- RENDER NUTRIZIONE (LIVE SCANNER E CAROSELLO) ---
 export function renderNutritionDashboard(container, mealsData, goals, currentTab, favorites, onTabSwitch, onMicClick, onManualClick, onDeleteMeal, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAddFavoriteClick, onAskAI, onDailyHistoryClick) {
     let contentHtml = '';
@@ -599,16 +612,8 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
                 <button id="close-scanner-btn" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla Scansione</button>
             </div>
 
-            <div id="action-buttons" class="flex space-x-2 mb-6">
-                <button id="manual-meal-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                    ➕ Manuale
-                </button>
-                <button id="scan-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg> Scanner
-                </button>
-                <button id="favorites-page-btn" class="flex-1 bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                    ⭐ Preferiti
-                </button>
+            <div id="action-buttons" class="grid grid-cols-4 gap-2 mb-6">
+                ${azioniPastoHtml({ manuale: 'manual-meal-btn', scanner: 'scan-btn', preferiti: 'favorites-page-btn', prep: 'prep-btn' })}
             </div>
 
             <div class="flex justify-between items-end mb-3">
@@ -805,7 +810,7 @@ export function renderNutritionDashboard(container, mealsData, goals, currentTab
 }
 
 // --- RENDER DETTAGLIO PASTO (CON INGREDIENTI E PREFERITI) ---
-export function renderMealDetails(container, meal, onBack, onToggleFavorite, onAddVoice, onAddScan, onCloseScanner, onRemoveIngredient, onAddManual) {
+export function renderMealDetails(container, meal, onBack, onToggleFavorite, onAddVoice, onAddScan, onCloseScanner, onRemoveIngredient, onAddManual, onAddPrep) {
     const dateObj = new Date(meal.data);
     const dateStr = dateObj.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
     const timeStr = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
@@ -820,8 +825,11 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
                         
                         <div class="flex justify-between items-start mb-3">
                             <div class="pr-2 flex-1">
-                                <h4 class="text-[15px] font-bold text-gray-800 leading-tight break-words">${ing.nome}</h4>
-                                ${ing.grammi ? `<p class="text-xs font-bold text-gray-400 mt-1">Peso: <span class="text-gray-600">${ing.grammi}g</span></p>` : ''}
+                                <h4 class="text-[15px] font-bold text-gray-800 leading-tight break-words">${ing.prepId ? '🍲 ' : ''}${ing.nome}</h4>
+                                ${ing.prepId ? `
+                                    <p class="text-xs font-bold text-orange-600 mt-1">Meal prep · ${etichettaPorzione(ing)}${!ing.prepGrammi && ing.grammi ? ` <span class="text-gray-400">(~${ing.grammi}g)</span>` : ''}</p>
+                                    ${ing.prepDaCompletare ? `<p class="text-[11px] font-bold text-orange-500 mt-0.5">⚠️ Imposta ${ing.prepGrammi ? 'il peso del cotto' : 'le porzioni'} nella preparazione per calcolare i valori</p>` : ''}
+                                ` : ing.grammi ? `<p class="text-xs font-bold text-gray-400 mt-1">Peso: <span class="text-gray-600">${ing.grammi}g</span></p>` : ''}
                             </div>
                             <div class="text-right flex-shrink-0 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
                                 <span class="text-sm font-black text-gray-900">${Number(ing.calorie).toFixed(1)} <span class="text-[10px] font-bold text-gray-400">kcal</span></span>
@@ -913,16 +921,8 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
                     VOCE
                 </button>
                 
-                <div id="action-buttons" class="flex space-x-2">
-                    <button id="add-manual-meal-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                        ➕ Manuale
-                    </button>
-                    <button id="add-scan-meal-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg> Scanner
-                    </button>
-                    <button id="add-fav-to-meal-btn" class="flex-1 bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                        ⭐ Preferiti
-                    </button>
+                <div id="action-buttons" class="grid grid-cols-4 gap-2">
+                    ${azioniPastoHtml({ manuale: 'add-manual-meal-btn', scanner: 'add-scan-meal-btn', preferiti: 'add-fav-to-meal-btn', prep: 'add-prep-meal-btn' })}
                 </div>
             </div>
 
@@ -947,6 +947,7 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
     document.getElementById('add-voice-meal-btn').addEventListener('click', onAddVoice);
     document.getElementById('add-scan-meal-btn').addEventListener('click', onAddScan);
     document.getElementById('add-manual-meal-btn').addEventListener('click', onAddManual); // <-- Nuovo Listener
+    document.getElementById('add-prep-meal-btn').addEventListener('click', onAddPrep);
     document.getElementById('close-scanner-btn').addEventListener('click', onCloseScanner);
 
     container.querySelectorAll('.remove-ing-btn').forEach(btn => {

@@ -7,6 +7,16 @@ export function saveNutritionGoals(goals) {
     localStorage.setItem('nutriGoals', JSON.stringify(goals));
 }
 
+// Render (piano gratuito) mette in pausa il server: al risveglio può rispondere con una pagina
+// d'errore invece che con JSON. Meglio un messaggio chiaro di "Unexpected token <".
+async function leggiJSON(res) {
+    try {
+        return await res.json();
+    } catch (e) {
+        throw new Error('Il server non ha risposto correttamente (forse si sta riavviando). Riprova tra qualche secondo.');
+    }
+}
+
 // --- CHIAMATE AL DATABASE ---
 export async function getTodayMeals() {
     const res = await fetch('/api/today-meals');
@@ -62,13 +72,13 @@ export async function analyzeVoice(text, mealId = null) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, mealId })
     });
-    return await res.json();
+    return await leggiJSON(res);
 }
 
-export async function recommendMeal(question, goals, consumate, giaMangiati = [], dispensa = []) {
+export async function recommendMeal(question, goals, consumate, giaMangiati = []) {
     const res = await fetch('/api/recommend-meal', {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, goals, consumate, giaMangiati, dispensa })
+        body: JSON.stringify({ question, goals, consumate, giaMangiati })
     });
-    return await res.json();
+    return await leggiJSON(res);
 }
