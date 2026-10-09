@@ -7,9 +7,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import webpush from 'web-push';
 import {
-    ricalcolaPasto, totaliDaIngredienti, riepilogoConsumo, senzaCollegamentiPrep, risolviRiferimentiPrep
+    ricalcolaPasto, totaliDaIngredienti, riepilogoConsumo, senzaCollegamentiPrep, risolviRiferimentiPrep, valoriPorzione
 } from './mealPrep.js';
 import { tokenizza, classificaMatch } from './matching.js';
+import { componiConsigli } from './nutrizionista.js';
 
 dotenv.config();
 console.log("Prime lettere della chiave API:", process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 8) : "CHIAVE NON TROVATA");
@@ -829,102 +830,105 @@ app.get('/api/today-meals', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
-// --- API: NUTRIZIONISTA AI BASATO SULLA DISPENSA ---
+// --- API: NUTRIZIONISTA AI BASATO SULLA DISPENSA (E SUI MEAL PREP) ---
+// L'AI sceglie ingredienti e grammi; i valori li calcola componiConsigli dai dati veri.
 app.post('/api/recommend-meal', async (req, res) => {
     try {
-        const { question, goals, consumate, giaMangiati } = req.body;
+        const { question, goals = {}, consumate = {}, giaMangiati } = req.body;
 
         const dispensa = await PantryItem.find({ attivo: true, grammiRimasti: { $gt: 0 } })
-            .select('nome grammiRimasti calorie100 proteine100 carbo100 grassi100 categoria');
+            .select('nome grammiRimasti calorie100 proteine100 carbo100 grassi100 categoria').lean();
 
-        if (!dispensa || dispensa.length === 0) {
-            return res.status(400).json({ success: false, error: 'Dispensa vuota: aggiungi prodotti per ricevere consigli.' });
+        // Meal prep attivi con porzioni calcolabili e non ancora finiti
+        const prepsAttive = await MealPrep.find({ attiva: true }).lean();
+        const gruppi = await porzioniPerPrep(prepsAttive.map(p => p._id));
+        const prepsDisponibili = prepsAttive
+            .map(p => ({ ...p, riepilogo: riepilogoConsumo(p, gruppi.get(String(p._id))) }))
+            .filter(p => (p.pesoTotaleCotto > 0 || p.porzioniPreviste > 0) && p.calorie > 0 && p.riepilogo.quotaUsata < 0.97);
+
+        if (dispensa.length === 0 && prepsDisponibili.length === 0) {
+            return res.status(400).json({ success: false, error: 'Dispensa vuota: aggiungi prodotti (o un meal prep) per ricevere consigli.' });
         }
 
         const rimanenti = {
-            calorie: Math.max(0, goals.calorie - consumate.calorie),
-            proteine: Math.max(0, goals.proteine - consumate.proteine),
-            carbo: Math.max(0, goals.carbo - consumate.carbo),
-            grassi: Math.max(0, goals.grassi - consumate.grassi)
+            calorie: Math.max(0, (goals.calorie || 0) - (consumate.calorie || 0)),
+            proteine: Math.max(0, (goals.proteine || 0) - (consumate.proteine || 0)),
+            carbo: Math.max(0, (goals.carbo || 0) - (consumate.carbo || 0)),
+            grassi: Math.max(0, (goals.grassi || 0) - (consumate.grassi || 0))
         };
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-3.1-flash-lite",
-            generationConfig: { responseMimeType: "application/json" }
-        });
+        const giaMangiatiStr = (giaMangiati && giaMangiati.length > 0) ? giaMangiati.join(', ') : 'niente';
 
-        const cibiEvitare = (giaMangiati && giaMangiati.length > 0) ? giaMangiati.join(', ') : 'Nessuno';
-
-        // Formatta la dispensa per il prompt: nome, grammi disponibili, macro per 100g
-        const dispensaStr = dispensa.map(p =>
-            `- ${p.nome} (${p.grammiRimasti}g disponibili): ${p.calorie100} kcal/100g, ${p.proteine100}g prot/100g, ${p.carbo100}g carbo/100g, ${p.grassi100}g grassi/100g`
+        const dispensaStr = dispensa.length === 0 ? '(vuota)' : dispensa.map(p =>
+            `- "${p.nome}" (${p.grammiRimasti}g disponibili): ${p.calorie100} kcal, ${p.proteine100}g P, ${p.carbo100}g C, ${p.grassi100}g G per 100g`
         ).join('\n');
+
+        const prepsPerRef = {};
+        const prepStr = prepsDisponibili.map((p, i) => {
+            const ref = `P${i + 1}`;
+            prepsPerRef[ref] = p;
+            const unita = [];
+            if (p.porzioniPreviste > 0) {
+                const v = valoriPorzione({ prepPorzioni: 1 }, p);
+                unita.push(`1 porzione = ${v.calorie} kcal, ${v.proteine}g P, ${v.carboidrati}g C, ${v.grassi}g G (restano circa ${Math.max(0, p.porzioniPreviste - (p.riepilogo.porzioniUsate || 0)).toFixed(1)} porzioni)`);
+            }
+            if (p.pesoTotaleCotto > 0) {
+                const v = valoriPorzione({ prepGrammi: 100 }, p);
+                unita.push(`100g = ${v.calorie} kcal, ${v.proteine}g P, ${v.carboidrati}g C, ${v.grassi}g G (restano circa ${Math.max(0, p.pesoTotaleCotto - (p.riepilogo.grammiUsati || 0))}g)`);
+            }
+            return `- ${ref}: "${p.nome}" — ${unita.join('; ')}`;
+        }).join('\n');
 
         const prompt = `Sei il mio nutrizionista personale AI. L'app è usata solo da me.
 
 OBIETTIVI RIMANENTI per oggi: ${rimanenti.calorie.toFixed(0)} kcal, ${rimanenti.proteine.toFixed(0)}g Proteine, ${rimanenti.carbo.toFixed(0)}g Carbo, ${rimanenti.grassi.toFixed(0)}g Grassi.
 
-PRODOTTI DISPONIBILI IN DISPENSA (con grammi rimasti e valori nutrizionali ufficiali per 100g):
+PRODOTTI IN DISPENSA (grammi disponibili e valori per 100g):
 ${dispensaStr}
-
+${prepsDisponibili.length > 0 ? `
+PIATTI GIÀ CUCINATI (meal prep, pronti da mangiare):
+${prepStr}
+` : ''}
 La mia richiesta: "${question}"
 
 REGOLE FONDAMENTALI — rispettale tutte:
-1. Componi i pasti ESCLUSIVAMENTE con i prodotti elencati nella DISPENSA. Non inventare ingredienti extra.
-2. Calcola i macro di ogni ingrediente dai valori per 100g × i grammi che proponi. Non inventare valori.
-3. Non superare i grammi disponibili per nessun prodotto.
-4. STRATEGIA MACRO: l'obiettivo primario è avvicinarsi alle quote di PROTEINE e CARBOIDRATI rimanenti. I GRASSI devono essere tenuti il più bassi possibile — trattali come soglia massima da non superare, non come obiettivo da raggiungere. Meno grassi = meglio.
-5. Genera esattamente 3 opzioni ben distinte, ognuna con 1 variante (cambia 1-2 ingredienti rimanendo in dispensa).
-6. SPUNTINI: se la richiesta è per uno "Spuntino", proponi solo combinazioni veloci senza cottura.
-7. Oggi ho già mangiato: ${cibiEvitare}. Non proporli di nuovo in nessuna opzione né variante.
+1. Usa SOLO i prodotti della DISPENSA e i PIATTI GIÀ CUCINATI elencati. Non inventare ingredienti (niente sale, olio o altro se non è in elenco).
+2. Per un prodotto della dispensa scrivi "nome" ESATTAMENTE come in elenco e i "grammi". Per un piatto già cucinato scrivi "prepRef" (es. "P1") e "prepPorzioni" oppure "prepGrammi".
+3. NON scrivere calorie o macro: li calcola l'app con precisione. Usa i valori per 100g solo per scegliere le quantità giuste.
+4. Non superare i grammi o le porzioni disponibili.
+5. STRATEGIA MACRO: avvicinati il più possibile alle quote di PROTEINE e CARBOIDRATI rimanenti. I GRASSI sono una soglia massima da non superare, non un obiettivo: meno grassi = meglio.
+6. Genera 3 opzioni ben distinte, ognuna con 1 variante (cambia 1-2 ingredienti restando negli elenchi).
+7. Se ci sono piatti già cucinati, usali in almeno un'opzione: vanno consumati prima che scadano.
+8. SPUNTINI: se la richiesta è per uno "Spuntino", proponi solo combinazioni veloci senza cottura.
+9. Oggi ho già mangiato: ${giaMangiatiStr}. Cerca di variare, ma puoi riproporre un alimento se serve davvero per i macro.
 
 Restituisci SOLO un array JSON con questa esatta struttura:
 [
   {
     "nomePasto": "Nome breve del pasto",
-    "totaleCalorie": 0,
-    "totaleProteine": 0,
-    "totaleCarbo": 0,
-    "totaleGrassi": 0,
-    "messaggio": "Breve nota su perché questo pasto è ottimale per i tuoi obiettivi.",
+    "messaggio": "Breve nota su perché questo pasto è ottimale per i miei obiettivi.",
     "ingredienti": [
-      { "nome": "Nome ingrediente", "grammi": 0, "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
+      { "nome": "Nome esatto dalla dispensa", "grammi": 0 },
+      { "prepRef": "P1", "prepPorzioni": 1 }
     ],
     "variante": {
       "nomePasto": "Nome variante",
-      "totaleCalorie": 0,
-      "totaleProteine": 0,
-      "totaleCarbo": 0,
-      "totaleGrassi": 0,
       "messaggio": "Perché scegliere questa variante.",
-      "ingredienti": [
-        { "nome": "Nome ingrediente", "grammi": 0, "calorie": 0, "proteine": 0, "carboidrati": 0, "grassi": 0 }
-      ]
+      "ingredienti": [ { "nome": "Nome esatto dalla dispensa", "grammi": 0 } ]
     }
   }
 ]`;
 
-        const result = await model.generateContent(prompt);
-        let jsonText = result.response.text();
-
-        // FIX ESTREMO PER PREVENIRE IL CRASH JSON:
-        // Estraiamo in modo chirurgico solo la porzione che inizia con '[' e finisce con ']' 
-        // ignorando tutto il testo discorsivo che l'IA potrebbe aver aggiunto prima o dopo.
-        const startIndex = jsonText.indexOf('[');
-        const endIndex = jsonText.lastIndexOf(']');
-
-        if (startIndex !== -1 && endIndex !== -1) {
-            jsonText = jsonText.substring(startIndex, endIndex + 1);
-        } else {
-            throw new Error("L'IA non ha formattato correttamente i dati.");
+        const opzioniAI = estraiJSON(await generaJSON(prompt), '[', ']');
+        const recommendations = componiConsigli(opzioniAI, dispensa, prepsPerRef);
+        if (recommendations.length === 0) {
+            throw new Error("L'AI non ha proposto pasti con i prodotti disponibili. Riprova.");
         }
-
-        const recommendations = JSON.parse(jsonText);
 
         res.json({ success: true, recommendations });
     } catch (error) {
-        console.error("Errore AI Recommender:", error);
-        res.status(500).json({ success: false, error: "Impossibile generare consigli in questo momento." });
+        console.error("Errore AI Recommender:", error.dettaglio || error.message);
+        res.status(500).json({ success: false, error: error.message || "Impossibile generare consigli in questo momento." });
     }
 });
 

@@ -1560,7 +1560,7 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null
                 return `
                     <div class="flex justify-between items-center mb-3">
                         <span class="text-[10px] font-black ${bgColor} px-2.5 py-1.5 rounded-lg uppercase tracking-wider">${viewState === 'main' ? 'Opzione ' + (idx + 1) : 'Variante ' + (idx + 1)}</span>
-                        <button class="toggle-variant-btn text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-xl active:scale-95 transition-transform">${toggleText}</button>
+                        ${rec.variante ? `<button class="toggle-variant-btn text-xs font-bold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-xl active:scale-95 transition-transform">${toggleText}</button>` : ''}
                     </div>
                     
                     <h3 class="text-xl font-black text-gray-900 leading-tight mb-1">${data.nomePasto}</h3>
@@ -1580,7 +1580,9 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null
                         <ul class="space-y-2">
                             ${data.ingredienti.map(ing => `
                                 <li class="flex justify-between items-center text-[13px] gap-2">
-                                    <span class="font-medium text-gray-700 leading-tight">${ing.nome}${ing.grammi ? ` <span class="text-[11px] font-bold text-indigo-500">${ing.grammi}g</span>` : ''}</span>
+                                    <span class="font-medium text-gray-700 leading-tight">${ing.prepId ? '🍲 ' : ''}${ing.nome}${ing.prepId
+                                        ? ` <span class="text-[11px] font-bold text-orange-600">${etichettaPorzione(ing)}</span>`
+                                        : ing.grammi ? ` <span class="text-[11px] font-bold text-indigo-500">${ing.grammi}g</span>` : ''}</span>
                                     <span class="font-bold text-gray-900 flex-shrink-0">${ing.calorie} <span class="text-[10px] font-normal text-gray-400">kcal</span></span>
                                 </li>
                             `).join('')}
