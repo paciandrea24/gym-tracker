@@ -67,17 +67,23 @@ export function totaliDaIngredienti(ingredienti) {
     return tot;
 }
 
-// porzioni: elenco degli ingredienti-porzione registrati nei pasti per questa preparazione
+// Il cotto si considera pesante quanto gli ingredienti crudi: è il peso di riferimento del lotto
+export function pesoCrudo(ingredienti) {
+    return Math.round((ingredienti || []).reduce((s, ing) => s + (Number(ing.grammi) || 0), 0));
+}
+
+// porzioni: ingredienti-porzione registrati nei pasti per questa preparazione, dal più recente
 export function riepilogoConsumo(prep, porzioni) {
     let quota = 0;
     for (const ing of porzioni) quota += calcolaQuota(ing, prep) ?? 0;
 
     const peso = Number(prep.pesoTotaleCotto) || 0;
-    const n = Number(prep.porzioniPreviste) || 0;
+    const ultima = porzioni.find(ing => Number(ing.prepGrammi) > 0);
     return {
         quotaUsata: Math.round(quota * 1000) / 1000,
         grammiUsati: peso > 0 ? Math.round(quota * peso) : null,
-        porzioniUsate: n > 0 ? round1(quota * n) : null
+        grammiRimasti: peso > 0 ? Math.max(0, Math.round(peso * (1 - quota))) : null,
+        ultimiGrammi: ultima ? Number(ultima.prepGrammi) : null
     };
 }
 
@@ -91,21 +97,21 @@ export function senzaCollegamentiPrep(ingredienti) {
 }
 
 // Output della voce: l'AI indica le preparazioni con riferimenti brevi (P1, P2...).
-// refMap: { P1: prepId }. I valori li calcolerà ricalcolaPasto, quindi qui si azzerano.
-export function risolviRiferimentiPrep(ingredienti, refMap) {
+// refMap: { P1: prepId }. grammiSoliti: { prepId: grammi dell'ultima porzione }, usati quando
+// l'utente non dice i grammi. I valori li calcolerà ricalcolaPasto, quindi qui si azzerano.
+export function risolviRiferimentiPrep(ingredienti, refMap, grammiSoliti = {}) {
     return (ingredienti || []).map(ing => {
         if (!('prepRef' in ing)) return ing;
         const { prepRef, ...resto } = ing;
         const prepId = refMap[prepRef];
         if (!prepId) return resto;
 
-        const grammi = Number(resto.prepGrammi) || 0;
-        const porzioni = Number(resto.prepPorzioni) || 0;
+        const grammi = Number(resto.prepGrammi) || Number(grammiSoliti[prepId]) || 0;
         return {
             nome: resto.nome,
             prepId,
             prepGrammi: grammi > 0 ? grammi : 0,
-            prepPorzioni: grammi > 0 ? 0 : (porzioni > 0 ? porzioni : 1),
+            prepPorzioni: 0, // senza grammi resta "da completare": si corregge dal dettaglio del pasto
             calorie: 0, proteine: 0, carboidrati: 0, grassi: 0
         };
     });

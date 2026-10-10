@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     calcolaQuota, valoriPorzione, ricalcolaPasto, totaliDaIngredienti,
-    riepilogoConsumo, senzaCollegamentiPrep, risolviRiferimentiPrep
+    riepilogoConsumo, senzaCollegamentiPrep, risolviRiferimentiPrep, pesoCrudo
 } from './mealPrep.js';
 
 // Ragù da 1200 g cotti: 2400 kcal, 160 P, 80 C, 150 G
@@ -98,14 +98,27 @@ test('totali da ingredienti: somma arrotondata al decimo', () => {
     ]), { calorie: 150, proteine: 2.2, carboidrati: 5, grassi: 1 });
 });
 
-test('riepilogo consumo somma le quote miste e le esprime in grammi e porzioni', () => {
-    const r = riepilogoConsumo(ragu({ porzioniPreviste: 4 }), [{ prepPorzioni: 1 }, { prepGrammi: 300 }]);
-    assert.deepEqual(r, { quotaUsata: 0.5, grammiUsati: 600, porzioniUsate: 2 });
+test('riepilogo consumo: grammi mangiati, rimasti e ultima porzione (anche porzioni vecchie)', () => {
+    // porzioni dalla più recente: 300 g, poi 1 porzione vecchia (1 di 4 su 1200 g = 300 g)
+    const r = riepilogoConsumo(ragu({ porzioniPreviste: 4 }), [{ prepGrammi: 300 }, { prepPorzioni: 1 }]);
+    assert.deepEqual(r, { quotaUsata: 0.5, grammiUsati: 600, grammiRimasti: 600, ultimiGrammi: 300 });
 });
 
-test('riepilogo consumo ignora le porzioni non calcolabili', () => {
+test('riepilogo consumo: rimasti mai sotto zero, ultima volta dalla porzione in grammi più recente', () => {
+    const r = riepilogoConsumo(ragu(), [{ prepPorzioni: 1 }, { prepGrammi: 900 }, { prepGrammi: 500 }]);
+    assert.equal(r.grammiRimasti, 0);
+    assert.equal(r.ultimiGrammi, 900);
+});
+
+test('riepilogo consumo senza peso: niente grammi, porzioni non calcolabili ignorate', () => {
     const r = riepilogoConsumo(ragu({ pesoTotaleCotto: 0 }), [{ prepPorzioni: 1 }, { prepGrammi: 300 }]);
-    assert.deepEqual(r, { quotaUsata: 0.333, grammiUsati: null, porzioniUsate: 1 });
+    assert.deepEqual(r, { quotaUsata: 0.333, grammiUsati: null, grammiRimasti: null, ultimiGrammi: 300 });
+});
+
+test('peso crudo: somma dei grammi degli ingredienti, arrotondata', () => {
+    assert.equal(pesoCrudo([{ grammi: 500 }, { grammi: 700.4 }, { grammi: 20 }, { nome: 'sale' }]), 1220);
+    assert.equal(pesoCrudo([]), 0);
+    assert.equal(pesoCrudo(undefined), 0);
 });
 
 test('preferiti: gli ingredienti perdono il collegamento ma tengono i valori', () => {
@@ -127,8 +140,15 @@ test('voce: prepRef noto diventa prepId, sconosciuto viene ignorato', () => {
     assert.deepEqual(out[2], { nome: 'Sugo', grammi: 100, calorie: 90 });
 });
 
-test('voce: preparazione senza quantità vale una porzione', () => {
-    const [ing] = risolviRiferimentiPrep([{ nome: 'Ragù', prepRef: 'P1' }], { P1: 'prep1' });
-    assert.equal(ing.prepPorzioni, 1);
+test('voce: senza grammi si usano quelli dell\'ultima volta', () => {
+    const [ing] = risolviRiferimentiPrep([{ nome: 'Ragù', prepRef: 'P1' }], { P1: 'prep1' }, { prep1: 250 });
+    assert.equal(ing.prepGrammi, 250);
+    assert.equal(ing.prepPorzioni, 0);
+});
+
+test('voce: senza grammi e senza ultima volta la porzione resta da completare', () => {
+    const [ing] = risolviRiferimentiPrep([{ nome: 'Ragù', prepRef: 'P1', prepPorzioni: 1 }], { P1: 'prep1' });
     assert.equal(ing.prepGrammi, 0);
+    assert.equal(ing.prepPorzioni, 0);
+    assert.equal(valoriPorzione(ing, ragu()).prepDaCompletare, true);
 });

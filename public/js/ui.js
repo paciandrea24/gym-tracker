@@ -1,7 +1,7 @@
-import { formatDate, getWeekLabel } from './utils.js?v=24';
-import { etichettaPorzione } from './services/mealPrepService.js?v=24';
-import { cercaProdottoOFF } from './services/pantryService.js?v=24';
-import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=24';
+import { formatDate, getWeekLabel } from './utils.js?v=25';
+import { etichettaPorzione } from './services/mealPrepService.js?v=25';
+import { cercaProdottoOFF } from './services/pantryService.js?v=25';
+import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=25';
 
 // --- RENDER LISTA SCHEDE (HOME) ---
 export function renderRoutinesList(container, routines, onOpenRoutine, onCreateRoutine, onEditRoutineName, onDeleteRoutine) {

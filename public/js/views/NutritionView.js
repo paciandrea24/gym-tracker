@@ -1,15 +1,15 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=24';
-import * as scanner from '../components/scanner.js?v=24';
-import * as modal from '../components/modal.js?v=24';
-import * as voice from '../components/voice.js?v=24';
-import * as ui from '../ui.js?v=24';
-import { exportToCSV } from '../utils.js?v=24';
-import * as pantryService from '../services/pantryService.js?v=24';
-import * as pantrySync from '../services/pantrySync.js?v=24';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=24';
-import { renderChiusuraGiornata } from '../components/dayClosure.js?v=24';
+import * as nutriService from '../services/nutriService.js?v=25';
+import * as scanner from '../components/scanner.js?v=25';
+import * as modal from '../components/modal.js?v=25';
+import * as voice from '../components/voice.js?v=25';
+import * as ui from '../ui.js?v=25';
+import { exportToCSV } from '../utils.js?v=25';
+import * as pantryService from '../services/pantryService.js?v=25';
+import * as pantrySync from '../services/pantrySync.js?v=25';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=25';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=25';
 
 // Ogni cambio di sezione crea una nuova NutritionView: gli eventi globali vanno sempre
 // all'istanza corrente (prima restavano legati alla prima, con dati vecchi).
@@ -575,14 +575,15 @@ export class NutritionView {
         }
     }
 
-    // Porzione di meal prep: si cambia la quantità, i valori li ricalcola il server dalla preparazione
+    // Porzione di meal prep: si cambiano i grammi, i valori li ricalcola il server dalla preparazione.
+    // Una porzione vecchia registrata "a porzioni" diventa in grammi.
     async handleEditPrepPortion(meal, ing) {
-        const inGrammi = ing.prepGrammi > 0;
+        const attuali = ing.prepGrammi > 0 ? ing.prepGrammi : ing.grammi;
         const res = await modal.showModal({
             type: 'prompt',
             title: `Modifica: ${ing.nome}`,
-            message: inGrammi ? 'Quanti grammi hai preso?' : 'Quante porzioni? (es. 1 o 0,5)',
-            inputValue: String(inGrammi ? ing.prepGrammi : ing.prepPorzioni).replace('.', ',')
+            message: 'Quanti grammi hai mangiato?',
+            inputValue: attuali > 0 ? String(Math.round(attuali)) : ''
         });
         if (res === null || res === false) return;
 
@@ -590,7 +591,8 @@ export class NutritionView {
         if (isNaN(valore) || valore <= 0) {
             return modal.showModal({ type: 'error', title: 'Errore', message: "Valore non valido." });
         }
-        if (inGrammi) ing.prepGrammi = valore; else ing.prepPorzioni = valore;
+        ing.prepGrammi = valore;
+        ing.prepPorzioni = 0;
 
         try {
             this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Ricalcolo valori...</div>`;

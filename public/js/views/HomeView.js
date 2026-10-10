@@ -1,8 +1,8 @@
 // public/js/views/HomeView.js
 
-import * as userService from '../services/userService.js?v=24';
-import * as nutriService from '../services/nutriService.js?v=24';
-import * as ui from '../ui.js?v=24';
+import * as userService from '../services/userService.js?v=25';
+import * as nutriService from '../services/nutriService.js?v=25';
+import * as ui from '../ui.js?v=25';
 
 export class HomeView {
     constructor(container, onNavigateToGym, onNavigateToNutri) {

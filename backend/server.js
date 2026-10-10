@@ -7,7 +7,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import webpush from 'web-push';
 import {
-    ricalcolaPasto, totaliDaIngredienti, riepilogoConsumo, senzaCollegamentiPrep, risolviRiferimentiPrep, valoriPorzione
+    ricalcolaPasto, totaliDaIngredienti, riepilogoConsumo, senzaCollegamentiPrep, risolviRiferimentiPrep, valoriPorzione,
+    pesoCrudo
 } from './mealPrep.js';
 import { tokenizza, classificaMatch } from './matching.js';
 import { componiConsigli } from './nutrizionista.js';
@@ -26,7 +27,10 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '../public')));
 
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ Connesso a MongoDB"))
+    .then(() => {
+        console.log("✅ Connesso a MongoDB");
+        allineaPesiPreparazioni().catch(err => console.error("❌ Allineamento meal prep:", err.message));
+    })
     .catch(err => console.error("❌ Errore MongoDB:", err));
 
 // --- SCHEMI DATABASE ---
@@ -514,7 +518,7 @@ function estraiJSON(testo, apertura, chiusura) {
 
 // Trasforma un testo dettato in { pasto, alimenti, ingredienti[] }.
 // prepsAttive: preparazioni che l'AI deve riconoscere invece di stimarne i valori.
-async function analizzaTesto(text, prepsAttive = []) {
+async function analizzaTesto(text, prepsAttive = [], grammiSoliti = {}) {
     const refMap = {};
     const righePrep = prepsAttive.map((p, i) => {
         const ref = `P${i + 1}`;
@@ -526,8 +530,8 @@ async function analizzaTesto(text, prepsAttive = []) {
         6. L'utente ha queste PREPARAZIONI già cucinate (meal prep), di cui mangia una parte:
 ${righePrep}
            Se nomina chiaramente uno di questi piatti, NON stimarne i valori: inserisci l'ingrediente con
-           "prepRef" (es. "P1") e "prepGrammi" SOLO se ha detto esplicitamente i grammi, altrimenti
-           "prepPorzioni" ("una porzione" = 1, "mezza porzione" = 0.5, quantità non detta = 1).
+           "prepRef" (es. "P1") e "prepGrammi" SOLO se ha detto esplicitamente i grammi; altrimenti
+           ometti "prepGrammi" (l'app userà la sua porzione solita).
            Per questi ingredienti metti calorie, proteine, grassi e carboidrati a 0: li calcola l'app.`;
 
     const dizionarioPersonale = `
@@ -567,7 +571,7 @@ ${righePrep}
         }`;
 
     const data = estraiJSON(await generaJSON(prompt), '{', '}');
-    let ingredienti = risolviRiferimentiPrep(Array.isArray(data.ingredienti) ? data.ingredienti : [], refMap);
+    let ingredienti = risolviRiferimentiPrep(Array.isArray(data.ingredienti) ? data.ingredienti : [], refMap, grammiSoliti);
 
     if (ingredienti.length === 0) {
         ingredienti = [{
@@ -604,7 +608,9 @@ app.post('/api/analyze-meal', async (req, res) => {
         console.log("🗣️ Testo ricevuto dall'app:", text);
 
         const prepsAttive = await MealPrep.find({ attiva: true }).select('nome calorie proteine carboidrati grassi pesoTotaleCotto porzioniPreviste').lean();
-        const mealData = await analizzaTesto(text, prepsAttive);
+        const gruppi = await porzioniPerPrep(prepsAttive.map(p => p._id));
+        const grammiSoliti = Object.fromEntries(prepsAttive.map(p => [String(p._id), riepilogoConsumo(p, gruppi.get(String(p._id))).ultimiGrammi]));
+        const mealData = await analizzaTesto(text, prepsAttive, grammiSoliti);
         const totaliNuovi = totaliDaIngredienti(mealData.ingredienti);
 
         // SE C'È UN MEAL ID -> AGGIUNGO AL PASTO ESISTENTE
@@ -696,6 +702,23 @@ function aggiornaTotaliLotto(prep) {
     Object.assign(prep, totaliDaIngredienti(prep.ingredienti));
 }
 
+// Il peso del lotto è quello degli ingredienti crudi (il cotto si considera pesante uguale).
+// Le preparazioni ancora senza peso lo ricevono all'avvio e le loro porzioni "da completare" si riempiono;
+// quelle con un peso del cotto inserito a mano in passato lo tengono finché non se ne cambiano gli ingredienti.
+async function allineaPesiPreparazioni() {
+    const senzaPeso = await MealPrep.find({ $or: [{ pesoTotaleCotto: { $in: [0, null] } }, { pesoTotaleCotto: { $exists: false } }] });
+    let allineate = 0;
+    for (const prep of senzaPeso) {
+        const peso = pesoCrudo(prep.ingredienti);
+        if (peso <= 0) continue;
+        prep.pesoTotaleCotto = peso;
+        await prep.save();
+        await ricalcolaPastiCollegati(prep);
+        allineate++;
+    }
+    if (allineate) console.log(`🍲 Meal prep: peso crudo impostato su ${allineate} preparazioni`);
+}
+
 app.get('/api/preps', async (req, res) => {
     try {
         const filtro = req.query.stato === 'tutte' ? {} : { attiva: true };
@@ -730,17 +753,19 @@ app.post('/api/preps', async (req, res) => {
     }
 });
 
-// Modifica nome, ingredienti, peso cotto, porzioni previste o stato: ricalcola i pasti collegati
+// Modifica nome, ingredienti o stato: ricalcola i pasti collegati.
+// Il peso del lotto non arriva dal client: quando cambiano gli ingredienti diventa il loro peso crudo.
 app.put('/api/preps/:id', async (req, res) => {
     try {
         const prep = await MealPrep.findById(req.params.id);
         if (!prep) return res.status(404).json({ success: false, error: 'Preparazione non trovata' });
 
-        const { nome, ingredienti, pesoTotaleCotto, porzioniPreviste, attiva } = req.body;
+        const { nome, ingredienti, attiva } = req.body;
         if (typeof nome === 'string' && nome.trim()) prep.nome = nome.trim();
-        if (Array.isArray(ingredienti)) prep.ingredienti = senzaCollegamentiPrep(ingredienti);
-        if (pesoTotaleCotto !== undefined) prep.pesoTotaleCotto = Math.max(0, Number(pesoTotaleCotto) || 0);
-        if (porzioniPreviste !== undefined) prep.porzioniPreviste = Math.max(0, Number(porzioniPreviste) || 0);
+        if (Array.isArray(ingredienti)) {
+            prep.ingredienti = senzaCollegamentiPrep(ingredienti);
+            prep.pesoTotaleCotto = pesoCrudo(prep.ingredienti);
+        }
         if (typeof attiva === 'boolean') prep.attiva = attiva;
         aggiornaTotaliLotto(prep);
         await prep.save();
@@ -795,12 +820,9 @@ app.post('/api/preps/:id/portion', async (req, res) => {
 
         const { mealId, pasto } = req.body;
         const prepGrammi = Math.max(0, Number(req.body.prepGrammi) || 0);
-        const prepPorzioni = prepGrammi > 0 ? 0 : Math.max(0, Number(req.body.prepPorzioni) || 0);
-        if (!prepGrammi && !prepPorzioni) {
-            return res.status(400).json({ success: false, error: 'Indica i grammi o le porzioni.' });
-        }
+        if (!prepGrammi) return res.status(400).json({ success: false, error: 'Indica quanti grammi hai mangiato.' });
 
-        const ing = { nome: prep.nome, prepId: prep._id, prepGrammi, prepPorzioni };
+        const ing = { nome: prep.nome, prepId: prep._id, prepGrammi, prepPorzioni: 0 };
         const preps = new Map([[String(prep._id), prep]]);
         let meal;
 

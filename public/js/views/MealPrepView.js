@@ -1,51 +1,89 @@
 // public/js/views/MealPrepView.js
 // Meal prep: un lotto cucinato una volta (es. ragù) e mangiato in più giorni.
+// Si pesano gli ingredienti crudi e, ogni giorno, i grammi che si mangiano. Il cotto si considera
+// pesante quanto il crudo (stima scelta dall'utente): niente pentola da pesare, niente porzioni.
 
-import * as prepService from '../services/mealPrepService.js?v=24';
-import * as nutriService from '../services/nutriService.js?v=24';
-import * as pantryService from '../services/pantryService.js?v=24';
-import * as pantrySync from '../services/pantrySync.js?v=24';
-import * as scanner from '../components/scanner.js?v=24';
-import * as voice from '../components/voice.js?v=24';
-import * as modal from '../components/modal.js?v=24';
-import * as ui from '../ui.js?v=24';
+import * as prepService from '../services/mealPrepService.js?v=25';
+import * as nutriService from '../services/nutriService.js?v=25';
+import * as pantryService from '../services/pantryService.js?v=25';
+import * as pantrySync from '../services/pantrySync.js?v=25';
+import * as scanner from '../components/scanner.js?v=25';
+import * as voice from '../components/voice.js?v=25';
+import * as modal from '../components/modal.js?v=25';
+import * as ui from '../ui.js?v=25';
+import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=25';
+import { apriFoglio } from '../components/sheet.js?v=25';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const num = (n) => String(Math.round((Number(n) || 0) * 10) / 10).replace('.', ',');
-const dataBreve = (d) => new Date(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+const leggiNumero = (v) => parseFloat(String(v).replace(',', '.')) || 0;
+const maiuscola = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const giornoLungo = (d) => new Date(d).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+const giornoBreve = (d) => maiuscola(new Date(d).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }));
 
-function rigaMacro(v) {
-    return `${Math.round(v.calorie)} kcal · P ${num(v.proteine)} · C ${num(v.carboidrati)} · G ${num(v.grassi)}`;
-}
+const BTN_PRINCIPALE = 'w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform';
+const BTN_SECONDARIO = 'w-full bg-white border border-gray-200 text-gray-800 font-bold text-[15px] py-3.5 rounded-2xl active:scale-95 transition-transform';
+const CARD = 'bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100';
 
-function valoriPerUnita(prep) {
-    const righe = [];
-    const porzione = prepService.anteprimaPorzione(prep, { prepPorzioni: 1 });
-    const cento = prepService.anteprimaPorzione(prep, { prepGrammi: 100 });
-    if (porzione) righe.push(`<p class="text-[12px] font-bold text-gray-600"><span class="text-gray-400">1 porzione</span> · ${rigaMacro(porzione)}</p>`);
-    if (cento) righe.push(`<p class="text-[12px] font-bold text-gray-600"><span class="text-gray-400">100 g</span> · ${rigaMacro(cento)}</p>`);
-    if (righe.length === 0) {
-        righe.push(`<p class="text-[12px] font-bold text-orange-500">⚠️ Imposta il peso del cotto o il numero di porzioni</p>`);
-    }
-    return righe.join('');
-}
+const ICONA_INDIETRO = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>`;
+const ICONA_AVANTI = `<svg class="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>`;
+const ICONA_MATITA = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>`;
+const ICONA_MIC = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>`;
 
-function barraConsumo(prep) {
-    const r = prep.riepilogo || { quotaUsata: 0, grammiUsati: null, porzioniUsate: null };
-    const perc = Math.round(r.quotaUsata * 100);
-    const dettagli = [];
-    if (r.grammiUsati !== null) dettagli.push(`${r.grammiUsati} g su ${prep.pesoTotaleCotto} g`);
-    if (r.porzioniUsate !== null) dettagli.push(`${num(r.porzioniUsate)} su ${num(prep.porzioniPreviste)} porzioni`);
-    const colore = perc >= 100 ? 'bg-green-500' : 'bg-indigo-500';
+const pesoIngredienti = (p) => Math.round(p.ingredienti.reduce((s, ing) => s + (Number(ing.grammi) || 0), 0));
+
+function valoriOgni100(p, { grande = false } = {}) {
+    const v = perCento(p, p.pesoTotaleCotto);
+    if (!v) return `<p class="text-[14px] font-semibold text-gray-500">Aggiungi gli ingredienti crudi con i loro pesi per vedere i valori.</p>`;
     return `
-        <div class="mt-3">
-            <div class="flex justify-between text-[11px] font-bold mb-1">
-                <span class="text-gray-500">${perc >= 100 ? '✅ Finita' : `Usato ${perc}%`}</span>
-                <span class="text-gray-400">${dettagli.join(' · ')}</span>
+        <p class="text-[11px] font-semibold text-gray-400">Ogni 100 g</p>
+        <p class="text-gray-900"><span class="${grande ? 'text-3xl' : 'text-2xl'} font-black">${intero(v.calorie)}</span> <span class="text-sm font-bold text-gray-400">kcal</span></p>
+        <div class="mt-2">${macroColonne(v, { dimensione: grande ? 'text-[15px]' : 'text-[14px]' })}</div>`;
+}
+
+function rimasti(p) {
+    const r = p.riepilogo || {};
+    if (!(p.pesoTotaleCotto > 0) || r.grammiRimasti == null) return '';
+    const perc = Math.min(100, Math.round(r.grammiRimasti / p.pesoTotaleCotto * 100));
+    return `
+        <div>
+            <div class="flex justify-between text-[13px] font-bold mb-1.5">
+                <span class="text-gray-900">${r.grammiRimasti > 0 ? `Rimasti circa ${r.grammiRimasti} g` : 'Finita'}</span>
+                <span class="text-gray-400">su ${p.pesoTotaleCotto} g</span>
             </div>
-            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div class="${colore} h-2 rounded-full" style="width:${Math.min(100, perc)}%"></div>
+            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden"><div class="bg-indigo-500 h-2 rounded-full" style="width:${perc}%"></div></div>
+        </div>`;
+}
+
+function notaPeso(p) {
+    const crudo = pesoIngredienti(p);
+    return p.pesoTotaleCotto === crudo
+        ? `Tutto il lotto: ${intero(p.calorie)} kcal. Stima: il cotto conta come gli ingredienti crudi (${crudo} g).`
+        : `Tutto il lotto: ${intero(p.calorie)} kcal, su ${p.pesoTotaleCotto} g di cotto.`;
+}
+
+function quantitaPorzione(por) {
+    if (por.prepGrammi > 0) return `${intero(por.prepGrammi)} g`;
+    if (por.grammi > 0) return `${intero(por.grammi)} g`;
+    return prepService.etichettaPorzione(por);
+}
+
+// Voce (principale) e Manuale / Scanner / Preferiti, più lo scanner che si apre al posto dei pulsanti
+function metodiAggiunta() {
+    const tasto = (id, icona, testo) => `
+        <button id="${id}" class="bg-white border border-gray-200 text-gray-800 font-bold text-[13px] py-3 rounded-2xl flex flex-col items-center gap-0.5 active:scale-95 transition-transform">
+            <span class="text-lg leading-none">${icona}</span>${testo}
+        </button>`;
+    return `
+        <div id="prep-action-buttons" class="space-y-2">
+            <button id="prep-voice-btn" class="${BTN_PRINCIPALE} flex justify-center items-center gap-2">${ICONA_MIC} Voce</button>
+            <div class="grid grid-cols-3 gap-2">
+                ${tasto('prep-manual-btn', '➕', 'Manuale')}${tasto('prep-scan-btn', '📷', 'Scanner')}${tasto('prep-fav-btn', '⭐', 'Preferiti')}
             </div>
+        </div>
+        <div id="prep-scanner-container" class="hidden bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
+            <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra il codice a barre</p>
+            <video id="prep-reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[220px]" autoplay playsinline></video>
+            <button id="prep-close-scanner" class="w-full bg-white text-gray-900 font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla</button>
         </div>`;
 }
 
@@ -63,7 +101,18 @@ export class MealPrepView {
         this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-gray-500">${testo}</div>`;
     }
 
-    // ─── LISTA ─────────────────────────────────────────────────────────────
+    intestazione(titolo, { idIndietro, conMatita = false } = {}) {
+        return `
+            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
+                <div class="flex items-center min-w-0">
+                    <button id="${idIndietro}" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2" aria-label="Indietro">${ICONA_INDIETRO}</button>
+                    <h1 class="text-xl font-bold text-gray-900 truncate">${titolo}</h1>
+                </div>
+                ${conMatita ? `<button id="rename-prep-btn" class="p-2 text-gray-500 bg-gray-100 rounded-full active:scale-95" aria-label="Rinomina">${ICONA_MATITA}</button>` : ''}
+            </header>`;
+    }
+
+    // ─── ELENCO ────────────────────────────────────────────────────────────
     async renderList() {
         this.loading('Caricamento preparazioni...');
         let preps;
@@ -77,48 +126,44 @@ export class MealPrepView {
         const attive = preps.filter(p => p.attiva);
         const concluse = preps.filter(p => !p.attiva);
 
-        this.container.innerHTML = `
-            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
-                <button id="prep-back-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                </button>
-                <h1 class="text-xl font-bold text-gray-900 truncate">Meal Prep</h1>
-            </header>
-            <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50 min-h-screen">
-                <button id="new-prep-btn" class="w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform">
-                    ➕ Nuova preparazione
-                </button>
+        const card = (p) => `
+            <div data-id="${p._id}" class="apri-prep ${CARD} cursor-pointer">
+                <div class="flex justify-between items-start gap-2">
+                    <div class="min-w-0">
+                        <h3 class="text-lg font-black text-gray-900 leading-tight">${esc(p.nome)}</h3>
+                        <p class="text-[12px] font-semibold text-gray-400 mt-0.5">Cucinato ${giornoLungo(p.dataCreazione)}</p>
+                    </div>
+                    <span class="mt-1">${ICONA_AVANTI}</span>
+                </div>
+                <div class="mt-4 bg-gray-50 border border-gray-100 rounded-2xl p-3">${valoriOgni100(p)}</div>
+                ${p.pesoTotaleCotto > 0 ? `<div class="mt-4">${rimasti(p)}</div>` : ''}
+                ${p.pesoTotaleCotto > 0
+                    ? `<button data-id="${p._id}" class="add-portion-btn mt-5 ${BTN_PRINCIPALE} !py-3.5 !shadow-none">+ Aggiungi a oggi</button>`
+                    : `<button data-id="${p._id}" class="open-prep-btn mt-5 ${BTN_SECONDARIO}">Aggiungi gli ingredienti</button>`}
+            </div>`;
 
+        this.container.innerHTML = `
+            ${this.intestazione('Meal prep', { idIndietro: 'prep-back-btn' })}
+            <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50 min-h-screen">
                 ${attive.length === 0 ? `
-                    <div class="text-center py-8 px-4">
+                    <div class="text-center py-6 px-4">
                         <p class="text-4xl mb-3">🍲</p>
-                        <p class="text-gray-500 font-medium text-sm leading-relaxed">Quando cucini qualcosa che dura più giorni (es. il ragù), registralo qui una volta sola: poi ogni giorno aggiungi solo la tua porzione.</p>
+                        <p class="text-gray-600 font-medium text-[15px] leading-relaxed">Quando cucini qualcosa che dura più giorni (es. il ragù), registralo qui una volta sola con i suoi ingredienti crudi. Poi ogni giorno scrivi solo quanti grammi ne mangi.</p>
                     </div>
-                ` : attive.map(p => `
-                    <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                        <div class="flex justify-between items-start mb-2">
-                            <div class="pr-2">
-                                <h3 class="text-lg font-black text-gray-900 leading-tight">🍲 ${esc(p.nome)}</h3>
-                                <p class="text-[11px] font-bold text-gray-400 mt-0.5">Cucinato il ${dataBreve(p.dataCreazione)} · lotto ${Math.round(p.calorie)} kcal</p>
-                            </div>
-                        </div>
-                        <div class="space-y-0.5">${valoriPerUnita(p)}</div>
-                        ${barraConsumo(p)}
-                        <div class="flex gap-2 mt-4">
-                            <button data-id="${p._id}" class="add-portion-btn flex-1 bg-indigo-600 text-white font-black text-sm py-3 rounded-2xl active:scale-95 transition-transform">+ Porzione</button>
-                            <button data-id="${p._id}" class="open-prep-btn flex-1 bg-gray-100 text-gray-700 font-bold text-sm py-3 rounded-2xl active:scale-95 transition-transform">Dettagli</button>
-                        </div>
-                    </div>
-                `).join('')}
+                    <button id="new-prep-btn" class="${BTN_PRINCIPALE}">+ Nuova preparazione</button>
+                ` : `
+                    ${attive.map(card).join('')}
+                    <button id="new-prep-btn" class="${BTN_SECONDARIO}">+ Nuova preparazione</button>
+                `}
 
                 ${concluse.length > 0 ? `
-                    <details class="bg-white rounded-2xl border border-gray-100 p-4">
+                    <details class="bg-white rounded-2xl border border-gray-100 px-4 py-3">
                         <summary class="text-xs font-bold text-gray-400 uppercase tracking-widest cursor-pointer">Concluse (${concluse.length})</summary>
-                        <div class="mt-3 space-y-2">
+                        <div class="mt-2 divide-y divide-gray-100">
                             ${concluse.map(p => `
-                                <button data-id="${p._id}" class="open-prep-btn w-full text-left flex justify-between items-center bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5 active:scale-95 transition-transform">
-                                    <span class="font-bold text-gray-700 text-sm">${esc(p.nome)} <span class="text-[11px] text-gray-400">· ${dataBreve(p.dataCreazione)}</span></span>
-                                    <span class="text-[11px] font-bold text-gray-400">${Math.round((p.riepilogo?.quotaUsata || 0) * 100)}%</span>
+                                <button data-id="${p._id}" class="open-prep-btn w-full text-left flex justify-between items-center py-3 active:opacity-60">
+                                    <span class="font-bold text-gray-700 text-[15px]">${esc(p.nome)}</span>
+                                    <span class="flex items-center gap-2 text-[12px] font-semibold text-gray-400">${giornoBreve(p.dataCreazione)} ${ICONA_AVANTI}</span>
                                 </button>
                             `).join('')}
                         </div>
@@ -129,6 +174,11 @@ export class MealPrepView {
 
         document.getElementById('prep-back-btn').addEventListener('click', () => this.onBack());
         document.getElementById('new-prep-btn').addEventListener('click', () => this.handleNewPrep());
+        this.container.querySelectorAll('.apri-prep').forEach(el =>
+            el.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return; // i pulsanti della card hanno la loro azione
+                this.renderDetail(el.dataset.id);
+            }));
         this.container.querySelectorAll('.open-prep-btn').forEach(btn =>
             btn.addEventListener('click', () => this.renderDetail(btn.dataset.id)));
         this.container.querySelectorAll('.add-portion-btn').forEach(btn =>
@@ -166,140 +216,111 @@ export class MealPrepView {
 
     drawDetail() {
         const p = this.prep;
-        const ingredientiHtml = p.ingredienti.length === 0
-            ? `<p class="text-center text-sm font-medium text-gray-500 py-4">Aggiungi gli ingredienti crudi che hai usato (es. passata 700 g, macinato 500 g, olio...).</p>`
-            : p.ingredienti.map((ing, idx) => `
-                <div class="flex justify-between items-center py-3 ${idx > 0 ? 'border-t border-gray-100' : ''}">
-                    <div class="pr-2 flex-1 min-w-0">
-                        <p class="text-[15px] font-bold text-gray-800 leading-tight break-words">${esc(ing.nome)}</p>
-                        <p class="text-[11px] font-bold text-gray-400 mt-0.5">${ing.grammi ? `${num(ing.grammi)} g · ` : ''}${rigaMacro(ing)}</p>
-                    </div>
-                    <div class="flex items-center space-x-1 flex-shrink-0">
-                        <button data-idx="${idx}" class="edit-prep-ing-btn p-2 text-gray-400 bg-gray-50 rounded-full active:scale-95">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                        </button>
-                        <button data-idx="${idx}" class="remove-prep-ing-btn p-2 text-gray-400 bg-gray-50 rounded-full active:scale-95">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-
-        const porzioniHtml = p.porzioni.length === 0
-            ? `<p class="text-center text-sm font-medium text-gray-500 py-2">Nessuna porzione registrata.</p>`
-            : p.porzioni.map(por => `
-                <div class="flex justify-between items-center py-2 text-sm">
-                    <span class="font-bold text-gray-700">${dataBreve(por.data)} · ${esc(por.pasto)}</span>
-                    <span class="font-bold text-gray-500">${prepService.etichettaPorzione(por)} · ${por.prepDaCompletare ? '⚠️ da completare' : `${Math.round(por.calorie)} kcal`}</span>
-                </div>
-            `).join('');
-
+        const vuota = p.ingredienti.length === 0;
         this.container.innerHTML = `
-            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
-                <div class="flex items-center min-w-0">
-                    <button id="prep-detail-back" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                    </button>
-                    <h1 class="text-xl font-bold text-gray-900 truncate">🍲 ${esc(p.nome)}</h1>
-                </div>
-                <button id="rename-prep-btn" class="p-2 text-gray-500 bg-gray-100 rounded-full active:scale-95">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                </button>
-            </header>
-
-            <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
+            ${this.intestazione(esc(p.nome), { idIndietro: 'prep-detail-back', conMatita: true })}
+            <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50 min-h-screen">
                 ${!p.attiva ? `<div class="bg-gray-200 text-gray-600 text-xs font-bold text-center rounded-xl py-2">Preparazione conclusa</div>` : ''}
-
-                <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Totale lotto</p>
-                    <span class="text-3xl font-black text-gray-900">${Math.round(p.calorie)} <span class="text-sm font-bold text-gray-400">kcal</span></span>
-                    <div class="grid grid-cols-3 gap-2 mt-3">
-                        <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100"><p class="text-[9px] font-bold text-blue-500 uppercase">Pro</p><p class="text-sm font-black text-gray-800">${num(p.proteine)}g</p></div>
-                        <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100"><p class="text-[9px] font-bold text-green-500 uppercase">Car</p><p class="text-sm font-black text-gray-800">${num(p.carboidrati)}g</p></div>
-                        <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100"><p class="text-[9px] font-bold text-yellow-500 uppercase">Fat</p><p class="text-sm font-black text-gray-800">${num(p.grassi)}g</p></div>
-                    </div>
-                    ${barraConsumo(p)}
-                </div>
-
-                <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 space-y-3">
-                    <p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Come la dividi</p>
-                    <div class="flex gap-2">
-                        <div class="flex-1">
-                            <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Peso cotto (g)</label>
-                            <input type="number" inputmode="decimal" id="prep-peso" value="${p.pesoTotaleCotto || ''}" placeholder="es. 1200" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
-                        </div>
-                        <div class="flex-1">
-                            <label class="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Porzioni</label>
-                            <input type="number" inputmode="decimal" id="prep-porzioni" value="${p.porzioniPreviste || ''}" placeholder="es. 4" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900">
-                        </div>
-                    </div>
-                    <p class="text-[11px] font-medium text-gray-400 leading-snug">Pesa il cotto senza pentola. Le porzioni sono una stima: se cambiano, correggile qui e i giorni già registrati si ricalcolano.</p>
-                    <div class="space-y-0.5">${valoriPerUnita(p)}</div>
-                    <button id="save-prep-settings" class="w-full bg-gray-900 text-white font-bold py-3 rounded-2xl active:scale-95 transition-transform">Salva e ricalcola</button>
-                </div>
-
-                ${p.attiva ? `
-                <button id="detail-add-portion" class="w-full bg-indigo-600 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(79,70,229,0.25)] active:scale-95 transition-transform">
-                    + Aggiungi una porzione a oggi
-                </button>` : ''}
-
-                <div class="space-y-3">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Ingredienti (crudi)</h3>
-                    <button id="prep-voice-btn" class="w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform flex justify-center items-center gap-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                        VOCE
-                    </button>
-                    <div id="prep-action-buttons" class="flex space-x-2">
-                        <button id="prep-manual-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform">➕ Manuale</button>
-                        <button id="prep-scan-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform">📷 Scanner</button>
-                        <button id="prep-fav-btn" class="flex-1 bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform">⭐ Preferiti</button>
-                    </div>
-                    <div id="prep-scanner-container" class="hidden bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
-                        <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider">Inquadra il codice a barre</p>
-                        <video id="prep-reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[220px]" autoplay playsinline></video>
-                        <button id="prep-close-scanner" class="w-full bg-red-500 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform">Annulla Scansione</button>
-                    </div>
-                    <div class="bg-white px-5 py-2 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                        ${ingredientiHtml}
-                    </div>
-                </div>
-
-                <div class="space-y-2">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Porzioni registrate</h3>
-                    <div class="bg-white px-5 py-2 rounded-[24px] border border-gray-100 divide-y divide-gray-100">${porzioniHtml}</div>
-                </div>
-
-                <div class="flex gap-2 pt-2">
-                    <button id="toggle-prep-active" class="flex-1 bg-white border border-gray-200 text-gray-700 font-bold text-sm py-3 rounded-2xl active:scale-95 transition-transform">
-                        ${p.attiva ? '✅ Concludi' : '↩️ Riattiva'}
-                    </button>
-                    ${p.porzioni.length === 0 ? `
-                    <button id="delete-prep-btn" class="flex-1 bg-red-50 border border-red-100 text-red-600 font-bold text-sm py-3 rounded-2xl active:scale-95 transition-transform">🗑️ Elimina</button>` : ''}
-                </div>
+                ${vuota ? this.htmlPassi() : this.htmlDettaglio()}
             </main>
         `;
         this.bindDetail();
+    }
+
+    // Preparazione appena creata: i due passi, con i pulsanti centrati sotto il primo
+    htmlPassi() {
+        const passo = (n, attivo, titolo, testo) => `
+            <div class="${CARD}">
+                <div class="flex gap-3">
+                    <span class="w-7 h-7 rounded-full ${attivo ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-600'} text-sm font-black flex items-center justify-center flex-shrink-0">${n}</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-black text-gray-900">${titolo}</p>
+                        <p class="text-[13px] font-medium text-gray-500 mt-0.5">${testo}</p>
+                    </div>
+                </div>
+            </div>`;
+        return `
+            <div class="space-y-3">
+                ${passo(1, true, 'Ingredienti crudi', 'Aggiungili con i loro pesi, come per un pasto: si scalano dalla dispensa.')}
+                ${metodiAggiunta()}
+                ${passo(2, false, 'Ogni giorno, i grammi che mangi', 'Pesa il piatto e scrivi i grammi, da qui o a voce ("pasta 80 g con 250 g di ragù"). I valori si calcolano dagli ingredienti crudi.')}
+            </div>
+            <button id="delete-prep-btn" class="w-full text-red-600 font-bold text-sm py-2">Elimina preparazione</button>`;
+    }
+
+    htmlDettaglio() {
+        const p = this.prep;
+        const ingredienti = p.ingredienti.map((ing, idx) => `
+            <button data-idx="${idx}" class="riga-ing w-full flex justify-between items-center py-3 text-left active:opacity-60">
+                <div class="min-w-0 pr-2">
+                    <p class="text-[15px] font-bold text-gray-800 leading-tight break-words">${esc(ing.nome)}</p>
+                    <p class="text-[12px] font-semibold text-gray-400 mt-0.5">${ing.grammi ? `${intero(ing.grammi)} g · ` : ''}${intero(ing.calorie)} kcal</p>
+                </div>
+                ${ICONA_AVANTI}
+            </button>`).join('');
+
+        const mangiato = p.porzioni.length === 0
+            ? `<p class="text-center text-sm font-medium text-gray-500 py-4">Ancora niente: la prima volta che la mangi usa "Aggiungi a oggi".</p>`
+            : p.porzioni.map(por => `
+                <div class="flex justify-between items-center gap-2 py-3 text-[14px]">
+                    <span class="font-bold text-gray-700">${giornoBreve(por.data)} · ${esc(por.pasto)}</span>
+                    <span class="font-bold text-gray-500 whitespace-nowrap">${por.prepDaCompletare ? '⚠️ da completare' : `${quantitaPorzione(por)} · ${intero(por.calorie)} kcal`}</span>
+                </div>`).join('');
+
+        return `
+            <div class="${CARD}">
+                ${valoriOgni100(p, { grande: true })}
+                <div class="border-t border-gray-100 mt-4 pt-3 space-y-3">
+                    ${rimasti(p)}
+                    <p class="text-[12px] font-semibold text-gray-400 leading-snug">${notaPeso(p)}</p>
+                </div>
+            </div>
+
+            ${p.attiva ? `<button id="detail-add-portion" class="${BTN_PRINCIPALE}">+ Aggiungi a oggi</button>` : ''}
+
+            <div>
+                <div class="flex justify-between items-end px-1 mb-2">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Ingredienti crudi</h3>
+                    <button id="toggle-metodi" class="text-[13px] font-bold text-indigo-600">+ Aggiungi</button>
+                </div>
+                <div id="pannello-metodi" class="hidden space-y-2 mb-3">${metodiAggiunta()}</div>
+                <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">${ingredienti}</div>
+            </div>
+
+            <div>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 mb-2">Mangiato finora</h3>
+                <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">${mangiato}</div>
+            </div>
+
+            <div class="space-y-1 pt-1">
+                <button id="toggle-prep-active" class="${BTN_SECONDARIO} !text-sm !py-3">${p.attiva ? 'Concludi preparazione' : 'Riattiva preparazione'}</button>
+                ${p.porzioni.length === 0 ? `<button id="delete-prep-btn" class="w-full text-red-600 font-bold text-sm py-2">Elimina preparazione</button>` : ''}
+            </div>`;
     }
 
     bindDetail() {
         const $ = (id) => document.getElementById(id);
         $('prep-detail-back').addEventListener('click', () => { scanner.stopScanner(); this.renderList(); });
         $('rename-prep-btn').addEventListener('click', () => this.handleRename());
-        $('save-prep-settings').addEventListener('click', () => this.handleSaveSettings());
         $('detail-add-portion')?.addEventListener('click', () =>
             openPortionSheet({ prepId: this.prep._id, onDone: () => this.renderDetail(this.prep._id) }));
+        $('toggle-metodi')?.addEventListener('click', (e) => {
+            const pannello = $('pannello-metodi');
+            const apri = pannello.classList.contains('hidden');
+            if (!apri) this.closeScanner();
+            pannello.classList.toggle('hidden', !apri);
+            e.currentTarget.textContent = apri ? 'Chiudi' : '+ Aggiungi';
+        });
         $('prep-voice-btn').addEventListener('click', (e) => this.handleVoice(e.currentTarget));
         $('prep-manual-btn').addEventListener('click', () => this.openManualForm());
         $('prep-scan-btn').addEventListener('click', () => this.handleScan());
         $('prep-close-scanner').addEventListener('click', () => this.closeScanner());
         $('prep-fav-btn').addEventListener('click', () => this.handleFavorites());
-        $('toggle-prep-active').addEventListener('click', () => this.handleToggleActive());
+        $('toggle-prep-active')?.addEventListener('click', () => this.handleToggleActive());
         $('delete-prep-btn')?.addEventListener('click', () => this.handleDelete());
 
-        this.container.querySelectorAll('.edit-prep-ing-btn').forEach(btn =>
-            btn.addEventListener('click', () => this.handleEditIngredient(parseInt(btn.dataset.idx, 10))));
-        this.container.querySelectorAll('.remove-prep-ing-btn').forEach(btn =>
-            btn.addEventListener('click', () => this.handleRemoveIngredient(parseInt(btn.dataset.idx, 10))));
+        this.container.querySelectorAll('.riga-ing').forEach(btn =>
+            btn.addEventListener('click', () => this.apriIngrediente(parseInt(btn.dataset.idx, 10))));
     }
 
     // Salva una modifica sul server e ridisegna con i dati aggiornati (porzioni ricalcolate incluse)
@@ -313,7 +334,7 @@ export class MealPrepView {
         this.prep = r.prep;
         this.drawDetail();
         if (r.pastiAggiornati > 0) {
-            pantrySync.showToast(`🔄 Ricalcolati ${r.pastiAggiornati} ${r.pastiAggiornati === 1 ? 'pasto' : 'pasti'}`, 'bg-indigo-600');
+            pantrySync.showToast(`🔄 Ricalcolati ${r.pastiAggiornati} ${r.pastiAggiornati === 1 ? 'pasto' : 'pasti'}`, 'bg-gray-900');
         }
         return r;
     }
@@ -322,15 +343,6 @@ export class MealPrepView {
         const nome = await modal.showModal({ type: 'prompt', title: 'Rinomina', message: 'Nuovo nome della preparazione', inputValue: this.prep.nome });
         if (!nome || !String(nome).trim()) return;
         await this.salva({ nome: String(nome).trim() });
-    }
-
-    async handleSaveSettings() {
-        const peso = parseFloat(String(document.getElementById('prep-peso').value).replace(',', '.')) || 0;
-        const porzioni = parseFloat(String(document.getElementById('prep-porzioni').value).replace(',', '.')) || 0;
-        if (peso < 0 || porzioni < 0) {
-            return modal.showModal({ type: 'error', title: 'Errore', message: 'Valori non validi.' });
-        }
-        await this.salva({ pesoTotaleCotto: peso, porzioniPreviste: porzioni }, 'Ricalcolo...');
     }
 
     async aggiungiIngredienti(nuovi) {
@@ -411,18 +423,35 @@ export class MealPrepView {
         });
     }
 
-    async handleEditIngredient(idx) {
+    // Tocco su un ingrediente: foglio per cambiare i grammi o toglierlo
+    apriIngrediente(idx) {
         const ing = this.prep.ingredienti[idx];
         if (!ing) return;
+        const { box, chiudi, intestazione, collegaChiudi } = apriFoglio({ id: 'prep-ing-sheet' });
+        box.innerHTML = `
+            ${intestazione(esc(ing.nome), `${intero(ing.calorie)} kcal · ${macroTesto(ing, { breve: true })}`)}
+            <label for="ing-grammi" class="block text-xs font-semibold text-gray-400 uppercase mb-2">Grammi crudi</label>
+            <input id="ing-grammi" type="number" inputmode="decimal" step="any" value="${ing.grammi || ''}" placeholder="es. 500"
+                class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-2xl font-black text-center outline-none focus:ring-2 focus:ring-gray-900 mb-4">
+            <button id="ing-salva" class="${BTN_PRINCIPALE}">Salva</button>
+            <button id="ing-togli" class="w-full text-red-600 font-bold text-sm py-3 mt-2">Togli dalla preparazione</button>`;
+        collegaChiudi();
+
+        box.querySelector('#ing-salva').addEventListener('click', () => {
+            const grammi = leggiNumero(box.querySelector('#ing-grammi').value);
+            if (grammi <= 0) return modal.showModal({ type: 'error', title: 'Grammi', message: 'Scrivi quanti grammi crudi hai usato.' });
+            chiudi();
+            if (grammi !== Number(ing.grammi)) this.cambiaGrammiIngrediente(idx, grammi);
+        });
+        box.querySelector('#ing-togli').addEventListener('click', () => {
+            chiudi();
+            this.togliIngrediente(idx);
+        });
+    }
+
+    async cambiaGrammiIngrediente(idx, nuoviGrammi) {
+        const ing = this.prep.ingredienti[idx];
         const vecchiGrammi = ing.grammi || 100;
-        const res = await modal.showModal({ type: 'prompt', title: `Modifica: ${ing.nome}`, message: 'Quanti grammi hai usato?', inputValue: String(vecchiGrammi) });
-        if (res === null || res === false) return;
-
-        const nuoviGrammi = parseFloat(String(res).replace(',', '.'));
-        if (isNaN(nuoviGrammi) || nuoviGrammi <= 0) {
-            return modal.showModal({ type: 'error', title: 'Errore', message: 'Valore non valido.' });
-        }
-
         const mult = nuoviGrammi / vecchiGrammi;
         const aggiornato = {
             ...ing, grammi: nuoviGrammi,
@@ -441,10 +470,10 @@ export class MealPrepView {
         else if (diff < 0) pantrySync.ripristinaDispensa(comePasto(prep, []), [{ nome: ing.nome, grammi: -diff }], 'Meal prep: riduzione grammi');
     }
 
-    async handleRemoveIngredient(idx) {
+    async togliIngrediente(idx) {
         const ing = this.prep.ingredienti[idx];
         if (!ing) return;
-        const ok = await modal.showModal({ type: 'confirm', title: 'Rimuovi', message: `Rimuovere "${ing.nome}" dalla preparazione?`, confirmText: 'Sì', cancelText: 'No' });
+        const ok = await modal.showModal({ type: 'confirm', title: 'Togli', message: `Togliere "${ing.nome}" dalla preparazione? Torna in dispensa.`, confirmText: 'Togli', cancelText: 'Annulla' });
         if (!ok) return;
 
         const prep = this.prep;
@@ -456,7 +485,7 @@ export class MealPrepView {
         const conclusa = this.prep.attiva;
         const r = await this.salva({ attiva: !this.prep.attiva });
         if (r && r.success && conclusa) {
-            pantrySync.showToast(`✅ ${this.prep.nome} conclusa`, 'bg-green-600');
+            pantrySync.showToast(`✅ ${this.prep.nome} conclusa`, 'bg-gray-900');
             this.renderList();
         }
     }
@@ -481,7 +510,7 @@ export class MealPrepView {
     }
 }
 
-// ─── FOGLIO "AGGIUNGI PORZIONE" ────────────────────────────────────────────
+// ─── FOGLIO "AGGIUNGI A OGGI" ──────────────────────────────────────────────
 // prepId: preparazione già scelta (altrimenti si sceglie tra le attive)
 // mealId: aggiunge la porzione a un pasto esistente (altrimenti crea un nuovo pasto)
 // onDone(meal): chiamata dopo il salvataggio
@@ -501,106 +530,56 @@ export async function openPortionSheet({ prepId = null, mealId = null, onDone = 
         return modal.showModal({ type: 'alert', title: 'Nessun meal prep', message: 'Non hai preparazioni attive. Creane una da Nutrizione › Prep.' });
     }
 
-    const stato = {
-        prep: preps.length === 1 ? preps[0] : null,
-        modo: null, pasto: prepService.pastoPerOra(new Date().getHours())
-    };
-
-    const sheet = document.createElement('div');
-    sheet.id = 'prep-portion-sheet';
-    sheet.className = 'fixed inset-0 z-[99990] flex items-end justify-center bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300';
-    sheet.innerHTML = `<div class="bg-white w-full max-w-md rounded-t-[2rem] p-6 shadow-2xl transform translate-y-full transition-transform duration-300 max-h-[88vh] overflow-y-auto [&::-webkit-scrollbar]:hidden" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));"></div>`;
-    document.getElementById('prep-portion-sheet')?.remove();
-    document.body.appendChild(sheet);
-    document.body.style.overflow = 'hidden';
-    const box = sheet.firstElementChild;
-
-    const chiudi = () => {
-        sheet.classList.add('opacity-0');
-        box.classList.add('translate-y-full');
-        setTimeout(() => { sheet.remove(); document.body.style.overflow = ''; }, 300);
-    };
-
-    const modoIniziale = (p) => {
-        try {
-            const salvato = localStorage.getItem(`prepUnita_${p._id}`);
-            if (salvato === 'grammi' || salvato === 'porzioni') return salvato;
-        } catch { }
-        return p.pesoTotaleCotto > 0 && !(p.porzioniPreviste > 0) ? 'grammi' : 'porzioni';
-    };
-
-    const intestazione = (titolo) => `
-        <div class="flex justify-between items-center mb-5">
-            <h2 class="text-xl font-black text-gray-900">${titolo}</h2>
-            <button class="close-sheet text-gray-400 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-        </div>`;
+    const stato = { prep: preps.length === 1 ? preps[0] : null, pasto: prepService.pastoPerOra(new Date().getHours()) };
+    const { box, chiudi, intestazione, collegaChiudi } = apriFoglio({ id: 'prep-portion-sheet' });
+    const testoRimasti = (p) => p.riepilogo?.grammiRimasti != null ? `Rimasti circa ${p.riepilogo.grammiRimasti} g` : '';
 
     function disegnaScelta() {
         box.innerHTML = `
             ${intestazione('Quale preparazione?')}
             <div class="space-y-2">
                 ${preps.map(p => `
-                    <button data-id="${p._id}" class="pick-prep w-full text-left bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 active:bg-indigo-50 transition-colors">
-                        <p class="font-black text-gray-800">🍲 ${esc(p.nome)}</p>
-                        <p class="text-[11px] font-bold text-gray-400">Usato ${Math.round((p.riepilogo?.quotaUsata || 0) * 100)}% · cucinato il ${dataBreve(p.dataCreazione)}</p>
+                    <button data-id="${p._id}" class="pick-prep w-full text-left bg-white border border-gray-200 rounded-2xl px-4 py-3.5 flex justify-between items-center active:bg-gray-50 transition-colors">
+                        <span class="min-w-0">
+                            <span class="block font-black text-gray-900">${esc(p.nome)}</span>
+                            <span class="block text-[12px] font-semibold text-gray-400">${[testoRimasti(p), `cucinato ${giornoBreve(p.dataCreazione).toLowerCase()}`].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        ${ICONA_AVANTI}
                     </button>`).join('')}
             </div>`;
-        box.querySelector('.close-sheet').addEventListener('click', chiudi);
+        collegaChiudi();
         box.querySelectorAll('.pick-prep').forEach(btn => btn.addEventListener('click', () => {
             stato.prep = preps.find(p => String(p._id) === btn.dataset.id);
-            stato.modo = null;
             disegna();
         }));
     }
 
     function disegna() {
         const p = stato.prep;
-        if (!stato.modo) stato.modo = modoIniziale(p);
-        const grammi = stato.modo === 'grammi';
-        const serveDato = grammi ? !(p.pesoTotaleCotto > 0) : !(p.porzioniPreviste > 0);
-        const r = p.riepilogo || { quotaUsata: 0, grammiUsati: null };
-        const rimasto = Math.max(0, 100 - Math.round(r.quotaUsata * 100));
-        const rimastoGrammi = r.grammiUsati !== null ? ` (~${Math.max(0, p.pesoTotaleCotto - r.grammiUsati)} g)` : '';
-        const tab = (modo, label) => `<button data-modo="${modo}" class="modo-btn flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${stato.modo === modo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}">${label}</button>`;
+        if (!(p.pesoTotaleCotto > 0)) {
+            box.innerHTML = `
+                ${intestazione(esc(p.nome))}
+                <p class="text-[15px] font-medium text-gray-600 mb-5">Prima aggiungi gli ingredienti crudi con i loro pesi: servono per calcolare i valori.</p>
+                <button class="chiudi-foglio ${BTN_SECONDARIO}">Ok</button>`;
+            collegaChiudi();
+            return;
+        }
+
+        const r = p.riepilogo || {};
+        const iniziali = r.ultimiGrammi || '';
+        const chip = (t) => `<button data-pasto="${t}" class="pasto-btn py-2.5 rounded-xl text-[12px] font-bold border transition-colors ${stato.pasto === t ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-600 border-gray-200'}">${t}</button>`;
 
         box.innerHTML = `
-            ${intestazione(`Porzione di ${esc(p.nome)}`)}
-            <p class="text-[12px] font-bold text-gray-400 -mt-3 mb-4">Rimasto circa ${rimasto}%${rimastoGrammi}</p>
+            ${intestazione(esc(p.nome), testoRimasti(p))}
+            <label for="portion-qty" class="block text-xs font-semibold text-gray-400 uppercase mb-2">Quanti grammi?</label>
+            <input id="portion-qty" type="number" inputmode="decimal" step="any" value="${iniziali}" placeholder="es. 250"
+                class="w-full bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-3xl font-black text-center outline-none focus:ring-2 focus:ring-indigo-500">
+            <p class="text-[12px] font-semibold text-gray-400 text-center mt-1.5 mb-4">${iniziali ? "Come l'ultima volta" : 'Pesa il piatto e scrivi i grammi'}</p>
+            ${mealId ? '' : `<div class="grid grid-cols-4 gap-1.5 mb-4">${['Colazione', 'Pranzo', 'Cena', 'Spuntino'].map(chip).join('')}</div>`}
+            <div id="portion-preview" class="bg-gray-50 border border-gray-100 rounded-2xl p-3 mb-4 text-center"></div>
+            <button id="portion-save" class="${BTN_PRINCIPALE}">${mealId ? 'Aggiungi al pasto' : 'Aggiungi a oggi'}</button>`;
+        collegaChiudi();
 
-            <div class="flex bg-gray-100 p-1 rounded-xl mb-4">${tab('porzioni', 'Porzioni')}${tab('grammi', 'Grammi')}</div>
-
-            <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">${grammi ? 'Quanti grammi hai preso?' : 'Quante porzioni?'}</label>
-            <input id="portion-qty" type="number" inputmode="decimal" step="any" value="${grammi ? '' : '1'}" placeholder="${grammi ? 'es. 250' : '1'}"
-                class="w-full bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-2xl font-black text-center outline-none focus:ring-2 focus:ring-indigo-500 mb-4">
-
-            ${serveDato ? `
-                <label class="block text-xs font-semibold text-orange-500 uppercase mb-2">${grammi ? 'Peso totale del cotto (g)' : 'In quante porzioni la dividi?'}</label>
-                <input id="portion-extra" type="number" inputmode="decimal" step="any" placeholder="${grammi ? 'es. 1200' : 'es. 4'}"
-                    class="w-full bg-orange-50 border border-orange-200 rounded-xl p-3 text-lg font-bold text-center outline-none focus:ring-2 focus:ring-orange-400 mb-1">
-                <p class="text-[11px] font-medium text-gray-400 mb-4">${grammi ? 'Serve una volta sola: pesa il cotto senza pentola.' : 'È una stima: potrai correggerla e i giorni registrati si ricalcolano.'}</p>
-            ` : ''}
-
-            ${mealId ? '' : `
-                <div class="grid grid-cols-4 gap-1.5 mb-4">
-                    ${['Colazione', 'Pranzo', 'Cena', 'Spuntino'].map(t => `
-                        <button data-pasto="${t}" class="pasto-btn py-2.5 rounded-xl text-[12px] font-bold border transition-colors ${stato.pasto === t ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-600 border-gray-200'}">${t}</button>
-                    `).join('')}
-                </div>`}
-
-            <div id="portion-preview" class="bg-gray-50 border border-gray-100 rounded-2xl p-3 text-center text-sm font-bold text-gray-700 mb-4"></div>
-
-            <button id="portion-save" class="w-full bg-indigo-600 text-white font-black text-[15px] py-4 rounded-2xl shadow-md active:scale-95 transition-transform">
-                ${mealId ? 'Aggiungi al pasto' : 'Aggiungi a oggi'}
-            </button>`;
-
-        box.querySelector('.close-sheet').addEventListener('click', chiudi);
-        box.querySelectorAll('.modo-btn').forEach(btn => btn.addEventListener('click', () => {
-            stato.modo = btn.dataset.modo;
-            try { localStorage.setItem(`prepUnita_${p._id}`, stato.modo); } catch { }
-            disegna();
-        }));
         box.querySelectorAll('.pasto-btn').forEach(btn => btn.addEventListener('click', () => {
             stato.pasto = btn.dataset.pasto;
             box.querySelectorAll('.pasto-btn').forEach(b => {
@@ -610,44 +589,37 @@ export async function openPortionSheet({ prepId = null, mealId = null, onDone = 
         }));
 
         const qtyInput = box.querySelector('#portion-qty');
-        const extraInput = box.querySelector('#portion-extra');
-        const leggi = (el) => el ? parseFloat(String(el.value).replace(',', '.')) || 0 : 0;
-
-        const aggiornaAnteprima = () => {
-            const qty = leggi(qtyInput);
-            const extra = leggi(extraInput);
-            const prepConExtra = { ...p };
-            if (extraInput && extra > 0) prepConExtra[grammi ? 'pesoTotaleCotto' : 'porzioniPreviste'] = extra;
-            const v = prepService.anteprimaPorzione(prepConExtra, grammi ? { prepGrammi: qty } : { prepPorzioni: qty });
-            box.querySelector('#portion-preview').textContent = v ? `≈ ${rigaMacro(v)}` : 'Inserisci i dati per vedere i valori';
+        const anteprima = () => {
+            const qty = leggiNumero(qtyInput.value);
+            const v = qty > 0 ? prepService.anteprimaPorzione(p, { prepGrammi: qty }) : null;
+            const el = box.querySelector('#portion-preview');
+            if (!v) {
+                el.innerHTML = `<p class="text-sm font-bold text-gray-500 py-2">Scrivi i grammi per vedere i valori</p>`;
+                return;
+            }
+            const restano = r.grammiRimasti != null ? Math.max(0, Math.round(r.grammiRimasti - qty)) : null;
+            el.innerHTML = `
+                <p class="text-gray-900"><span class="text-xl font-black">${intero(v.calorie)}</span> <span class="text-sm font-bold text-gray-400">kcal</span></p>
+                <div class="mt-2 text-left">${macroColonne(v, { dimensione: 'text-[14px]' })}</div>
+                ${restano !== null ? `<p class="text-[12px] font-semibold text-gray-400 mt-2">Dopo ne restano circa ${restano} g</p>` : ''}`;
         };
-        qtyInput.addEventListener('input', aggiornaAnteprima);
-        extraInput?.addEventListener('input', aggiornaAnteprima);
-        aggiornaAnteprima();
-        if (grammi) setTimeout(() => qtyInput.focus(), 350);
+        qtyInput.addEventListener('input', anteprima);
+        anteprima();
+        if (!iniziali) setTimeout(() => qtyInput.focus(), 350);
 
         box.querySelector('#portion-save').addEventListener('click', async () => {
-            const qty = leggi(qtyInput);
-            const extra = leggi(extraInput);
-            if (qty <= 0) return modal.showModal({ type: 'error', title: 'Quantità', message: grammi ? 'Inserisci i grammi.' : 'Inserisci il numero di porzioni.' });
-            if (extraInput && extra <= 0) return modal.showModal({ type: 'error', title: 'Manca un dato', message: grammi ? 'Inserisci il peso totale del cotto.' : 'Inserisci in quante porzioni la dividi.' });
+            const qty = leggiNumero(qtyInput.value);
+            if (qty <= 0) return modal.showModal({ type: 'error', title: 'Grammi', message: 'Scrivi quanti grammi hai mangiato.' });
 
             const btn = box.querySelector('#portion-save');
             btn.disabled = true;
             btn.textContent = 'Salvataggio...';
             try {
-                if (extraInput) {
-                    const up = await prepService.updatePrep(p._id, grammi ? { pesoTotaleCotto: extra } : { porzioniPreviste: extra });
-                    if (!up.success) throw new Error(up.error || 'Salvataggio non riuscito.');
-                }
-                const r = await prepService.addPortion(p._id, {
-                    ...(mealId ? { mealId } : { pasto: stato.pasto }),
-                    ...(grammi ? { prepGrammi: qty } : { prepPorzioni: qty })
-                });
-                if (!r.success) throw new Error(r.error || 'Salvataggio non riuscito.');
+                const res = await prepService.addPortion(p._id, { ...(mealId ? { mealId } : { pasto: stato.pasto }), prepGrammi: qty });
+                if (!res.success) throw new Error(res.error || 'Salvataggio non riuscito.');
                 chiudi();
-                pantrySync.showToast(`🍲 ${p.nome}: ${prepService.etichettaPorzione(grammi ? { prepGrammi: qty } : { prepPorzioni: qty })} aggiunta`, 'bg-indigo-600');
-                onDone(r.meal);
+                pantrySync.showToast(`🍲 ${p.nome}: ${intero(qty)} g aggiunti`, 'bg-gray-900');
+                onDone(res.meal);
             } catch (e) {
                 btn.disabled = false;
                 btn.textContent = mealId ? 'Aggiungi al pasto' : 'Aggiungi a oggi';
@@ -657,8 +629,4 @@ export async function openPortionSheet({ prepId = null, mealId = null, onDone = 
     }
 
     if (stato.prep) disegna(); else disegnaScelta();
-    requestAnimationFrame(() => {
-        sheet.classList.remove('opacity-0');
-        box.classList.remove('translate-y-full');
-    });
 }
