@@ -183,3 +183,7 @@ Codice: le schermate della palestra escono da `ui.js` e vanno in `views/gymUi.js
   helper di formato.
 - Prova end-to-end in locale (Mongo in memoria, Edge a viewport iPhone) dei flussi: nuova
   preparazione, ingredienti, aggiunta a oggi, modifica e rimozione ingrediente, voce.
+- Palestra: unit test su `gymLogic.js` (passo, drop, peso reale, volume, superserie e giri, serie
+  iniziali, progressi, righe del CSV) e prova end-to-end del flusso completo: modulo, trascinamento
+  e "Separa", esercizio da 7,5 a 4 kg con il "−" e drop, superserie a giri con drop, storico,
+  progressi. Nel grafico "Peso più alto" le colonne partono da zero.
