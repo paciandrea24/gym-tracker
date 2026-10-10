@@ -23,7 +23,8 @@ function setupNavigation() {
     if (navPantry) navPantry.addEventListener('click', () => switchModule('pantry'));
 }
 
-function switchModule(module) {
+// opzioni.spesa: apre la Dispensa direttamente sulla lista della spesa (dalla Home)
+function switchModule(module, opzioni = {}) {
     currentAppModule = module;
 
     const navHome = document.getElementById('nav-home');
@@ -40,22 +41,16 @@ function switchModule(module) {
     if (navNutri) navNutri.className = `${base} ${module === 'nutrition' ? active : inactive}`;
     if (navPantry) navPantry.className = `${base} ${module === 'pantry' ? active : inactive}`;
 
-    loadCurrentModule();
+    loadCurrentModule(opzioni);
 }
 
-function loadCurrentModule() {
+async function loadCurrentModule(opzioni = {}) {
     if (currentAppModule === 'home') {
-        const homeView = new HomeView(
-            appContainer,
-            () => switchModule('gym'),
-            (openAddMeal) => {
-                currentAppModule = 'nutrition';
-                document.getElementById('nav-nutri').className = `flex flex-col items-center justify-center w-[65px] h-full transition-colors text-[#4F46E5]`;
-                document.getElementById('nav-home').className = `flex flex-col items-center justify-center w-[65px] h-full transition-colors text-gray-400 hover:text-gray-600`;
-                const nutritionView = new NutritionView(appContainer);
-                nutritionView.render(openAddMeal);
-            }
-        );
+        const homeView = new HomeView(appContainer, {
+            onNutrizione: () => switchModule('nutrition'),
+            onPalestra: () => switchModule('gym'),
+            onSpesa: () => switchModule('pantry', { spesa: true })
+        });
         homeView.render();
     } else if (currentAppModule === 'gym') {
         const gymView = new GymView(appContainer);
@@ -65,7 +60,8 @@ function loadCurrentModule() {
         nutritionView.render();
     } else if (currentAppModule === 'pantry') {
         const pantryView = new PantryView(appContainer);
-        pantryView.render();
+        await pantryView.render();
+        if (opzioni.spesa) pantryView.showShoppingList();
     }
 }
 

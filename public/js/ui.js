@@ -38,7 +38,7 @@ function riquadroScanner() {
 }
 
 // Totali di un elenco di pasti, con le chiavi degli obiettivi (carbo)
-function totaliPasti(pasti) {
+export function totaliPasti(pasti) {
     const t = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
     for (const m of pasti) {
         t.calorie += Number(m.calorie) || 0;
@@ -53,7 +53,7 @@ const percento = (v, obiettivo) => Math.min(100, obiettivo > 0 ? v / obiettivo *
 
 // Riquadro scuro: calorie con la barra e una barra per macro rispetto agli obiettivi.
 // testoSotto: testo della pastiglia verde quando non si è superato l'obiettivo (es. "Mancano 300 kcal")
-function riquadroRiepilogo(t, goals, { titolo, testoSotto }) {
+export function riquadroRiepilogo(t, goals, { titolo, testoSotto }) {
     const oltre = t.calorie > goals.calorie;
     const scarto = intero(Math.abs(goals.calorie - t.calorie));
     const barraMacro = (nome, coloreTesto, coloreBarra, v, obiettivo) => `
