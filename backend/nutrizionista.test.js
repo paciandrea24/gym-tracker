@@ -60,6 +60,21 @@ test('una porzione di meal prep usa i valori della preparazione e resta collegat
     assert.equal(pasto.totaleCalorie, 652.2);
 });
 
+test('meal prep a grammi: senza grammi dall\'AI valgono quelli dell\'ultima volta, senza nessun dato si scarta', () => {
+    const nuovo = { _id: 'prep2', nome: 'Chili', calorie: 1200, proteine: 80, carboidrati: 100, grassi: 40, pesoTotaleCotto: 1200, porzioniPreviste: 0, riepilogo: { ultimiGrammi: 300 } };
+    const conGrammi = componiPasto({ nomePasto: 'A', ingredienti: [{ prepRef: 'P2', prepGrammi: 200 }] }, dispensa, { P2: nuovo });
+    assert.equal(conGrammi.ingredienti[0].prepGrammi, 200);
+    assert.equal(conGrammi.ingredienti[0].calorie, 200);
+
+    const senzaGrammi = componiPasto({ nomePasto: 'B', ingredienti: [{ prepRef: 'P2', prepPorzioni: 1 }] }, dispensa, { P2: nuovo });
+    assert.equal(senzaGrammi.ingredienti[0].prepGrammi, 300);
+    assert.equal(senzaGrammi.ingredienti[0].prepPorzioni, 0);
+
+    const maiMangiato = { ...nuovo, riepilogo: { ultimiGrammi: null } };
+    const scartato = componiPasto({ nomePasto: 'C', ingredienti: [{ prepRef: 'P2' }] }, dispensa, { P2: maiMangiato });
+    assert.equal(scartato.ingredienti.length, 0);
+});
+
 test('consigli: le opzioni senza ingredienti validi vengono tolte, una variante non valida diventa null', () => {
     const consigli = componiConsigli([
         { nomePasto: 'Vuoto', ingredienti: [{ nome: 'Salmone', grammi: 100 }] },

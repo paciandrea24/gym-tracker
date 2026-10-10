@@ -43,8 +43,9 @@ function ingredienteDaPrep(ing, prepsPerRef) {
     const prep = prepsPerRef[ing.prepRef];
     if (!prep) return null;
 
-    const prepGrammi = Number(ing.prepGrammi) > 0 ? Number(ing.prepGrammi) : 0;
-    const prepPorzioni = prepGrammi ? 0 : (Number(ing.prepPorzioni) > 0 ? Number(ing.prepPorzioni) : 1);
+    // Grammi dall'AI, altrimenti quelli dell'ultima volta; le porzioni valgono solo per le preparazioni vecchie
+    const prepGrammi = Number(ing.prepGrammi) > 0 ? Number(ing.prepGrammi) : (Number(prep.riepilogo?.ultimiGrammi) || 0);
+    const prepPorzioni = prepGrammi || !(prep.porzioniPreviste > 0) ? 0 : (Number(ing.prepPorzioni) > 0 ? Number(ing.prepPorzioni) : 1);
     const { prepDaCompletare, ...valori } = valoriPorzione({ prepGrammi, prepPorzioni }, prep);
     if (prepDaCompletare) return null;
 

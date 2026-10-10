@@ -907,12 +907,12 @@ app.post('/api/recommend-meal', async (req, res) => {
         const dispensa = await PantryItem.find({ attivo: true, grammiRimasti: { $gt: 0 } })
             .select('nome grammiRimasti calorie100 proteine100 carbo100 grassi100 categoria').lean();
 
-        // Meal prep attivi con porzioni calcolabili e non ancora finiti
+        // Meal prep attivi con un peso (somma dei grammi crudi) e non ancora finiti
         const prepsAttive = await MealPrep.find({ attiva: true }).lean();
         const gruppi = await porzioniPerPrep(prepsAttive.map(p => p._id));
         const prepsDisponibili = prepsAttive
             .map(p => ({ ...p, riepilogo: riepilogoConsumo(p, gruppi.get(String(p._id))) }))
-            .filter(p => (p.pesoTotaleCotto > 0 || p.porzioniPreviste > 0) && p.calorie > 0 && p.riepilogo.quotaUsata < 0.97);
+            .filter(p => p.pesoTotaleCotto > 0 && p.calorie > 0 && p.riepilogo.quotaUsata < 0.97);
 
         if (dispensa.length === 0 && prepsDisponibili.length === 0) {
             return res.status(400).json({ success: false, error: 'Dispensa vuota: aggiungi prodotti (o un meal prep) per ricevere consigli.' });
@@ -935,16 +935,9 @@ app.post('/api/recommend-meal', async (req, res) => {
         const prepStr = prepsDisponibili.map((p, i) => {
             const ref = `P${i + 1}`;
             prepsPerRef[ref] = p;
-            const unita = [];
-            if (p.porzioniPreviste > 0) {
-                const v = valoriPorzione({ prepPorzioni: 1 }, p);
-                unita.push(`1 porzione = ${v.calorie} kcal, ${v.proteine}g P, ${v.carboidrati}g C, ${v.grassi}g G (restano circa ${Math.max(0, p.porzioniPreviste - (p.riepilogo.porzioniUsate || 0)).toFixed(1)} porzioni)`);
-            }
-            if (p.pesoTotaleCotto > 0) {
-                const v = valoriPorzione({ prepGrammi: 100 }, p);
-                unita.push(`100g = ${v.calorie} kcal, ${v.proteine}g P, ${v.carboidrati}g C, ${v.grassi}g G (restano circa ${Math.max(0, p.pesoTotaleCotto - (p.riepilogo.grammiUsati || 0))}g)`);
-            }
-            return `- ${ref}: "${p.nome}" — ${unita.join('; ')}`;
+            const v = valoriPorzione({ prepGrammi: 100 }, p);
+            const solita = p.riepilogo.ultimiGrammi ? `, porzione solita ${p.riepilogo.ultimiGrammi}g` : '';
+            return `- ${ref}: "${p.nome}" — 100g = ${v.calorie} kcal, ${v.proteine}g P, ${v.carboidrati}g C, ${v.grassi}g G (restano circa ${p.riepilogo.grammiRimasti}g${solita})`;
         }).join('\n');
 
         const prompt = `Sei il mio nutrizionista personale AI. L'app è usata solo da me.
@@ -961,9 +954,9 @@ La mia richiesta: "${question}"
 
 REGOLE FONDAMENTALI — rispettale tutte:
 1. Usa SOLO i prodotti della DISPENSA e i PIATTI GIÀ CUCINATI elencati. Non inventare ingredienti (niente sale, olio o altro se non è in elenco).
-2. Per un prodotto della dispensa scrivi "nome" ESATTAMENTE come in elenco e i "grammi". Per un piatto già cucinato scrivi "prepRef" (es. "P1") e "prepPorzioni" oppure "prepGrammi".
+2. Per un prodotto della dispensa scrivi "nome" ESATTAMENTE come in elenco e i "grammi". Per un piatto già cucinato scrivi "prepRef" (es. "P1") e i "prepGrammi" da mangiare.
 3. NON scrivere calorie o macro: li calcola l'app con precisione. Usa i valori per 100g solo per scegliere le quantità giuste.
-4. Non superare i grammi o le porzioni disponibili.
+4. Non superare i grammi disponibili.
 5. STRATEGIA MACRO: avvicinati il più possibile alle quote di PROTEINE e CARBOIDRATI rimanenti. I GRASSI sono una soglia massima da non superare, non un obiettivo: meno grassi = meglio.
 6. Genera 3 opzioni ben distinte, ognuna con 1 variante (cambia 1-2 ingredienti restando negli elenchi).
 7. Se ci sono piatti già cucinati, usali in almeno un'opzione: vanno consumati prima che scadano.
@@ -977,7 +970,7 @@ Restituisci SOLO un array JSON con questa esatta struttura:
     "messaggio": "Breve nota su perché questo pasto è ottimale per i miei obiettivi.",
     "ingredienti": [
       { "nome": "Nome esatto dalla dispensa", "grammi": 0 },
-      { "prepRef": "P1", "prepPorzioni": 1 }
+      { "prepRef": "P1", "prepGrammi": 250 }
     ],
     "variante": {
       "nomePasto": "Nome variante",
