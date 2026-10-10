@@ -5,8 +5,8 @@ import * as modal from '../components/modal.js?v=27';
 import * as userService from '../services/userService.js?v=27';
 import * as ui from '../ui.js?v=27';
 import * as gymUi from './gymUi.js?v=27';
-import { elementiDaFare } from '../services/gymLogic.js?v=27';
-import { debounce, exportToCSV } from '../utils.js?v=27';
+import { elementiDaFare, nuovoDrop, pulisciSerie } from '../services/gymLogic.js?v=27';
+import { exportToCSV } from '../utils.js?v=27';
 
 export class GymView {
     constructor(container) {
@@ -18,13 +18,6 @@ export class GymView {
         this.currentLastSession = null;
         this.recoveryInterval = null;
         this.recoveryRemaining = 0;
-
-        // Gestisce il ritardo nel salvataggio in bozza durante la digitazione
-        this.finalizeSetData = debounce((idx) => {
-            gymService.saveDraft(this.currentExercise.id, this.currentSessionData);
-            ui.updateFeedback(idx, 'Salvato ✓');
-        }, 500);
-
     }
 
     async render() {
@@ -222,7 +215,9 @@ export class GymView {
                 if (draft && draft[i]) {
                     this.currentSessionData.push({ ...draft[i], completed: draft[i].completed || false });
                 } else if (this.currentLastSession && this.currentLastSession.sets[i]) {
-                    this.currentSessionData.push({ ...this.currentLastSession.sets[i], completed: false });
+                    // Peso e ripetizioni dell'ultima volta; i drop si decidono di nuovo
+                    const { kg, reps } = this.currentLastSession.sets[i];
+                    this.currentSessionData.push({ kg, reps, completed: false });
                 } else {
                     this.currentSessionData.push({
                         kg: this.currentExercise.baseKg !== 0 ? this.currentExercise.baseKg : '',
@@ -236,25 +231,41 @@ export class GymView {
     }
 
     renderActiveExerciseUI() {
-        ui.renderActiveExercise(
-            this.container, this.currentExercise, this.currentLastSession, this.currentSessionData,
-            (idx, field, value) => this.handleInput(idx, field, value),
-            () => this.handleCompleteExercise(),
-            () => this.showActiveSession(),
-            (idx) => this.handleSaveSet(idx),
-            (idx) => this.handleEditSet(idx)
-        );
+        gymUi.renderEsercizio(this.container, this.currentExercise, this.currentLastSession, this.currentSessionData, {
+            onCambia: (idx, campo, valore, dropIdx) => this.handleInput(idx, campo, valore, dropIdx),
+            onAggiungiDrop: (idx) => {
+                const set = this.currentSessionData[idx];
+                set.drop = [...(set.drop || []), nuovoDrop(set)];
+                this.salvaBozzaEsercizio();
+                this.renderActiveExerciseUI();
+            },
+            onTogliDrop: (idx, dropIdx) => {
+                this.currentSessionData[idx].drop.splice(dropIdx, 1);
+                this.salvaBozzaEsercizio();
+                this.renderActiveExerciseUI();
+            },
+            onSalvaSerie: (idx) => this.handleSaveSet(idx),
+            onModificaSerie: (idx) => this.handleEditSet(idx),
+            onTermina: () => this.handleCompleteExercise(),
+            onIndietro: () => this.showActiveSession()
+        });
     }
 
-    handleInput(idx, field, value) {
-        this.currentSessionData[idx][field] = value;
-        ui.updateFeedback(idx, 'Salvataggio...');
-        this.finalizeSetData(idx);
+    salvaBozzaEsercizio() {
+        gymService.saveDraft(this.currentExercise.id, this.currentSessionData);
+    }
+
+    // Scrive nel dato senza ridisegnare (il campo resta col focus); la bozza si salva subito
+    handleInput(idx, campo, valore, dropIdx = null) {
+        const set = this.currentSessionData[idx];
+        const dove = dropIdx === null ? set : set.drop[dropIdx];
+        dove[campo] = valore;
+        this.salvaBozzaEsercizio();
     }
 
     handleSaveSet(idx) {
-        this.currentSessionData[idx].completed = true;
-        gymService.saveDraft(this.currentExercise.id, this.currentSessionData);
+        this.currentSessionData[idx] = { ...pulisciSerie(this.currentSessionData[idx]), completed: true };
+        this.salvaBozzaEsercizio();
 
         if (this.currentExercise && this.currentExercise.type !== 'cardio') {
             const restTime = this.currentExercise.restSeconds || 90; // Prende il tempo salvato o 90
@@ -265,12 +276,12 @@ export class GymView {
 
     handleEditSet(idx) {
         this.currentSessionData[idx].completed = false;
-        gymService.saveDraft(this.currentExercise.id, this.currentSessionData);
+        this.salvaBozzaEsercizio();
         this.renderActiveExerciseUI();
     }
 
     handleCompleteExercise() {
-        gymService.completeExerciseInSession(this.currentExercise, this.currentSessionData);
+        gymService.completeExerciseInSession(this.currentExercise, this.currentSessionData.map(pulisciSerie));
         gymService.clearDraft();
         this.currentExercise = null;
         this.currentSessionData = [];

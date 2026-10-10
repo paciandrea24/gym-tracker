@@ -108,3 +108,17 @@ test('completare un blocco: ogni esercizio va nei fatti con le sue serie e il se
 test('giri = il massimo delle serie', () => {
     assert.equal(giriSuperserie({ b: [{}, {}, {}], c: [{}, {}, {}, {}] }), 4);
 });
+
+import { pulisciSerie, nuovoDrop } from '../public/js/services/gymLogic.js';
+
+test('serie da salvare: virgola e vuoti diventano numeri, i drop senza ripetizioni spariscono', () => {
+    assert.deepEqual(pulisciSerie({ kg: '7,5', reps: '10', completed: true }), { kg: 7.5, reps: 10, completed: true });
+    assert.deepEqual(pulisciSerie({ kg: '', reps: '', completed: false }), { kg: 0, reps: 0, completed: false });
+    assert.deepEqual(pulisciSerie({ kg: 65, reps: 8, drop: [{ kg: '50', reps: '5' }, { kg: 40, reps: '' }] }), { kg: 65, reps: 8, drop: [{ kg: 50, reps: 5 }] });
+});
+
+test('nuovo drop: circa 80% dell\'ultimo peso della serie, ripetizioni da scrivere', () => {
+    assert.deepEqual(nuovoDrop({ kg: 4, reps: 12 }), { kg: 3, reps: '' });
+    assert.deepEqual(nuovoDrop({ kg: '7,5', reps: 10 }), { kg: 6, reps: '' });
+    assert.deepEqual(nuovoDrop({ kg: 65, reps: 8, drop: [{ kg: 50, reps: 5 }] }), { kg: 40, reps: '' });
+});

@@ -7,7 +7,7 @@ import { icona } from '../components/icons.js?v=27';
 import { apriFoglio } from '../components/sheet.js?v=27';
 import * as modal from '../components/modal.js?v=27';
 import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=27';
-import { testoSerie, volumeSerie } from '../services/gymLogic.js?v=27';
+import { testoSerie, volumeSerie, passoPeso } from '../services/gymLogic.js?v=27';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -477,4 +477,123 @@ function attivaTrascinamento(container, onUnisci) {
             maniglia.addEventListener('pointercancel', annulla);
         });
     });
+}
+
+// ─── ESERCIZIO (serie, drop set, + e −) ────────────────────────────────────
+// Valore nel campo: con la virgola, fino a due decimali (anche i vecchi 61,25 restano esatti)
+const inCampo = (v) => v === '' || v == null ? '' : String(Math.round(numero(v) * 100) / 100).replace('.', ',');
+const indice = (v) => v === undefined ? null : parseInt(v, 10);
+
+// Numero con + e −: il campo 'kg' usa il passo del peso, gli altri ±1. attr: data-* di chi lo usa
+// (indice della serie, del drop, id dell'esercizio). variante 'drop': piccolo e arancione.
+function stepper(campo, valore, etichetta, attr = '', variante = '') {
+    const drop = variante === 'drop';
+    const tasto = `px-3 ${drop ? 'py-2' : 'py-2.5'} text-gray-500 font-black text-lg leading-none active:bg-gray-200`;
+    return `
+        <div class="stepper min-w-0 ${drop ? 'flex-1' : ''}" data-campo="${campo}" ${attr}>
+            ${etichetta ? `<p class="text-[11px] font-semibold text-gray-400 uppercase mb-1">${etichetta}</p>` : ''}
+            <div class="flex items-center ${drop ? 'bg-orange-50/60 border-orange-200' : 'bg-gray-50 border-gray-200'} border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-gray-900">
+                <button type="button" class="stepper-meno ${tasto}" aria-label="Meno">−</button>
+                <input type="text" inputmode="decimal" data-campo="${campo}" value="${inCampo(valore)}" placeholder="0" class="w-full min-w-0 text-center ${drop ? 'text-base' : 'text-xl'} font-black bg-transparent outline-none p-0">
+                <button type="button" class="stepper-piu ${tasto}" aria-label="Più">+</button>
+            </div>
+        </div>`;
+}
+
+// + e − scrivono nel campo senza ridisegnare (il focus resta); anche quello che si scrive
+// arriva a onValore(stepper, valore)
+function collegaStepper(container, onValore) {
+    container.querySelectorAll('.stepper').forEach(st => {
+        const input = st.querySelector('input');
+        const cambia = (direzione) => {
+            const v = numero(input.value);
+            const nuovo = st.dataset.campo === 'kg' ? passoPeso(v, direzione) : Math.max(0, v + (direzione === 'piu' ? 1 : -1));
+            input.value = inCampo(nuovo);
+            onValore(st, nuovo);
+        };
+        st.querySelector('.stepper-meno').addEventListener('click', () => cambia('meno'));
+        st.querySelector('.stepper-piu').addEventListener('click', () => cambia('piu'));
+        input.addEventListener('input', () => onValore(st, input.value));
+    });
+}
+
+// "Peso per lato · recupero 1:00"
+function sottotitoloEsercizio(ex) {
+    const parti = [];
+    if (ex.type === 'cardio') parti.push('Cardio');
+    if (ex.type === 'corpo-libero') parti.push('Corpo libero');
+    if (ex.type === 'sala-pesi' && Number(ex.weightMultiplier) === 2) parti.push('Peso per lato');
+    if (ex.type === 'sala-pesi' && numero(ex.barbellWeight) > 0) parti.push(`bilanciere ${decimale(ex.barbellWeight)} kg`);
+    if (ex.type !== 'cardio') parti.push(`recupero ${minuti(Number(ex.restSeconds) || 90)}`);
+    const testo = parti.join(' · ');
+    return testo.charAt(0).toUpperCase() + testo.slice(1);
+}
+
+const etichettaPeso = (ex) => Number(ex.weightMultiplier) === 2 ? 'kg per lato' : 'kg';
+
+function ultimaVoltaHtml(ultimaVolta, tipo) {
+    const stile = 'bg-gray-100 rounded-xl px-3 py-2 text-[13px] font-semibold text-gray-600';
+    if (!ultimaVolta?.sets?.length) return `<div class="${stile}">Prima volta con questo esercizio</div>`;
+    return `<div class="${stile}">Ultima volta: <span class="font-bold text-gray-900">${serieInRiga(ultimaVolta.sets, tipo)}</span></div>`;
+}
+
+// Campi di una serie da fare: peso e ripetizioni (o minuti), poi i drop in arancione con la x.
+// Li usa anche la superserie. attr: data-* comuni a stepper e pulsanti della serie
+function campiSerie(ex, set, attr) {
+    const reps = stepper('reps', set.reps, ex.type === 'cardio' ? 'Minuti' : 'Ripetizioni', attr);
+    if (ex.type !== 'sala-pesi') return reps;
+    const drop = set.drop || [];
+    return `
+        <div class="grid grid-cols-2 gap-3">${stepper('kg', set.kg, etichettaPeso(ex), attr)}${reps}</div>
+        ${drop.length ? `
+            <div class="mt-3 pt-3 border-t border-dashed border-gray-200 space-y-2">
+                ${drop.map((d, j) => `
+                    <div class="riga-drop flex items-center gap-2">
+                        <span class="text-[11px] font-black text-orange-600 w-11 flex-shrink-0">Drop ${j + 1}</span>
+                        ${stepper('kg', d.kg, '', `${attr} data-drop="${j}"`, 'drop')}
+                        ${stepper('reps', d.reps, '', `${attr} data-drop="${j}"`, 'drop')}
+                        <button type="button" class="togli-drop p-1 text-gray-300 active:text-gray-600 flex-shrink-0" ${attr} data-drop="${j}" aria-label="Togli il drop">${icona.chiudi()}</button>
+                    </div>`).join('')}
+            </div>` : ''}`;
+}
+
+export function renderEsercizio(container, ex, ultimaVolta, serie, { onCambia, onAggiungiDrop, onTogliDrop, onSalvaSerie, onModificaSerie, onTermina, onIndietro }) {
+    const primaDaFare = serie.findIndex(s => !s.completed);
+    const nome = (i) => ex.type === 'cardio' ? 'Durata' : `Serie ${i + 1}`;
+
+    const fatta = (set, i) => `
+        <div class="serie-fatta bg-white rounded-2xl border border-green-200 px-4 py-3 flex items-center gap-3">
+            <span class="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0">${icona.spunta()}</span>
+            <p class="flex-1 min-w-0 font-bold text-gray-800">${nome(i)} <span class="font-semibold text-gray-500 ml-1">${serieInRiga([set], ex.type)}</span></p>
+            <button type="button" class="modifica-serie text-[13px] font-bold text-indigo-600" data-idx="${i}">Modifica</button>
+        </div>`;
+    const daFare = (set, i) => {
+        const prima = i === primaDaFare;
+        return `
+            <div class="serie-da-fare bg-white rounded-2xl border ${prima ? 'border-gray-200 shadow-sm' : 'border-gray-100'} p-4" data-idx="${i}">
+                <p class="font-black text-gray-900 mb-3">${nome(i)}</p>
+                ${campiSerie(ex, set, `data-idx="${i}"`)}
+                <div class="flex items-center justify-between mt-3">
+                    ${ex.type === 'sala-pesi' ? `<button type="button" class="aggiungi-drop text-[13px] font-bold text-indigo-600 py-1" data-idx="${i}">+ Drop</button>` : '<span></span>'}
+                    <button type="button" class="salva-serie border font-black text-[14px] px-6 py-2.5 rounded-xl active:scale-95 transition-transform ${prima ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-800 border-gray-200'}" data-idx="${i}">Salva serie</button>
+                </div>
+            </div>`;
+    };
+
+    container.innerHTML = `
+        ${intestazione(esc(ex.name), { idIndietro: 'back-btn', sotto: sottotitoloEsercizio(ex) })}
+        <main class="p-4 space-y-3 pb-24 safe-pb bg-gray-50">
+            ${ultimaVoltaHtml(ultimaVolta, ex.type)}
+            ${serie.map((set, i) => set.completed ? fatta(set, i) : daFare(set, i)).join('')}
+            <button id="complete-btn" class="${primaDaFare === -1 ? BTN_PRINCIPALE : BTN_SECONDARIO}">Termina esercizio</button>
+        </main>
+    `;
+
+    document.getElementById('back-btn').addEventListener('click', onIndietro);
+    document.getElementById('complete-btn').addEventListener('click', onTermina);
+    collegaStepper(container, (st, valore) => onCambia(indice(st.dataset.idx), st.dataset.campo, valore, indice(st.dataset.drop)));
+    container.querySelectorAll('.aggiungi-drop').forEach(b => b.addEventListener('click', () => onAggiungiDrop(indice(b.dataset.idx))));
+    container.querySelectorAll('.togli-drop').forEach(b => b.addEventListener('click', () => onTogliDrop(indice(b.dataset.idx), indice(b.dataset.drop))));
+    container.querySelectorAll('.salva-serie').forEach(b => b.addEventListener('click', () => onSalvaSerie(indice(b.dataset.idx))));
+    container.querySelectorAll('.modifica-serie').forEach(b => b.addEventListener('click', () => onModificaSerie(indice(b.dataset.idx))));
 }

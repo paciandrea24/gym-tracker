@@ -29,6 +29,22 @@ export function pesoDrop(kg) {
     return tondo(Math.floor(v / p + 1e-9) * p);
 }
 
+// Riga di drop nuova: circa l'80% dell'ultimo peso della serie (la serie o il drop precedente)
+export function nuovoDrop(set) {
+    const catena = [set, ...(set.drop || [])];
+    return { kg: pesoDrop(catena[catena.length - 1].kg), reps: '' };
+}
+
+// Serie pronta da salvare: peso e ripetizioni numerici (virgola accettata, vuoto = 0),
+// i drop senza ripetizioni si tolgono
+export function pulisciSerie(set) {
+    const { drop, ...resto } = set;
+    const pulita = { ...resto, kg: numero(set.kg), reps: numero(set.reps) };
+    const drops = (drop || []).map(d => ({ kg: numero(d.kg), reps: numero(d.reps) })).filter(d => d.reps > 0);
+    if (drops.length) pulita.drop = drops;
+    return pulita;
+}
+
 // Peso davvero sollevato: per lato conta doppio, il bilanciere si somma (solo se c'è un peso)
 export function pesoReale(kg, esercizio = {}) {
     const v = numero(kg);
