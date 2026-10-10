@@ -364,14 +364,7 @@ export class MealPrepView {
         const salva = document.getElementById('save-meal-btn');
         if (salva) salva.textContent = 'Aggiungi alla preparazione';
 
-        if (prefill) {
-            document.getElementById('m-alimenti').value = prefill.nome;
-            document.getElementById('m-cal-100').value = prefill.calorie100;
-            document.getElementById('m-pro-100').value = prefill.proteine100;
-            document.getElementById('m-carbo-100').value = prefill.carbo100;
-            document.getElementById('m-fat-100').value = prefill.grassi100;
-            document.getElementById('m-peso').focus();
-        }
+        if (prefill) ui.riempiFormPasto(prefill);
     }
 
     handleScan() {

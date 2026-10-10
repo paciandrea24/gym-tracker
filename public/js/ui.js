@@ -1,5 +1,7 @@
 import { formatDate, getWeekLabel } from './utils.js?v=22';
 import { etichettaPorzione } from './services/mealPrepService.js?v=22';
+import { cercaProdottoOFF } from './services/pantryService.js?v=22';
+import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=22';
 
 // --- RENDER LISTA SCHEDE (HOME) ---
 export function renderRoutinesList(container, routines, onOpenRoutine, onCreateRoutine, onEditRoutineName, onDeleteRoutine) {
@@ -967,6 +969,18 @@ export function renderMealDetails(container, meal, onBack, onToggleFavorite, onA
 }
 
 // --- RENDER FORM PASTO MANUALE ---
+// Compila il form manuale con un prodotto di Open Food Facts (valori per 100 g)
+export function riempiFormPasto(prodotto) {
+    const al = document.getElementById('m-alimenti');
+    if (!al || !prodotto) return;
+    al.value = prodotto.nome;
+    document.getElementById('m-cal-100').value = prodotto.calorie100;
+    document.getElementById('m-pro-100').value = prodotto.proteine100;
+    document.getElementById('m-carbo-100').value = prodotto.carbo100;
+    document.getElementById('m-fat-100').value = prodotto.grassi100;
+    document.getElementById('m-peso').focus();
+}
+
 export function renderManualMealForm(container, onSave, onCancel) {
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
@@ -977,6 +991,7 @@ export function renderManualMealForm(container, onSave, onCancel) {
         </header>
         <main class="p-4 space-y-4 bg-gray-50 pb-24 safe-pb">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                ${campoCodiceHtml()}
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-2">Pasto (es. Colazione)</label>
                     <input type="text" id="m-pasto" placeholder="Pranzo" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
@@ -1022,6 +1037,18 @@ export function renderManualMealForm(container, onSave, onCancel) {
     `;
 
     document.getElementById('cancel-meal-btn').addEventListener('click', onCancel);
+
+    collegaCampoCodice(container, async (codice) => {
+        try {
+            const prodotto = await cercaProdottoOFF(codice);
+            if (!prodotto) return { errore: `Il codice ${codice} non è su Open Food Facts: inserisci i valori a mano.` };
+            riempiFormPasto(prodotto);
+            return { ok: `✓ ${prodotto.nome}: scrivi quanti grammi.` };
+        } catch (e) {
+            return { errore: 'Errore di connessione a Open Food Facts.' };
+        }
+    });
+
     document.getElementById('save-meal-btn').addEventListener('click', () => {
         const pasto = document.getElementById('m-pasto').value.trim() || 'Spuntino';
         const alimenti = document.getElementById('m-alimenti').value.trim();

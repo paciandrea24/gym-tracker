@@ -323,15 +323,7 @@ export class NutritionView {
 
     openPreFilledManualMeal(prodotto, targetMealId = null) {
         this.handleManualMealClick(targetMealId);
-        const al = document.getElementById('m-alimenti');
-        if (al) {
-            al.value = prodotto.nome;
-            document.getElementById('m-cal-100').value = prodotto.calorie100;
-            document.getElementById('m-pro-100').value = prodotto.proteine100;
-            document.getElementById('m-carbo-100').value = prodotto.carbo100;
-            document.getElementById('m-fat-100').value = prodotto.grassi100;
-            document.getElementById('m-peso').focus();
-        }
+        ui.riempiFormPasto(prodotto);
     }
 
     handleMicRecord(targetMealId = null) {

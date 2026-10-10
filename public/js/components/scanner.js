@@ -10,59 +10,11 @@ export function normalizzaBarcode(testo) {
     return /^\d{8,14}$/.test(pulito) ? pulito : null;
 }
 
-// Aggiunge sotto il video (una volta sola) il campo per scrivere il codice a mano.
-// Così funziona in ogni schermata che usa lo scanner, anche quando la fotocamera fa i capricci.
-function preparaInserimentoManuale(videoElementId, onSuccess) {
-    const video = document.getElementById(videoElementId);
-    if (!video || !video.parentElement) return null;
-
-    let row = video.parentElement.querySelector('.manual-barcode-row');
-    if (!row) {
-        row = document.createElement('div');
-        row.className = 'manual-barcode-row mb-3';
-        row.innerHTML = `
-            <p class="manual-barcode-msg hidden text-center text-xs font-bold text-orange-300 mb-2"></p>
-            <form class="flex gap-2">
-                <input type="text" inputmode="numeric" autocomplete="off" placeholder="Oppure scrivi il codice"
-                    class="flex-1 min-w-0 bg-gray-800 border border-gray-700 text-white placeholder-gray-500 font-bold tracking-widest rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">
-                <button type="submit" class="bg-blue-600 text-white font-bold px-4 rounded-xl active:scale-95 transition-transform">Cerca</button>
-            </form>`;
-        // Sopra al video: sempre visibile, anche quando il riquadro finisce sotto la barra in basso
-        video.insertAdjacentElement('beforebegin', row);
-    }
-
-    const input = row.querySelector('input');
-    const msg = row.querySelector('.manual-barcode-msg');
-    input.value = '';
-    msg.classList.add('hidden');
-
-    row.querySelector('form').onsubmit = (e) => {
-        e.preventDefault();
-        const codice = normalizzaBarcode(input.value);
-        if (!codice) {
-            msg.textContent = 'Il codice deve avere da 8 a 14 cifre.';
-            msg.classList.remove('hidden');
-            return;
-        }
-        input.blur();
-        stopScanner();
-        onSuccess(codice);
-    };
-    return msg;
-}
-
 export async function startScanner(videoElementId, onSuccess, onError) {
-    const manualMsg = preparaInserimentoManuale(videoElementId, onSuccess);
-
-    // Senza fotocamera si resta nel riquadro per scrivere il codice, invece di chiuderlo
+    // Il codice si può sempre scrivere a mano nel form "Manuale"
     const erroreFotocamera = (testo) => {
         stopScanner();
-        if (manualMsg) {
-            manualMsg.textContent = `${testo} Scrivi il codice qui sotto.`;
-            manualMsg.classList.remove('hidden');
-        } else if (onError) {
-            onError(testo);
-        }
+        if (onError) onError(`${testo} Il codice puoi anche scriverlo nel form Manuale.`);
     };
 
     if (typeof ZXing === 'undefined') {

@@ -2,6 +2,7 @@
 
 import * as pantryService from '../services/pantryService.js?v=22';
 import * as scanner from '../components/scanner.js?v=22';
+import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.js?v=22';
 import * as modal from '../components/modal.js?v=22';
 import { searchFoodTable } from '../data/foodTable.js?v=22';
 
@@ -635,6 +636,8 @@ export class PantryView {
     // ─── AGGIUNGI MANUALE / VOCE ─────────────────────────────────────────────────
     async handleVoiceAdd() {
         const result = await this.showManualAddForm();
+        // Codice a barre scritto nel form: stesso percorso dello scanner
+        if (result?.codice) return this.fetchAndAddProduct(result.codice, result.qty);
         if (result) this.render();
     }
 
@@ -665,6 +668,7 @@ export class PantryView {
                     ${isAddingToOFF ? `<div class="mb-4 bg-blue-50 text-blue-700 p-3 rounded-xl border border-blue-100 text-xs font-bold flex gap-2"><span class="text-lg">🌍</span> Stai contribuendo al database mondiale Open Food Facts! Più dati inserisci, meglio è.</div>` : ''}
 
                     <div class="space-y-4 pb-6">
+                        ${isAddingToOFF ? '' : campoCodiceHtml()}
                         <div>
                             <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nome prodotto</label>
                             <div class="flex gap-2">
@@ -768,6 +772,11 @@ export class PantryView {
             };
 
             m.querySelector('#close-manual-modal').addEventListener('click', () => closeModal(false));
+
+            collegaCampoCodice(m, async (codice) => {
+                const qty = parseInt(m.querySelector('#m-qty')?.value) || 1;
+                closeModal({ codice, qty });
+            });
 
             // Logica dettatura vocale (rimane inalterata)
             const voiceBtn = m.querySelector('#voice-nome-btn');
