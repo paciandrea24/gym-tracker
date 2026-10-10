@@ -5,7 +5,8 @@
 import { icona } from '../components/icons.js?v=32';
 import { chiaveGiorno, nomeGiorno } from '../components/format.js?v=32';
 import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=32';
-import { unaPerGiorno, riassuntoPeso, puntiLinea, segno } from '../services/pesoLogic.js?v=32';
+import * as modal from '../components/modal.js?v=32';
+import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=32';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -104,4 +105,95 @@ export function renderHome(container, dati, { onNutrizione, onPalestra, onPeso, 
         const n = Number(b.dataset.index);
         onAcqua(n === dati.bicchieri ? n - 1 : n);
     }));
+}
+
+// ─── PESO ──────────────────────────────────────────────────────────────────
+// Una riga per giorno (l'ultima pesata del giorno). onSalva(kg) con il numero già controllato.
+export function renderPeso(container, pesate, { onIndietro, onSalva }) {
+    const giorni = unaPerGiorno(pesate);
+    const riassunto = riassuntoPeso(pesate);
+    const righe = righePesate(pesate);
+    const valori = giorni.map(l => Number(l.weight) || 0);
+    const riquadro = (etichetta, valore) => `
+        <div class="bg-white border border-gray-100 rounded-2xl p-3 text-center shadow-sm">
+            <p class="text-[11px] font-bold text-gray-400">${etichetta}</p> <p class="text-lg font-black text-gray-900">${valore} <span class="text-[11px] font-bold text-gray-400">kg</span></p>
+        </div>`;
+    const MOSTRATE = 4;
+
+    container.innerHTML = `
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
+            <button id="back-weight-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2" aria-label="Indietro">${icona.indietro()}</button>
+            <h1 class="text-xl font-bold text-gray-900">Peso</h1>
+        </header>
+        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
+            <div class="bg-white rounded-[20px] border border-gray-100 shadow-sm p-4">
+                <label for="new-weight-input" class="block text-[11px] font-semibold text-gray-400 uppercase mb-1">Peso di oggi</label>
+                <div class="flex gap-2">
+                    <div class="flex-1 min-w-0 flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 focus-within:ring-2 focus-within:ring-gray-900">
+                        <input id="new-weight-input" type="text" inputmode="decimal" placeholder="74,8" value="${riassunto ? decimaleKg(riassunto.ultimo) : ''}" class="flex-1 min-w-0 bg-transparent py-3 text-center text-2xl font-black text-gray-900 outline-none">
+                        <span class="text-[13px] font-bold text-gray-400">kg</span>
+                    </div>
+                    <button id="save-weight-btn" class="bg-gray-900 text-white font-black text-[15px] px-6 rounded-xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform">Salva</button>
+                </div>
+                ${riassunto?.pesatoOggi ? '<p class="text-[12px] font-semibold text-gray-400 mt-2">Ti sei già pesato oggi: salvando aggiorni il valore di oggi.</p>' : ''}
+            </div>
+            ${giorni.length ? `
+                <div class="grid grid-cols-3 gap-2">
+                    ${riquadro('Più alto', decimaleKg(Math.max(...valori)))}
+                    ${riquadro('Più basso', decimaleKg(Math.min(...valori)))}
+                    ${riassunto.variazione !== null ? riquadro(`Dal ${riassunto.dal}`, segno(riassunto.variazione)) : ''}
+                </div>
+                ${giorni.length > 1 ? `
+                    <div class="bg-white p-5 rounded-[20px] border border-gray-100 shadow-sm">
+                        <h3 class="text-[15px] font-black text-gray-900">Andamento</h3>
+                        <p class="text-[12px] font-medium text-gray-400 mb-4">Le tue pesate, dalla prima all'ultima.</p>
+                        <div class="relative h-48 w-full"><canvas id="weightLineChart"></canvas></div>
+                    </div>` : ''}
+                <div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 mb-2">Tutte le pesate</h3>
+                    <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">
+                        ${righe.map((r, i) => `
+                            <div class="riga-pesata py-3 flex justify-between items-baseline gap-2 ${i >= MOSTRATE ? 'hidden' : ''}">
+                                <p class="font-bold text-gray-800">${r.giorno}</p> <p class="whitespace-nowrap"><b class="font-black text-gray-900">${r.kg} kg</b> <span class="text-[12px] font-bold text-gray-400 ml-1">${r.differenza}</span></p>
+                            </div>`).join('')}
+                        ${righe.length > MOSTRATE ? `<button id="mostra-tutte" class="w-full py-3 text-center text-[13px] font-bold text-indigo-600">Mostra tutte (${righe.length})</button>` : ''}
+                    </div>
+                </div>` : `<p class="text-[14px] font-semibold text-gray-400 text-center py-6">Non ti sei ancora pesato.</p>`}
+        </main>
+    `;
+
+    document.getElementById('back-weight-btn').addEventListener('click', onIndietro);
+    document.getElementById('mostra-tutte')?.addEventListener('click', (e) => {
+        container.querySelectorAll('.riga-pesata.hidden').forEach(r => r.classList.remove('hidden'));
+        e.currentTarget.remove();
+    });
+    document.getElementById('save-weight-btn').addEventListener('click', async (e) => {
+        const kg = pesoScritto(document.getElementById('new-weight-input').value);
+        if (kg === null) return modal.showModal({ type: 'error', title: 'Peso non valido', message: 'Scrivi il peso, per esempio 74,8.' });
+        e.currentTarget.disabled = true;
+        onSalva(kg);
+    });
+
+    // Andamento: dal più vecchio al più recente, date "5 set", numeri con la virgola
+    if (giorni.length > 1 && typeof Chart !== 'undefined') {
+        const cronologico = [...giorni].reverse();
+        new Chart(document.getElementById('weightLineChart'), {
+            type: 'line',
+            data: {
+                labels: cronologico.map(l => new Date(l.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })),
+                datasets: [{
+                    data: cronologico.map(l => Number(l.weight) || 0), borderColor: '#4F46E5', backgroundColor: 'rgba(79, 70, 229, 0.06)',
+                    borderWidth: 3, pointBackgroundColor: '#4F46E5', pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: 4, fill: true, tension: 0.35
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: '#111827', padding: 10, displayColors: false, callbacks: { label: (c) => `${decimaleKg(c.parsed.y)} kg` } } },
+                scales: {
+                    y: { beginAtZero: false, border: { display: false }, grid: { color: '#f3f4f6' }, ticks: { callback: (v) => decimaleKg(v) } },
+                    x: { border: { display: false }, grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 12 } }
+                }
+            }
+        });
+    }
 }
