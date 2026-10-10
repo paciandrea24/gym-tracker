@@ -241,6 +241,46 @@ Codice: le schermate escono da `PantryView.js` e vanno in `views/pantryUi.js`; i
 (tipi, gruppi, da comprare, rifornimento, correzione, riga utilizzo, prodotto già presente) in
 `services/pantryLogic.js` con i test.
 
+## Sezione 6 — Home
+
+Approvata con l'anteprima https://claude.ai/artifact/SJHMXzGUD7PMFFKreZRDhL e le risposte
+dell'utente: niente pulsante nero in Home (ci si muove toccando i riquadri), la riga "Da comprare"
+resta come scorciatoia per la lista della spesa, una sola pesata al giorno (l'ultima), icone nuove
+della barra in basso.
+
+### Home
+
+- Titolo "Ciao Andrea" senza emoji e la data ("Sabato 10 ottobre").
+- **Mangiato oggi**: lo stesso riquadro scuro della Nutrizione (calorie, "Mancano X kcal" o "Oltre
+  di X kcal", barre Proteine, Carboidrati, Grassi). Il tocco apre la Nutrizione.
+- **Allenamento**: riga bianca; con un allenamento a metà "Allenamento in corso · N da fare" e
+  "Riprendi", altrimenti "Ultima volta mercoledì 7 ottobre · Scheda A" (o "Non ti sei ancora
+  allenato") e "Inizia". Il tocco apre la Palestra.
+- **Acqua**: "750 ml di 2 l" e 8 gocce da 250 ml; si tocca la goccia (l'ultima piena la toglie).
+  Spariscono i pulsanti − e +.
+- **Peso**: ultimo peso con la virgola, "−1,6 kg dal 5 settembre · pesato oggi", linea
+  dell'andamento delle ultime pesate. Senza pesate: "Tocca per pesarti". Il tocco apre il Peso.
+- **Da comprare**: la riga della Dispensa ("Da comprare · 3" e i nomi, o "Non manca niente"); il
+  tocco apre direttamente la lista della spesa.
+- **Barra in basso**: Palestra con un manubrio, Nutrizione con forchetta e coltello.
+
+### Peso
+
+- Titolo "Peso". "Peso di oggi" con il campo (virgola accettata) e "kg", "Salva" nero; se c'è già
+  una pesata di oggi, una riga dice che salvando si aggiorna. Peso non valido: finestra dell'app
+  "Scrivi il peso, per esempio 74,8."
+- Riquadri "Più alto", "Più basso", "Dal 5 settembre" (variazione dalla prima pesata), con la
+  virgola.
+- Grafico "Andamento" senza emoji, date "5 set", numeri con la virgola.
+- "Tutte le pesate": un riquadro con una riga per giorno ("Oggi", "Mercoledì 7 ottobre"), peso e
+  differenza dalla pesata prima; le prime 4, le altre con "Mostra tutte (N)".
+- **Una pesata al giorno**: il server aggiorna la pesata di oggi (giorno italiano) invece di
+  aggiungerne un'altra; le doppie già salvate si mostrano una per giorno (l'ultima).
+
+Codice: le schermate escono da `HomeView.js` e vanno in `views/homeUi.js`; i calcoli del peso
+(una per giorno, riassunto, righe con la differenza, punti della linea) in `services/pesoLogic.js`
+con i test. `ui.js` esporta `riquadroRiepilogo` e `totaliPasti` per riusarli.
+
 ## Test
 
 - Unit test (node:test) su peso crudo, riepilogo (rimasti, ultima volta), voce senza grammi,
