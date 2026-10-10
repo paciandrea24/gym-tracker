@@ -1,11 +1,11 @@
-import { formatDate, getWeekLabel } from './utils.js?v=32';
-import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=32';
-import { cercaProdottoOFF } from './services/pantryService.js?v=32';
-import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=32';
-import * as modal from './components/modal.js?v=32';
-import { icona } from './components/icons.js?v=32';
-import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=32';
-import { apriFoglio } from './components/sheet.js?v=32';
+import { formatDate, getWeekLabel } from './utils.js?v=33';
+import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=33';
+import { cercaProdottoOFF } from './services/pantryService.js?v=33';
+import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=33';
+import * as modal from './components/modal.js?v=33';
+import { icona } from './components/icons.js?v=33';
+import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=33';
+import { apriFoglio } from './components/sheet.js?v=33';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const BTN_PRINCIPALE = 'w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform';

@@ -3,17 +3,17 @@
 // Si pesano gli ingredienti crudi e, ogni giorno, i grammi che si mangiano. Il cotto si considera
 // pesante quanto il crudo (stima scelta dall'utente): niente pentola da pesare, niente porzioni.
 
-import * as prepService from '../services/mealPrepService.js?v=32';
-import * as nutriService from '../services/nutriService.js?v=32';
-import * as pantryService from '../services/pantryService.js?v=32';
-import * as pantrySync from '../services/pantrySync.js?v=32';
-import * as scanner from '../components/scanner.js?v=32';
-import * as voice from '../components/voice.js?v=32';
-import * as modal from '../components/modal.js?v=32';
-import * as ui from '../ui.js?v=32';
-import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=32';
-import { apriFoglio } from '../components/sheet.js?v=32';
-import { icona } from '../components/icons.js?v=32';
+import * as prepService from '../services/mealPrepService.js?v=33';
+import * as nutriService from '../services/nutriService.js?v=33';
+import * as pantryService from '../services/pantryService.js?v=33';
+import * as pantrySync from '../services/pantrySync.js?v=33';
+import * as scanner from '../components/scanner.js?v=33';
+import * as voice from '../components/voice.js?v=33';
+import * as modal from '../components/modal.js?v=33';
+import * as ui from '../ui.js?v=33';
+import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=33';
+import { apriFoglio } from '../components/sheet.js?v=33';
+import { icona } from '../components/icons.js?v=33';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const leggiNumero = (v) => parseFloat(String(v).replace(',', '.')) || 0;
