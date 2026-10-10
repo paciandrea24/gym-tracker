@@ -61,3 +61,10 @@ test('prodotto già presente: stesso codice, o stesso nome senza badare alle mai
     assert.equal(trovaEsistente(items, { barcode: '', nome: ' mozzarella ' })._id, 'b');
     assert.equal(trovaEsistente(items, { barcode: '999', nome: 'Ricotta' }), null);
 });
+
+import { parolaFinito } from '../public/js/services/pantryLogic.js';
+
+test('"finito" concorda con il nome del prodotto (prima parola)', () => {
+    const casi = { 'Bresaola': 'finita', 'Pasta Barilla': 'finita', 'Latte parzialmente scremato': 'finito', 'Pane in cassetta': 'finito', 'Uova': 'finite', 'Mele': 'finite', 'Banane': 'finite', 'Olive': 'finite', 'Riso basmati': 'finito', 'Fagioli': 'finiti', 'Salmone': 'finito', 'Yogurt greco 0%': 'finito', 'Miele': 'finito' };
+    for (const [nome, atteso] of Object.entries(casi)) assert.equal(parolaFinito(nome), atteso, nome);
+});

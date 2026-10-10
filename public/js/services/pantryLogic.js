@@ -29,6 +29,19 @@ export function statoProdotto(item) {
     return numero(item.grammiTotali) > 0 && percentuale(item) <= (Number(item.sogliaBassa) || 20) ? 'sta-finendo' : 'ok';
 }
 
+// "finito" concordato con la prima parola del nome: Bresaola finita, Uova/Mele finite, Fagioli
+// finiti, Latte/Pane/Salmone finito. Le parole in -e sono quasi sempre plurali femminili (mele,
+// olive), tranne i maschili singolari della dispensa elencati qui e quelli in -one.
+const MASCHILI_IN_E = ['latte', 'pane', 'sale', 'pepe', 'miele', 'caffe', 'caffè', 'dolcificante'];
+export function parolaFinito(nome) {
+    const parola = String(nome || '').trim().split(/\s+/)[0].toLowerCase();
+    if (parola === 'uova') return 'finite';
+    if (parola.endsWith('a')) return 'finita';
+    if (parola.endsWith('i')) return 'finiti';
+    if (parola.endsWith('e') && !parola.endsWith('one') && !MASCHILI_IN_E.includes(parola)) return 'finite';
+    return 'finito';
+}
+
 const perNome = (a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' });
 const finitiInFondo = (a, b) => (statoProdotto(a) === 'finito') - (statoProdotto(b) === 'finito') || perNome(a, b);
 

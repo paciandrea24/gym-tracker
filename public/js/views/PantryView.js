@@ -5,6 +5,7 @@ import * as scanner from '../components/scanner.js?v=31';
 import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.js?v=31';
 import * as modal from '../components/modal.js?v=31';
 import { searchFoodTable } from '../data/foodTable.js?v=31';
+import * as pantryUi from './pantryUi.js?v=31';
 
 const CATEGORIE = ['Proteina', 'Carboidrato', 'Latticino', 'Verdura', 'Frutta', 'Condimento/Grassi', 'Altro'];
 
@@ -22,165 +23,48 @@ export class PantryView {
     constructor(container) {
         this.container = container;
         this.items = [];
-        this.filtroCategoria = 'Tutti';
-        this.filtroStato = 'tutti'; // tutti | allerta (bassa + esaurito)
     }
 
     async render() {
         this.container.innerHTML = `
             <div class="flex justify-center items-center min-h-screen">
-                <p class="animate-pulse font-bold text-gray-500">Caricamento dispensa...</p>
+                <p class="animate-pulse font-bold text-gray-500">Caricamento...</p>
             </div>`;
         try {
             this.items = await pantryService.getPantryItems();
-            this.generateHTML();
-            this.bindEvents();
         } catch (e) {
-            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Errore caricamento dispensa.</div>`;
+            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Non riesco a caricare la dispensa. Controlla la connessione.</div>`;
+            return;
         }
+        pantryUi.renderDispensa(this.container, this.items, {
+            onApri: (id) => this.showItemDetail(id),
+            onDaComprare: () => this.showShoppingList(),
+            onScansiona: () => this.apriScanner(),
+            onAMano: () => this.handleVoiceAdd(),
+            onChiudiScanner: () => this.chiudiScanner()
+        });
     }
 
-    // ─── RENDER PRINCIPALE (DASHBOARD) ─────────────────────────────────
-    generateHTML() {
-        const totale = this.items.length;
-        const scarseScorete = this.items.filter(i => i.scortaBassa).length;
-        const esauriti = this.items.filter(i => i.esaurito).length;
-        const inAllerta = scarseScorete + esauriti;
-
-        let filtered = [...this.items];
-        if (this.filtroCategoria !== 'Tutti') {
-            filtered = filtered.filter(i => i.categoria === this.filtroCategoria);
-        }
-        if (this.filtroStato === 'allerta') {
-            filtered = filtered.filter(i => i.scortaBassa || i.esaurito);
-        }
-
-        const itemsHtml = filtered.length === 0
-            ? `<div class="text-center py-12 text-gray-400 font-medium">Nessun prodotto corrisponde ai filtri.</div>`
-            : filtered.map(item => this.renderItemCard(item)).join('');
-
-        this.container.innerHTML = `
-            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex justify-between items-center">
-                <h1 class="text-2xl font-bold text-gray-900 tracking-tight">La Mia Dispensa</h1>
-            </header>
-
-            <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50 min-h-screen">
-                
-                <div class="bg-gray-900 text-white p-5 rounded-[24px] shadow-xl flex justify-between items-center">
-                    <div>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Prodotti</p>
-                        <h2 class="text-4xl font-black">${totale}</h2>
-                    </div>
-                    <div class="text-right flex flex-col gap-2">
-                        <div class="bg-white/10 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex items-center justify-between gap-3">
-                            <span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest">In esaurimento</span>
-                            <span class="text-sm font-black text-orange-400">${scarseScorete}</span>
-                        </div>
-                        <div class="bg-white/10 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex items-center justify-between gap-3">
-                            <span class="text-[10px] font-bold text-red-400 uppercase tracking-widest">Esauriti</span>
-                            <span class="text-sm font-black text-red-400">${esauriti}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="action-buttons" class="flex space-x-2">
-                    <button id="voice-add-btn" class="flex-1 bg-white text-gray-900 border border-gray-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                        ➕ Manuale
-                    </button>
-                    <button id="scan-add-btn" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                        📸 Scanner
-                    </button>
-                    <button id="shopping-list-btn" class="flex-1 bg-yellow-50 text-yellow-700 border border-yellow-200 font-bold text-sm py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                        🛒 Spesa
-                    </button>
-                </div>
-
-                <div id="scanner-container" class="hidden bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
-                    <p class="text-center text-xs text-gray-400 font-bold mb-2 uppercase tracking-wider mt-2">Inquadra il codice a barre</p>
-                    <video id="pantry-reader-video" class="w-full rounded-xl overflow-hidden mb-3 bg-black min-h-[220px]" autoplay playsinline></video>
-                    <div class="flex gap-2">
-                        <div class="bg-gray-800 rounded-xl px-3 py-2 flex items-center border border-gray-700">
-                            <label class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mr-2">Q.TÀ</label>
-                            <input type="number" id="qty-input" value="1" min="1" max="99" class="w-10 bg-transparent text-white text-center font-black text-lg outline-none">
-                        </div>
-                        <button id="close-scanner-btn" class="flex-1 bg-red-500 text-white font-bold py-2 rounded-xl active:scale-95 transition-transform">
-                            Annulla
-                        </button>
-                    </div>
-                </div>
-
-                <div class="pt-2">
-                    <div class="flex bg-gray-100 p-1 rounded-xl mb-4">
-                        <button data-stato="tutti" class="stato-filter flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${this.filtroStato === 'tutti' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}">
-                            Tutti i Prodotti
-                        </button>
-                        <button data-stato="allerta" class="stato-filter flex-1 py-2 text-sm font-bold rounded-lg transition-colors flex justify-center items-center gap-1 ${this.filtroStato === 'allerta' ? 'bg-white shadow-sm text-red-600' : 'text-gray-500'}">
-                            ${inAllerta > 0 ? `<span class="flex h-2 w-2 relative"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>` : ''}
-                            Da Rifornire
-                        </button>
-                    </div>
-
-                    <div class="flex gap-2 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
-                        ${['Tutti', ...CATEGORIE].map(cat => {
-            const active = this.filtroCategoria === cat;
-            const style = CATEGORIA_STYLE[cat];
-            return `<button data-cat="${cat}" class="cat-filter flex-shrink-0 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all ${active ? 'bg-gray-800 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200'}">
-                                ${style ? style.icon + ' ' : ''}${cat}
-                            </button>`;
-        }).join('')}
-                    </div>
-                </div>
-
-                <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 space-y-3">
-                    ${itemsHtml}
-                </div>
-            </main>
-        `;
-    }
-
-    // ─── CARD SINGOLO PRODOTTO ──────────────────────────────────────────────────
-    renderItemCard(item) {
-        const style = CATEGORIA_STYLE[item.categoria] || CATEGORIA_STYLE['Altro'];
-        const perc = item.grammiTotali > 0 ? (item.grammiRimasti / item.grammiTotali) * 100 : 0;
-        const percRounded = Math.max(0, Math.min(100, perc));
-
-        let barColor = 'bg-green-500';
-        let borderClass = 'border-gray-100';
-        let statusBadge = '';
-
-        if (item.esaurito) {
-            barColor = 'bg-gray-300';
-            borderClass = 'border-red-200';
-            statusBadge = `<span class="flex-shrink-0 text-[9px] font-black bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-md uppercase tracking-wider">Esaurito</span>`;
-        } else if (item.scortaBassa) {
-            barColor = 'bg-orange-400';
-            borderClass = 'border-orange-200';
-            statusBadge = `<span class="flex-shrink-0 text-[9px] font-black bg-orange-50 text-orange-600 border border-orange-100 px-2 py-0.5 rounded-md uppercase tracking-wider animate-pulse">Scorta bassa</span>`;
-        }
-
-        return `
-            <div class="pantry-item-card bg-gray-50 p-4 rounded-xl border ${borderClass} shadow-sm mb-3 cursor-pointer active:scale-95 transition-transform flex gap-4 items-center" data-id="${item._id}">
-                ${item.immagine
-                ? `<img src="${item.immagine}" class="w-14 h-14 object-cover rounded-xl border border-gray-200 flex-shrink-0">`
-                : `<div class="w-14 h-14 ${style.bg} rounded-xl flex items-center justify-center text-2xl border ${style.border} flex-shrink-0">${style.icon}</div>`
+    apriScanner() {
+        pantryUi.mostraScanner(true);
+        scanner.startScanner(
+            'pantry-reader-video',
+            (barcode) => { this.chiudiScanner(); this.handleCodice(barcode); },
+            async (err) => {
+                await modal.showModal({ type: 'error', title: 'Fotocamera', message: err });
+                this.chiudiScanner();
             }
-                
-                <div class="flex-1 min-w-0 pr-1">
-                    <div class="flex justify-between items-start mb-1">
-                        <h4 class="text-[14px] font-bold text-gray-800 break-words leading-tight pr-2">${item.nome}</h4>
-                        ${statusBadge}
-                    </div>
-                    
-                    <div class="flex justify-between items-end mt-2">
-                        <p class="text-sm font-black text-gray-900">${item.grammiRimasti}g <span class="text-[10px] font-medium text-gray-400">/ ${item.grammiTotali}g</span></p>
-                    </div>
+        );
+    }
 
-                    <div class="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
-                        <div class="${barColor} h-1.5 rounded-full transition-all" style="width: ${percRounded}%"></div>
-                    </div>
-                </div>
-            </div>
-        `;
+    chiudiScanner() {
+        scanner.stopScanner();
+        pantryUi.mostraScanner(false);
+    }
+
+    // Codice letto dallo scanner o scritto a mano
+    handleCodice(codice) {
+        return this.fetchAndAddProduct(codice, 1);
     }
 
     // ─── DETTAGLIO ARTICOLO ─────────────────────────────────────────────────────
@@ -344,78 +228,6 @@ export class PantryView {
             await pantryService.deletePantryItem(item._id);
             this.render();
         });
-    }
-
-    // ─── EVENTI PRINCIPALI ──────────────────────────────────────────────────────
-    bindEvents() {
-        this.container.querySelectorAll('.pantry-item-card').forEach(card => {
-            card.addEventListener('click', () => this.showItemDetail(card.dataset.id));
-        });
-
-        this.container.querySelectorAll('.stato-filter').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.filtroStato = btn.dataset.stato;
-                this.generateHTML();
-                this.bindEvents();
-            });
-        });
-
-        this.container.querySelectorAll('.cat-filter').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.filtroCategoria = btn.dataset.cat;
-                this.generateHTML();
-                this.bindEvents();
-            });
-        });
-
-        // NUOVO CODICE:
-        const shoppingBtn = document.getElementById('shopping-list-btn');
-        if (shoppingBtn) {
-            shoppingBtn.addEventListener('click', () => this.showShoppingList());
-        }
-
-        // Tasto Scanner
-        const scanBtn = document.getElementById('scan-add-btn');
-        if (scanBtn) {
-            scanBtn.addEventListener('click', () => {
-                document.getElementById('scanner-container').classList.remove('hidden');
-                document.getElementById('action-buttons').classList.add('hidden');
-                scanner.startScanner(
-                    'pantry-reader-video',
-                    (barcode) => {
-                        this.handleCloseScanner();
-                        const qty = parseInt(document.getElementById('qty-input')?.value) || 1;
-                        this.fetchAndAddProduct(barcode, qty);
-                    },
-                    async (err) => {
-                        await modal.showModal({ type: 'error', title: 'Errore Scanner', message: err });
-                        this.handleCloseScanner();
-                    }
-                );
-            });
-        }
-
-        const closeScannerBtn = document.getElementById('close-scanner-btn');
-        if (closeScannerBtn) {
-            closeScannerBtn.addEventListener('click', () => {
-                this.handleCloseScanner();
-            });
-        }
-
-        const voiceBtn = document.getElementById('voice-add-btn');
-        if (voiceBtn) {
-            voiceBtn.addEventListener('click', () => {
-                this.handleVoiceAdd();
-            });
-        }
-    }
-
-    handleCloseScanner() {
-        scanner.stopScanner();
-        const scannerContainer = document.getElementById('scanner-container');
-        const actionBtns = document.getElementById('action-buttons');
-        if (scannerContainer) scannerContainer.classList.add('hidden');
-        if (actionBtns) actionBtns.classList.remove('hidden');
     }
 
     // ─── NUOVO: PAGINA LISTA DELLA SPESA FULL-SCREEN PER IL SUPERMERCATO ───
