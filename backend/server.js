@@ -1209,8 +1209,16 @@ app.get('/api/weight', async (req, res) => {
     } catch (e) { res.status(500).json([]); }
 });
 
+// Una pesata al giorno (giorno italiano): se oggi c'è già, si aggiorna con l'ultima
 app.post('/api/weight', async (req, res) => {
     try {
+        const diOggi = await Weight.findOne({ userId: 'admin', date: { $gte: getItalyMidnight() } }).sort({ date: -1 });
+        if (diOggi) {
+            diOggi.weight = req.body.weight;
+            diOggi.date = new Date();
+            await diOggi.save();
+            return res.json({ success: true, log: diOggi, aggiornata: true });
+        }
         const newLog = new Weight({ weight: req.body.weight });
         await newLog.save();
         res.json({ success: true, log: newLog });
