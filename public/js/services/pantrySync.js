@@ -79,10 +79,11 @@ export async function scalaDispensa(meal) {
                 } else {
                     // Mostra modale di scelta
                     pantryItemId = await modal.showChoiceModal({
-                        title: `"${item.nome}"`,
-                        message: 'A quale prodotto in dispensa corrisponde?',
+                        title: item.nome,
+                        message: 'Da quale prodotto della dispensa lo tolgo?',
                         options: item.candidates,
-                        allowNone: true
+                        allowNone: true,
+                        nota: `La prossima volta che scrivi "${item.nome}" uso la stessa scelta.`
                     });
                     setCachedMatch(item.nome, pantryItemId);
                 }

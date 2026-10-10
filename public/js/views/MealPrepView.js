@@ -474,7 +474,7 @@ export class MealPrepView {
     async togliIngrediente(idx) {
         const ing = this.prep.ingredienti[idx];
         if (!ing) return;
-        const ok = await modal.showModal({ type: 'confirm', title: 'Togli', message: `Togliere "${ing.nome}" dalla preparazione? Torna in dispensa.`, confirmText: 'Togli', cancelText: 'Annulla' });
+        const ok = await modal.showModal({ type: 'confirm', title: 'Togli', message: `Togliere "${ing.nome}" dalla preparazione? Torna in dispensa.`, confirmText: 'Togli', cancelText: 'Annulla', pericolo: true });
         if (!ok) return;
 
         const prep = this.prep;
@@ -495,7 +495,7 @@ export class MealPrepView {
         const ok = await modal.showModal({
             type: 'confirm', title: 'Elimina preparazione',
             message: `Eliminare "${this.prep.nome}"? Gli ingredienti tornano in dispensa.`,
-            confirmText: 'Elimina', cancelText: 'Annulla'
+            confirmText: 'Elimina', cancelText: 'Annulla', pericolo: true
         });
         if (!ok) return;
 

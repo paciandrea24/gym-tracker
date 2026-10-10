@@ -327,7 +327,7 @@ export function renderModuloEsercizio(container, ex, { onSalva, onAnnulla, onEli
 
     $('cancel-btn').addEventListener('click', onAnnulla);
     $('delete-ex-btn')?.addEventListener('click', async () => {
-        const ok = await modal.showModal({ type: 'confirm', title: 'Elimina esercizio', message: `Eliminare "${ex.name}" dalla scheda? Lo storico resta.`, confirmText: 'Elimina', cancelText: 'Annulla' });
+        const ok = await modal.showModal({ type: 'confirm', title: 'Elimina esercizio', message: `Eliminare "${ex.name}" dalla scheda? Lo storico resta.`, confirmText: 'Elimina', cancelText: 'Annulla', pericolo: true });
         if (ok) onElimina();
     });
     $('save-ex-btn').addEventListener('click', () => {

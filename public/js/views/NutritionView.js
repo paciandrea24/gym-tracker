@@ -185,7 +185,7 @@ export class NutritionView {
     }
 
     async handleRemoveIngredient(mealId, ingIdx) {
-        const confirm = await modal.showModal({ type: 'confirm', title: 'Togli', message: "Togliere questo alimento dal pasto?", confirmText: 'Togli', cancelText: 'Annulla' });
+        const confirm = await modal.showModal({ type: 'confirm', title: 'Togli', message: "Togliere questo alimento dal pasto?", confirmText: 'Togli', cancelText: 'Annulla', pericolo: true });
         if (!confirm) return;
 
         const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
@@ -392,7 +392,7 @@ export class NutritionView {
     }
 
     async handleDeleteMeal(mealId) {
-        const confirm = await modal.showModal({ type: 'confirm', title: 'Conferma Eliminazione', message: 'Vuoi eliminare questo pasto?', confirmText: 'Sì', cancelText: 'No' });
+        const confirm = await modal.showModal({ type: 'confirm', title: 'Elimina pasto', message: 'Vuoi eliminare questo pasto?', confirmText: 'Elimina', cancelText: 'Annulla', pericolo: true });
         if (!confirm) return;
         try {
             // --- RIPRISTINO DISPENSA PASTO INTERO (le porzioni di meal prep vengono ignorate) ---

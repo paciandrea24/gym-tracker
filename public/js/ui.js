@@ -519,7 +519,7 @@ export function renderFavoritePreviewModal(favMeal, onConfirm, onUnfavorite) {
         onConfirm();
     });
     box.querySelector('#remove-fav-btn').addEventListener('click', async () => {
-        const ok = await modal.showModal({ type: 'confirm', title: 'Preferiti', message: `Togliere "${favMeal.alimenti}" dai preferiti?`, confirmText: 'Togli', cancelText: 'Annulla' });
+        const ok = await modal.showModal({ type: 'confirm', title: 'Preferiti', message: `Togliere "${favMeal.alimenti}" dai preferiti?`, confirmText: 'Togli', cancelText: 'Annulla', pericolo: true });
         if (!ok) return;
         chiudi();
         onUnfavorite();

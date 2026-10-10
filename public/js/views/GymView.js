@@ -59,7 +59,7 @@ export class GymView {
     }
 
     async handleDeleteRoutine(routineId) {
-        const confirm = await modal.showModal({ type: 'confirm', title: 'Elimina scheda', message: 'Eliminare questa scheda e i suoi esercizi?', confirmText: 'Elimina', cancelText: 'Annulla' });
+        const confirm = await modal.showModal({ type: 'confirm', title: 'Elimina scheda', message: 'Eliminare questa scheda e i suoi esercizi?', confirmText: 'Elimina', cancelText: 'Annulla', pericolo: true });
         if (confirm) {
             await gymService.deleteRoutine(routineId);
             this.showRoutinesList();
