@@ -4,6 +4,7 @@ import * as gymService from '../services/gymService.js?v=27';
 import * as modal from '../components/modal.js?v=27';
 import * as userService from '../services/userService.js?v=27';
 import * as ui from '../ui.js?v=27';
+import * as gymUi from './gymUi.js?v=27';
 import { debounce, exportToCSV } from '../utils.js?v=27';
 
 export class GymView {
@@ -23,13 +24,6 @@ export class GymView {
             ui.updateFeedback(idx, 'Salvato ✓');
         }, 500);
 
-        // Listener globale per la tara dei bilancieri (lo agganciamo una volta sola)
-        if (!window._gymConfigListenerAdded) {
-            window.addEventListener('configExercise', async (e) => this.handleConfigExercise(e.detail));
-            window.addEventListener('editRoutineExercise', async (e) => this.handleEditRoutineExercise(e.detail));
-            window.addEventListener('exportGymCSV', () => this.handleExportCSV());
-            window._gymConfigListenerAdded = true;
-        }
     }
 
     async render() {
@@ -44,46 +38,35 @@ export class GymView {
 
     async showRoutinesList() {
         this.container.innerHTML = `<div class="flex justify-center items-center min-h-screen"><p class="animate-pulse">Caricamento...</p></div>`;
-        const routines = await gymService.getRoutines();
-        ui.renderRoutinesList(
-            this.container, routines,
-            (id) => this.handleOpenRoutine(id),
-            () => this.handleCreateRoutine(),
-            (id, name) => this.handleEditRoutineName(id, name),
-            (id) => this.handleDeleteRoutine(id)
-        );
+        const [routines, storico] = await Promise.all([gymService.getRoutines(), gymService.getAllHistory()]);
+        const ultimi = {};
+        for (const h of Array.isArray(storico) ? storico : []) {
+            if (!ultimi[h.routineId] || h.endTime > ultimi[h.routineId]) ultimi[h.routineId] = h.endTime;
+        }
+        gymUi.renderSchede(this.container, routines, ultimi, {
+            onApri: (id) => this.handleOpenRoutine(id),
+            onNuova: () => this.handleCreateRoutine()
+        });
     }
 
     async handleCreateRoutine() {
-        const name = await modal.showModal({ type: 'prompt', title: 'Crea Scheda', message: 'Come vuoi chiamare la nuova scheda?', inputValue: 'Nuova Scheda' });
+        const name = await modal.showModal({ type: 'prompt', title: 'Nuova scheda', message: 'Come la chiami?', inputValue: 'Nuova scheda' });
         if (name && name.trim() !== "") {
             await gymService.createRoutine(name.trim());
             this.showRoutinesList();
         }
     }
 
-    async handleEditRoutineExercise(exerciseId) {
-        const routine = await gymService.getRoutine(this.currentRoutineId);
-        const exToEdit = routine.exercises.find(e => String(e.id) === String(exerciseId));
-        if (!exToEdit) return;
-
-        ui.renderRoutineBuilder(this.container, async (updatedExercise) => {
-            this.container.innerHTML = `<p class="text-center mt-20 animate-pulse">Salvataggio in corso...</p>`;
-            await gymService.updateExerciseInRoutine(this.currentRoutineId, updatedExercise);
-            this.showDashboard();
-        }, () => this.showDashboard(), exToEdit);
-    }
-
     async handleEditRoutineName(routineId, oldName) {
-        const newName = await modal.showModal({ type: 'prompt', title: 'Modifica Nome', message: 'Inserisci il nuovo nome:', inputValue: oldName });
+        const newName = await modal.showModal({ type: 'prompt', title: 'Rinomina', message: 'Nuovo nome della scheda:', inputValue: oldName });
         if (newName && newName.trim() !== "") {
             await gymService.editRoutineName(routineId, newName.trim());
-            this.showRoutinesList();
+            this.showDashboard();
         }
     }
 
     async handleDeleteRoutine(routineId) {
-        const confirm = await modal.showModal({ type: 'confirm', title: 'Attenzione!', message: 'Vuoi davvero eliminare questa scheda e tutti i suoi esercizi?', confirmText: 'Sì', cancelText: 'No' });
+        const confirm = await modal.showModal({ type: 'confirm', title: 'Elimina scheda', message: 'Eliminare questa scheda e i suoi esercizi?', confirmText: 'Elimina', cancelText: 'Annulla' });
         if (confirm) {
             await gymService.deleteRoutine(routineId);
             this.showRoutinesList();
@@ -141,31 +124,42 @@ export class GymView {
         if (!routine) return this.showRoutinesList();
 
         const history = await gymService.getHistoryForRoutine(this.currentRoutineId);
-        ui.renderDashboard(
-            this.container, routine, history, this.currentTab,
-            (tab) => { this.currentTab = tab; this.showDashboard(); },
-            () => this.handleStartSession(),
-            () => this.showRoutineBuilder(),
-            (id) => this.handleDeleteExercise(id),
-            (id, name) => this.handleShowExerciseStats(id, name),
-            () => this.showRoutinesList()
-        );
+        gymUi.renderScheda(this.container, routine, history, this.currentTab, {
+            onTab: (tab) => { this.currentTab = tab; this.showDashboard(); },
+            onInizia: () => this.handleStartSession(),
+            onAggiungi: () => this.showModulo(null),
+            onEsercizio: (id) => {
+                const ex = routine.exercises.find(e => String(e.id) === String(id));
+                if (!ex) return;
+                gymUi.apriFoglioEsercizio(ex, {
+                    onProgressi: () => this.handleShowExerciseStats(ex.id, ex.name),
+                    onModifica: () => this.showModulo(ex)
+                });
+            },
+            onMenu: () => gymUi.apriMenuScheda(routine, {
+                onRinomina: () => this.handleEditRoutineName(routine.id, routine.name),
+                onElimina: () => this.handleDeleteRoutine(routine.id)
+            }),
+            onIndietro: () => this.showRoutinesList(),
+            onScarica: () => this.handleExportCSV()
+        });
     }
 
-    async handleDeleteExercise(exerciseId) {
-        const confirm = await modal.showModal({ type: 'confirm', title: 'Elimina Esercizio', message: 'Vuoi eliminare questo esercizio dalla scheda?', confirmText: 'Sì', cancelText: 'No' });
-        if (confirm) {
-            await gymService.removeExerciseFromRoutine(this.currentRoutineId, exerciseId);
-            this.showDashboard();
-        }
-    }
-
-    showRoutineBuilder() {
-        ui.renderRoutineBuilder(this.container, async (newExercise) => {
-            this.container.innerHTML = `<p class="text-center mt-20 animate-pulse">Salvataggio...</p>`;
-            await gymService.addExerciseToRoutine(this.currentRoutineId, newExercise);
-            this.showDashboard();
-        }, () => this.showDashboard());
+    // Modulo unico per creare o modificare un esercizio (anche peso per lato, bilanciere e recupero)
+    showModulo(esercizio) {
+        gymUi.renderModuloEsercizio(this.container, esercizio, {
+            onSalva: async (dati) => {
+                this.container.innerHTML = `<p class="text-center mt-20 animate-pulse">Salvataggio...</p>`;
+                if (esercizio) await gymService.updateExerciseInRoutine(this.currentRoutineId, dati);
+                else await gymService.addExerciseToRoutine(this.currentRoutineId, dati);
+                this.showDashboard();
+            },
+            onAnnulla: () => this.showDashboard(),
+            onElimina: async () => {
+                await gymService.removeExerciseFromRoutine(this.currentRoutineId, esercizio.id);
+                this.showDashboard();
+            }
+        });
     }
 
     async handleStartSession() {
@@ -335,35 +329,6 @@ export class GymView {
             { allTimeMax1RM, allTimeMaxWeight, totalSessions },
             () => this.showDashboard()
         );
-    }
-
-    async handleConfigExercise(exerciseId) {
-        const routine = await gymService.getRoutine(this.currentRoutineId);
-        const ex = routine.exercises.find(e => String(e.id) === String(exerciseId));
-        if (!ex) return;
-
-        // 1. Chiediamo prima i secondi di recupero
-        const rest = await modal.showModal({ type: 'prompt', title: `Configura ${ex.name}`, message: `Inserisci i SECONDI di recupero tra le serie (es. 90 o 120):`, inputValue: String(ex.restSeconds || 90) });
-        if (rest === null || rest === false) return;
-
-        // 2. Chiediamo il moltiplicatore
-        const mult = await modal.showModal({ type: 'prompt', title: `Configura ${ex.name}`, message: `Inserisci il moltiplicatore:\n(1 = Manubri / Peso Totale)\n(2 = Se logghi solo 1 lato)`, inputValue: String(ex.weightMultiplier || 1) });
-        if (mult === null || mult === false) return;
-
-        // 3. Chiediamo il peso del bilanciere
-        const bar = await modal.showModal({ type: 'prompt', title: `Tara Attrezzo`, message: `Peso del bilanciere o tara in kg (es. 20):`, inputValue: String(ex.barbellWeight || 0) });
-        if (bar === null || bar === false) return;
-
-        // Salvataggio Parametri
-        ex.restSeconds = parseInt(rest, 10) || 90;
-        ex.weightMultiplier = parseFloat(mult) || 1;
-        ex.barbellWeight = parseFloat(bar) || 0;
-
-        await gymService.saveRoutine(routine);
-        await modal.showModal({ type: 'success', title: 'Salvato!', message: `Configurazione salvata con successo!\n\n⏱️ Recupero: ${ex.restSeconds}s\n⚖️ Calcolo Grafici: (Kg x ${ex.weightMultiplier}) + ${ex.barbellWeight}kg` });
-
-        // Aggiorniamo la vista
-        this.showDashboard();
     }
 
     startRecoveryTimer(seconds) {

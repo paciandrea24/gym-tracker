@@ -9,7 +9,15 @@ const crea = (percorsi, base = 'w-5 h-5') => (classi = base) => svg(percorsi, cl
 
 const STELLA = '<path d="M11.05 2.93c.3-.92 1.6-.92 1.9 0l1.52 4.67a1 1 0 00.95.69h4.91c.97 0 1.37 1.24.59 1.81l-3.98 2.89a1 1 0 00-.36 1.12l1.52 4.67c.3.92-.76 1.69-1.54 1.12l-3.98-2.89a1 1 0 00-1.17 0l-3.98 2.89c-.78.57-1.84-.2-1.54-1.12l1.52-4.67a1 1 0 00-.36-1.12L2.07 10.1c-.78-.57-.38-1.81.59-1.81h4.91a1 1 0 00.95-.69l1.53-4.67z"/>';
 
+// Icone piene (punti): stessa forma, riempite
+const piena = (percorsi) => (classi = 'w-5 h-5') => svg(percorsi, classi).replace('fill="none"', 'fill="currentColor"').replace('stroke="currentColor"', 'stroke="none"');
+
 export const icona = {
+    puntini: piena('<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>'),
+    maniglia: piena('<circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>'),
+    play: crea('<circle cx="12" cy="12" r="9"/><path d="M10 9l5 3-5 3z"/>', 'w-6 h-6'),
+    grafico: crea('<path d="M4 19h16M7 16V10m5 6V6m5 10v-4"/>'),
+    spunta: crea('<path d="M5 13l4 4L19 7"/>', 'w-4 h-4'),
     stellaPiena: (classi = 'w-6 h-6') => svg(STELLA, classi).replace('fill="none"', 'fill="currentColor"'),
     mic: crea('<path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>'),
     piu: crea('<path d="M12 5v14M5 12h14"/>'),
