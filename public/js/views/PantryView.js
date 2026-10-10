@@ -7,6 +7,7 @@ import * as modal from '../components/modal.js?v=31';
 import { searchFoodTable } from '../data/foodTable.js?v=31';
 import * as pantryUi from './pantryUi.js?v=31';
 import { rifornimento, correzioneGrammi } from '../services/pantryLogic.js?v=31';
+import { showToast } from '../services/pantrySync.js?v=31';
 
 const CATEGORIE = ['Proteina', 'Carboidrato', 'Latticino', 'Verdura', 'Frutta', 'Condimento/Grassi', 'Altro'];
 
@@ -99,118 +100,25 @@ export class PantryView {
         this.showProdotto(item._id);
     }
 
-    // ─── NUOVO: PAGINA LISTA DELLA SPESA FULL-SCREEN PER IL SUPERMERCATO ───
-    // ─── NUOVO: PAGINA LISTA DELLA SPESA FULL-SCREEN CON MODIFICA PESO E SOVRASCRITTURA ───
+    // ─── DA COMPRARE ────────────────────────────────────────────────────────────
     showShoppingList() {
-        const toBuy = this.items.filter(i => i.scortaBassa || i.esaurito);
-
-        const itemsHtml = toBuy.length === 0
-            ? `<div class="text-center py-20 bg-white m-4 rounded-[24px] border border-gray-100 shadow-sm">
-                 <div class="text-6xl mb-4">🛒</div>
-                 <p class="text-gray-900 font-black text-xl mb-1">Niente da comprare!</p>
-                 <p class="text-gray-500 font-medium">La tua dispensa è al top. 🚀</p>
-               </div>`
-            : toBuy.map((item) => `
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-3 gap-3">
-                    <div class="flex items-center gap-3 flex-1 min-w-0">
-                        <input type="checkbox" id="buy-${item._id}" value="${item._id}" class="shopping-cb w-6 h-6 text-yellow-500 bg-white border-gray-300 rounded focus:ring-yellow-500 active:scale-90 transition-transform cursor-pointer">
-                        <div class="flex-1 min-w-0 pl-1">
-                            <label for="buy-${item._id}" class="font-bold text-gray-800 text-[15px] truncate block leading-tight cursor-pointer">${item.nome}</label>
-                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Predefinito: ${item.pesoConfezione}g</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center gap-3 flex-shrink-0 justify-between sm:justify-end w-full sm:w-auto">
-                        <div class="flex items-center gap-1">
-                            <label class="text-[10px] font-bold text-gray-400 uppercase">Peso (g)</label>
-                            <input type="number" id="weight-${item._id}" value="${item.pesoConfezione}" class="w-16 bg-gray-50 border border-gray-200 rounded-xl p-2 text-center font-bold text-gray-900 outline-none focus:ring-2 focus:ring-yellow-400 transition-all">
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <label class="text-[10px] font-bold text-gray-400 uppercase">Q.tà</label>
-                            <input type="number" id="qty-${item._id}" value="1" min="1" max="99" class="w-12 bg-white border border-gray-200 rounded-xl p-2 text-center font-black text-gray-900 outline-none focus:ring-2 focus:ring-yellow-400 transition-all">
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-
-        this.container.innerHTML = `
-            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
-                <div class="flex items-center">
-                    <button id="back-shopping-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2 active:scale-90 transition-transform">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                    </button>
-                    <h1 class="text-xl font-bold text-gray-900 truncate">Lista della Spesa</h1>
-                </div>
-            </header>
-
-            <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50 min-h-screen">
-                ${toBuy.length > 0 ? `<p class="text-xs font-bold text-gray-500 mb-2 leading-relaxed bg-yellow-50 text-yellow-700 p-4 rounded-2xl border border-yellow-100 shadow-sm">Modifica il peso della confezione se differisce dal solito, spunta l'articolo e caricalo in dispensa.</p>` : ''}
-                
-                <div class="space-y-1">
-                    ${itemsHtml}
-                </div>
-
-                ${toBuy.length > 0 ? `
-                    <div class="pt-2">
-                        <button id="confirm-shopping-btn" class="w-full bg-yellow-400 text-yellow-900 font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgba(250,204,21,0.2)] active:scale-95 transition-all flex justify-center items-center gap-2">
-                            ✅ Carica nel Database
-                        </button>
-                    </div>
-                ` : ''}
-            </main>
-        `;
-
-        document.getElementById('back-shopping-btn').addEventListener('click', () => this.render());
-
-        const confirmBtn = document.getElementById('confirm-shopping-btn');
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', async () => {
-                const checkboxes = this.container.querySelectorAll('.shopping-cb:checked');
-                if (checkboxes.length === 0) {
-                    await modal.showModal({ type: 'alert', title: 'Carrello Vuoto', message: 'Spunta almeno un prodotto che hai messo nel carrello prima di rifornire.' });
-                    return;
-                }
-
-                confirmBtn.innerHTML = '⏳ Aggiornamento in corso...';
-                confirmBtn.classList.replace('bg-yellow-400', 'bg-gray-200');
-                confirmBtn.classList.replace('text-yellow-900', 'text-gray-500');
-                confirmBtn.disabled = true;
-
-                const updatePromises = Array.from(checkboxes).map(async (cb) => {
-                    const itemId = cb.value;
-                    const item = this.items.find(i => String(i._id) === String(itemId));
-                    const qtyInput = this.container.querySelector(`#qty-${itemId}`);
-                    const weightInput = this.container.querySelector(`#weight-${itemId}`);
-
-                    const qty = parseInt(qtyInput.value) || 1;
-                    // Estrae il peso modificato manualmente (es: 300g reali della vaschetta di carne)
-                    const customWeight = parseFloat(weightInput.value) || item.pesoConfezione;
-
-                    if (item) {
-                        const totalNewWeight = qty * customWeight;
-
-                        // EFFETTUA LA SOVRASCRITTURA COMPLETA DEI VALORI TARGET
-                        return pantryService.updatePantryItem(itemId, {
-                            pesoConfezione: customWeight,
-                            quantitaConfezioni: qty,       // Sovrascrive la quantità
-                            grammiTotali: totalNewWeight,   // Sovrascrive il totale target (i 300g dell'esempio)
-                            grammiRimasti: totalNewWeight   // Sovrascrive i grammi rimasti correnti
-                        });
-                    }
-                });
-
+        pantryUi.renderDaComprare(this.container, this.items, {
+            onIndietro: () => this.render(),
+            onMetti: async (scelte) => {
                 try {
-                    await Promise.all(updatePromises);
-                    await modal.showModal({ type: 'success', title: 'Fatto!', message: 'La dispensa è stata aggiornata e resettata con i nuovi valori reali! 🛒' });
-                    this.render();
+                    // La spesa si somma a quello che resta (vedi rifornimento)
+                    await Promise.all(scelte.map(({ id, confezioni, grammiLuna }) => {
+                        const item = this.items.find(i => String(i._id) === String(id));
+                        return pantryService.updatePantryItem(id, rifornimento(item, confezioni, grammiLuna));
+                    }));
+                    showToast(scelte.length === 1 ? '1 prodotto messo in dispensa' : `${scelte.length} prodotti messi in dispensa`);
                 } catch (e) {
-                    await modal.showModal({ type: 'error', title: 'Errore', message: 'Si è verificato un errore durante il caricamento delle scorte.' });
-                    this.render();
+                    await modal.showModal({ type: 'error', title: 'Non salvato', message: 'Controlla la connessione e riprova.' });
                 }
-            });
-        }
+                this.render();
+            }
+        });
     }
-
 
     // ─── AGGIUNGI DA SCANNER ─────────────────────────────────────────────────────
     async fetchAndAddProduct(barcode, quantitaConfezioni = 1) {

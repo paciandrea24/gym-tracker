@@ -106,11 +106,11 @@ export function mostraScanner(visibile) {
 // ─── PEZZI COMUNI ──────────────────────────────────────────────────────────
 // Numero di confezioni con + e − (minimo 1); il valore si può anche scrivere
 function contatore(id, valore = 1, etichetta = 'Confezioni') {
-    const tasto = 'px-3 py-2 text-gray-500 font-black text-lg leading-none active:bg-gray-200';
+    const tasto = 'h-full px-3 text-gray-500 font-black text-lg leading-none active:bg-gray-200';
     return `
         <div class="contatore min-w-0">
             ${etichetta ? `<p class="text-[11px] font-semibold text-gray-400 uppercase mb-1">${etichetta}</p>` : ''}
-            <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-gray-900">
+            <div class="h-11 flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-gray-900">
                 <button type="button" class="contatore-meno ${tasto}" aria-label="Una in meno">−</button>
                 <input id="${id}" type="text" inputmode="numeric" value="${valore}" class="contatore-valore w-full min-w-0 text-center text-lg font-black bg-transparent outline-none p-0">
                 <button type="button" class="contatore-piu ${tasto}" aria-label="Una in più">+</button>
@@ -136,7 +136,7 @@ function collegaContatori(root, onCambia) {
 const campoGrammi = (id, valore, etichetta) => `
     <div class="min-w-0">
         <label for="${id}" class="block text-[11px] font-semibold text-gray-400 uppercase mb-1">${etichetta}</label>
-        <input id="${id}" type="text" inputmode="decimal" value="${valore === '' || valore == null ? '' : String(valore).replace('.', ',')}" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 text-center text-lg font-black outline-none focus:ring-2 focus:ring-gray-900">
+        <input id="${id}" type="text" inputmode="decimal" value="${valore === '' || valore == null ? '' : String(valore).replace('.', ',')}" placeholder="0" class="w-full h-11 bg-gray-50 border border-gray-200 rounded-xl text-center text-lg font-black outline-none focus:ring-2 focus:ring-gray-900">
     </div>`;
 
 // "Per 100 g": Calorie e macro per esteso, con i colori dell'app
@@ -225,6 +225,85 @@ export function apriFoglioConfezioni(item, onConferma) {
         chiudi();
         onConferma(n, g);
     });
+}
+
+// ─── DA COMPRARE ───────────────────────────────────────────────────────────
+// Lista della spesa: si spunta quello che si è preso; "Modifica" cambia confezioni e grammi
+// l'una. onMetti(scelte: [{ id, confezioni, grammiLuna }]) con solo i prodotti spuntati.
+export function renderDaComprare(container, items, { onIndietro, onMetti }) {
+    const lista = daComprare(items);
+    const scelte = Object.fromEntries(lista.map(i => [i._id, { spuntato: false, aperto: false, confezioni: 1, grammiLuna: numero(i.pesoConfezione) }]));
+    const confezioni = (n, g) => `${n} ${n === 1 ? 'confezione' : 'confezioni'} da ${grammi(g)}`;
+    const diventano = (item) => `In dispensa diventano <b class="text-gray-900">${grammi(rifornimento(item, scelte[item._id].confezioni, scelte[item._id].grammiLuna).grammiRimasti)}</b>`;
+
+    const riga = (item) => {
+        const s = scelte[item._id];
+        const stato = statoProdotto(item) === 'finito'
+            ? parolaFinito(item.nome).replace(/^f/, 'F')
+            : `Restano ${grammi(item.grammiRimasti)}`;
+        return `
+            <div class="riga-spesa py-3" data-id="${esc(item._id)}">
+                <div class="flex items-center gap-3">
+                    <button type="button" class="spunta-spesa flex-1 min-w-0 flex items-center gap-3 text-left" role="checkbox" aria-checked="${s.spuntato}">
+                        <span class="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center ${s.spuntato ? 'bg-gray-900 text-white' : 'border-2 border-gray-300'}">${s.spuntato ? icona.spunta() : ''}</span>
+                        <span class="min-w-0">
+                            <span class="block font-bold text-gray-800">${esc(item.nome)}</span>
+                            <span class="block text-[12px] font-semibold text-gray-400">${stato} · <span class="dettaglio-spesa">${confezioni(s.confezioni, s.grammiLuna)}</span></span>
+                        </span>
+                    </button>
+                    ${s.spuntato && !s.aperto ? `<button type="button" class="modifica-spesa text-[13px] font-bold text-indigo-600 py-1">Modifica</button>` : ''}
+                </div>
+                ${s.spuntato && s.aperto ? `
+                    <div class="grid grid-cols-2 gap-2 mt-3 ml-9">
+                        ${contatore(`spesa-qty-${esc(item._id)}`, s.confezioni)}
+                        ${campoGrammi(`spesa-grammi-${esc(item._id)}`, s.grammiLuna || '', "Grammi l'una")}
+                    </div>
+                    <p class="diventano text-[12px] font-semibold text-gray-500 mt-2 ml-9">${diventano(item)}</p>` : ''}
+            </div>`;
+    };
+
+    const disegna = () => {
+        const n = lista.filter(i => scelte[i._id].spuntato).length;
+        container.innerHTML = `
+            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
+                <button id="back-shopping-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2" aria-label="Indietro">${icona.indietro()}</button>
+                <div class="min-w-0">
+                    <h1 class="text-xl font-bold text-gray-900 leading-tight">Da comprare</h1>
+                    <p class="text-[12px] font-semibold text-gray-400">${lista.length} ${lista.length === 1 ? 'prodotto' : 'prodotti'}</p>
+                </div>
+            </header>
+            <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
+                ${lista.length ? `
+                    <p class="text-[13px] font-semibold text-gray-500 px-1">Spunta quello che hai preso. Quando hai finito, lo metti in dispensa tutto insieme.</p>
+                    <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">${lista.map(riga).join('')}</div>
+                    <button id="metti-in-dispensa-btn" class="${BTN_PRINCIPALE} disabled:opacity-40 disabled:active:scale-100" ${n ? '' : 'disabled'}>Metti in dispensa${n ? ` (${n})` : ''}</button>
+                ` : `
+                    <div class="bg-white rounded-[20px] border border-gray-100 p-6 text-center">
+                        <p class="font-bold text-gray-700">Non manca niente</p>
+                        <p class="text-[14px] font-medium text-gray-500 mt-1">Quando un prodotto sta per finire lo trovi qui.</p>
+                    </div>`}
+            </main>
+        `;
+        document.getElementById('back-shopping-btn').addEventListener('click', onIndietro);
+        container.querySelectorAll('.riga-spesa').forEach(r => {
+            const item = lista.find(i => String(i._id) === r.dataset.id);
+            const s = scelte[item._id];
+            r.querySelector('.spunta-spesa').addEventListener('click', () => { s.spuntato = !s.spuntato; if (!s.spuntato) s.aperto = false; disegna(); });
+            r.querySelector('.modifica-spesa')?.addEventListener('click', () => { s.aperto = true; disegna(); });
+            // Confezioni e grammi cambiano il dato e la riga "diventano" senza ridisegnare (resta il focus)
+            const aggiorna = () => {
+                r.querySelector('.diventano').innerHTML = diventano(item);
+                r.querySelector('.dettaglio-spesa').textContent = confezioni(s.confezioni, s.grammiLuna);
+            };
+            collegaContatori(r, (_, valore) => { s.confezioni = valore; aggiorna(); });
+            r.querySelector('[id^="spesa-grammi-"]')?.addEventListener('input', (e) => { s.grammiLuna = numero(e.target.value); aggiorna(); });
+        });
+        document.getElementById('metti-in-dispensa-btn')?.addEventListener('click', (e) => {
+            e.currentTarget.disabled = true;
+            onMetti(lista.filter(i => scelte[i._id].spuntato).map(i => ({ id: i._id, confezioni: scelte[i._id].confezioni, grammiLuna: scelte[i._id].grammiLuna })));
+        });
+    };
+    disegna();
 }
 
 // Foglio "Correggi i grammi": quanti ne restano davvero; onConferma(grammi)
