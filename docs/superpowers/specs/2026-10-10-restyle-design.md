@@ -32,6 +32,8 @@ push (l'utente prova sul telefono). Ordine: 1. Meal prep · 2. Nutrizione Oggi +
    - rosso solo per eliminare (e solo dentro dettagli o conferme).
 
 8. **Niente emoji**: le icone sono SVG a tratto (`components/icons.js`), colorate con il testo.
+9. **Come un'app nativa**: il tocco lungo non seleziona il testo e non apre il menu di iPhone, in
+   tutta l'app (`css/style.css`); nei campi dove si scrive la selezione resta.
 
 Helper condivisi lato client: `components/format.js` (numeri e macro), `components/sheet.js`
 (foglio dal basso), `components/icons.js` (icone).

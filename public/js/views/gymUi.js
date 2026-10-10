@@ -3,11 +3,11 @@
 // allenamento in corso con superserie, esercizio con drop set, superserie a giri, progressi.
 // Solo disegno ed eventi: i dati e i salvataggi li gestisce GymView.
 
-import { icona } from '../components/icons.js?v=30';
-import { apriFoglio } from '../components/sheet.js?v=30';
-import * as modal from '../components/modal.js?v=30';
-import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=30';
-import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco, testoMigliore } from '../services/gymLogic.js?v=30';
+import { icona } from '../components/icons.js?v=31';
+import { apriFoglio } from '../components/sheet.js?v=31';
+import * as modal from '../components/modal.js?v=31';
+import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=31';
+import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco, testoMigliore } from '../services/gymLogic.js?v=31';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -352,16 +352,14 @@ export function renderModuloEsercizio(container, ex, { onSalva, onAnnulla, onEli
 
 // ─── ALLENAMENTO IN CORSO ──────────────────────────────────────────────────
 // elementi: da elementiDaFare(session) — esercizi singoli e blocchi superserie
-// Su iPhone il tocco lungo sulle card serve a trascinarle: niente selezione del testo né menu
-const NON_SELEZIONABILE = 'select-none [-webkit-touch-callout:none]';
 const riassuntoBreve = (ex) => riassuntoEsercizio(ex).replace(/ · recupero \d+:\d+$/, '').replace(' + bilanciere', '');
 
 export function renderAllenamento(container, session, routine, elementi, { onApri, onApriFatto, onUnisci, onSepara, onTermina }) {
     const trova = (id) => routine.exercises.find(e => String(e.id) === String(id));
     const cardEsercizio = (ex) => `
-        <div class="card-da-fare ${NON_SELEZIONABILE} bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-1 p-2 transition" data-id="${esc(ex.id)}">
+        <div class="card-da-fare bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-1 p-2 transition" data-id="${esc(ex.id)}">
             <span class="maniglia p-2 text-gray-300 cursor-grab" style="touch-action: none" aria-label="Trascina per fare la superserie">${icona.maniglia()}</span>
-            <button class="apri-esercizio ${NON_SELEZIONABILE} flex-1 min-w-0 flex items-center gap-2 text-left py-2 pr-2" data-id="${esc(ex.id)}">
+            <button class="apri-esercizio flex-1 min-w-0 flex items-center gap-2 text-left py-2 pr-2" data-id="${esc(ex.id)}">
                 <span class="flex-1 min-w-0">
                     <span class="block font-bold text-gray-900">${esc(ex.name)}</span>
                     <span class="block text-[12px] font-semibold text-gray-400">${riassuntoBreve(ex)}</span>
@@ -371,7 +369,7 @@ export function renderAllenamento(container, session, routine, elementi, { onApr
             </button>
         </div>`;
     const blocco = (ids) => `
-        <div class="blocco-superserie ${NON_SELEZIONABILE} bg-white rounded-2xl border border-gray-100 shadow-sm p-4 transition" data-id="${esc(ids[0])}">
+        <div class="blocco-superserie bg-white rounded-2xl border border-gray-100 shadow-sm p-4 transition" data-id="${esc(ids[0])}">
             <div class="flex justify-between items-center mb-2">
                 <span class="text-[11px] font-black bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg">Superserie</span>
                 <button class="separa-btn text-[13px] font-bold text-indigo-600" data-id="${esc(ids[0])}">Separa</button>
