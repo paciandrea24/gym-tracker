@@ -182,6 +182,63 @@ Codice: le schermate della palestra escono da `ui.js` e vanno in `views/gymUi.js
 (passo, drop, peso reale, volume, testo delle serie, operazioni sulle superserie) in
 `services/gymLogic.js` con i test.
 
+## Sezione 5 — Dispensa
+
+Approvata con l'anteprima https://claude.ai/artifact/Utmkd6E4aUgULUgYxaG3Vn. A cosa serve (detto
+dall'utente): sapere cosa c'è in casa, sapere cosa comprare alla prossima spesa, e far proporre
+alla nutrizionista piatti fattibili con quello che c'è. La cronologia dei consumi è secondaria.
+I pasti e i meal prep continuano a scalare la dispensa da soli; la nutrizionista la legge come oggi.
+
+### Regole dei dati
+
+- Stato di un prodotto: "finito" a 0 g, "sta finendo" sotto il 20% (`sogliaBassa`) dei grammi di
+  riferimento, altrimenti a posto (i flag `esaurito` / `scortaBassa` del server).
+- **La spesa si somma**: comprare N confezioni da G grammi porta i grammi rimasti a
+  `rimasti + N × G` (prima la lista della spesa azzerava e ripartiva da `N × G`). I grammi di
+  riferimento ("di X") diventano quelli appena raggiunti, così dopo la spesa la barra è piena.
+  Vale per la lista "Da comprare", per "Aggiungi confezioni" e per un prodotto già in dispensa
+  aggiunto di nuovo (scanner, codice o a mano con lo stesso nome).
+- "Correggi i grammi": i rimasti diventano quelli scritti; il riferimento sale se li supera.
+- Categorie salvate come oggi (`Proteina`, `Carboidrato`, …); a schermo al plurale: Proteine,
+  Carboidrati, Latticini, Verdura, Frutta, Condimenti e grassi, Altro.
+
+### Schermate
+
+- **Dispensa**: titolo e numero di prodotti; in cima la riga "Da comprare · N" con i nomi (o "Non
+  manca niente"), che apre la lista; "Scansiona" nero (fotocamera come nella Nutrizione) e "A mano"
+  bianco; prodotti divisi per tipo, in ordine alfabetico, i finiti in fondo al gruppo in grigio.
+  Riga: nome, eventuale "sta finendo" (arancione) o "finito/finita" (rosso), "650 g di 1000",
+  barra (azzurra, arancione se sta finendo). Niente filtri, niente riquadro con i numeri.
+- **Prodotto**: titolo col nome, sotto il tipo, foto piccola se c'è; grammi grandi "di X g",
+  barra, "Confezioni da 500 g"; valori per 100 g con i nomi per esteso; "Aggiungi confezioni"
+  nero (foglio con le confezioni a + e −), "Correggi i grammi" bianco (foglio con i grammi);
+  "Ultimi utilizzi" (al massimo 5: "Pranzo · Riso, Pollo", "Oggi, 13:10", "−80 g");
+  "Togli dalla dispensa" in rosso in fondo, con conferma.
+- **Da comprare**: i prodotti finiti o che stanno finendo, in ordine alfabetico; riga con cerchio
+  da spuntare, nome, "Restano 60 g · 1 confezione da 360 g" (o "Finito · …"). Da spuntati,
+  "Modifica" apre confezioni (+ e −) e grammi di una confezione con "In dispensa diventano
+  780 g". "Metti in dispensa (N)" nero. Vuota: "Non manca niente".
+- **Prodotto trovato** (dopo scanner o codice scritto): foglio con codice, nome, valori per 100 g,
+  confezioni (+ e −), grammi di una confezione (vuoti se Open Food Facts non li sa: vanno
+  scritti), tipo a pulsanti già scelto; se il prodotto c'è già "Ne hai 340 g, diventano 790 g";
+  pulsante "Aggiungi 450 g". Codice sconosciuto: conferma "Scrivo i dati" e modulo a mano con
+  marca e foto per Open Food Facts, come oggi.
+- **A mano**: foglio "Aggiungi alla dispensa" con codice (facoltativo), nome con microfono e
+  suggerimenti CREA ("253 kcal · Proteine 18 g"), confezioni (+ e −), grammi di una confezione,
+  tipo a pulsanti, valori per 100 g (Calorie, Proteine, Carboidrati, Grassi), "Salva in dispensa".
+- Dopo un'aggiunta un avviso breve in alto ("Skyr bianco: 450 g in dispensa") invece della
+  finestra "Fatto!".
+- **Quale prodotto** (registrando un pasto): titolo con il nome dell'ingrediente, "Da quale
+  prodotto della dispensa lo tolgo?", righe nome + grammi, "Non toglierlo dalla dispensa"
+  bianco, nota "La prossima volta che scrivi … uso la stessa scelta".
+- **Finestre di avviso e conferma (tutta l'app)**: niente emoji; icona SVG in un cerchio
+  (domanda, matita, avviso, spunta, informazione), "Annulla" bianco con bordo, conferma nera,
+  rossa quando elimina o toglie qualcosa (`pericolo: true`).
+
+Codice: le schermate escono da `PantryView.js` e vanno in `views/pantryUi.js`; i calcoli puri
+(tipi, gruppi, da comprare, rifornimento, correzione, riga utilizzo, prodotto già presente) in
+`services/pantryLogic.js` con i test.
+
 ## Test
 
 - Unit test (node:test) su peso crudo, riepilogo (rimasti, ultima volta), voce senza grammi,
