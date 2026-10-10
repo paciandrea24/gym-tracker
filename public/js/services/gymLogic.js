@@ -56,3 +56,72 @@ export function stima1RM(set, esercizio = {}) {
     if (!(kg > 0 && reps > 0)) return 0;
     return reps === 1 ? kg : kg * (36 / (37 - reps));
 }
+
+// --- Superserie nella sessione attiva ---
+// session: { todo: [id], completed: [...], superserie?: [[id, id, ...]] }. Le funzioni restituiscono
+// una copia: la sessione passata non cambia. Un blocco ha sempre almeno due esercizi.
+
+const copia = (session) => {
+    const s = structuredClone(session);
+    s.superserie = (s.superserie || []).map(g => [...g]);
+    return s;
+};
+
+// Cosa resta da fare, nell'ordine: esercizi singoli e blocchi (al posto del primo membro)
+export function elementiDaFare(session) {
+    const gruppi = session.superserie || [];
+    const todo = session.todo || [];
+    const visti = new Set();
+    const elementi = [];
+    for (const id of todo) {
+        const gruppo = gruppi.find(g => g.includes(id));
+        if (!gruppo) { elementi.push({ tipo: 'esercizio', id }); continue; }
+        const chiave = gruppo.join('+');
+        if (visti.has(chiave)) continue;
+        visti.add(chiave);
+        elementi.push({ tipo: 'superserie', ids: gruppo.filter(x => todo.includes(x)) });
+    }
+    return elementi;
+}
+
+// Trascinare un esercizio su un altro (o su un membro di un blocco) li mette in superserie
+export function unisciSuperserie(session, idTrascinato, idBersaglio) {
+    const s = copia(session);
+    if (idTrascinato === idBersaglio || !s.todo.includes(idTrascinato) || !s.todo.includes(idBersaglio)) return s;
+
+    s.superserie = s.superserie.map(g => g.filter(id => id !== idTrascinato)).filter(g => g.length >= 2);
+    let gruppo = s.superserie.find(g => g.includes(idBersaglio));
+    if (gruppo) gruppo.push(idTrascinato);
+    else { gruppo = [idBersaglio, idTrascinato]; s.superserie.push(gruppo); }
+
+    // Nell'elenco il trascinato va subito dopo l'ultimo membro del blocco
+    s.todo = s.todo.filter(id => id !== idTrascinato);
+    const ultimo = Math.max(...gruppo.filter(id => id !== idTrascinato).map(id => s.todo.indexOf(id)));
+    s.todo.splice(ultimo + 1, 0, idTrascinato);
+    return s;
+}
+
+export function separaSuperserie(session, idMembro) {
+    const s = copia(session);
+    s.superserie = s.superserie.filter(g => !g.includes(idMembro));
+    return s;
+}
+
+// Fine di un blocco: ogni esercizio va fra i fatti con le sue serie e il segno del blocco
+export function completaSuperserie(session, ids, setsPerId, esercizi) {
+    const s = copia(session);
+    const chiave = ids.join('+');
+    s.todo = s.todo.filter(id => !ids.includes(id));
+    s.superserie = s.superserie.filter(g => !g.some(id => ids.includes(id)));
+    for (const id of ids) {
+        const es = esercizi.find(e => String(e.id) === String(id)) || {};
+        s.completed = (s.completed || []).filter(c => String(c.exerciseId) !== String(id));
+        s.completed.push({ exerciseId: id, name: es.name || '', type: es.type, sets: setsPerId[id] || [], superserie: chiave });
+    }
+    return s;
+}
+
+// Giri di un blocco: tante quante le serie dell'esercizio che ne ha di più
+export function giriSuperserie(setsPerId) {
+    return Math.max(0, ...Object.values(setsPerId).map(sets => sets.length));
+}

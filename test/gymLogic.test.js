@@ -59,3 +59,52 @@ test('massimale stimato: solo la serie principale, con il peso reale', () => {
     assert.equal(stima1RM({ kg: 100, reps: 1, drop: [{ kg: 200, reps: 1 }] }, {}), 100);
     assert.equal(Math.round(stima1RM({ kg: 5, reps: 10 }, { weightMultiplier: 2 })), 13);
 });
+
+import { elementiDaFare, unisciSuperserie, separaSuperserie, completaSuperserie, giriSuperserie } from '../public/js/services/gymLogic.js';
+
+const sessione = () => ({ id: 1, routineId: 'r', todo: ['a', 'b', 'c', 'd'], completed: [] });
+
+test('trascinare c su b crea un blocco al posto di b', () => {
+    const s = unisciSuperserie(sessione(), 'c', 'b');
+    assert.deepEqual(s.superserie, [['b', 'c']]);
+    assert.deepEqual(elementiDaFare(s), [{ tipo: 'esercizio', id: 'a' }, { tipo: 'superserie', ids: ['b', 'c'] }, { tipo: 'esercizio', id: 'd' }]);
+});
+
+test('trascinare su un blocco aggiunge al blocco; su sé stessi non fa niente', () => {
+    let s = unisciSuperserie(sessione(), 'c', 'b');
+    s = unisciSuperserie(s, 'a', 'c');
+    assert.deepEqual(s.superserie, [['b', 'c', 'a']]);
+    assert.deepEqual(elementiDaFare(s), [{ tipo: 'superserie', ids: ['b', 'c', 'a'] }, { tipo: 'esercizio', id: 'd' }]);
+    assert.deepEqual(unisciSuperserie(sessione(), 'a', 'a').superserie || [], []);
+});
+
+test('un membro spostato in un altro blocco: il vecchio blocco da uno si scioglie', () => {
+    let s = unisciSuperserie(sessione(), 'b', 'a');
+    s = unisciSuperserie(s, 'b', 'd');
+    assert.deepEqual(s.superserie, [['d', 'b']]);
+});
+
+test('separa scioglie il blocco; sessioni vecchie senza superserie funzionano', () => {
+    const s = separaSuperserie(unisciSuperserie(sessione(), 'c', 'b'), 'c');
+    assert.deepEqual(s.superserie, []);
+    assert.equal(elementiDaFare(sessione()).length, 4);
+});
+
+test('la sessione originale non viene modificata', () => {
+    const originale = sessione();
+    unisciSuperserie(originale, 'c', 'b');
+    assert.equal(originale.superserie, undefined);
+});
+
+test('completare un blocco: ogni esercizio va nei fatti con le sue serie e il segno del blocco', () => {
+    const s0 = unisciSuperserie(sessione(), 'c', 'b');
+    const es = [{ id: 'b', name: 'Curl', type: 'sala-pesi' }, { id: 'c', name: 'Tricipiti', type: 'sala-pesi' }];
+    const s = completaSuperserie(s0, ['b', 'c'], { b: [{ kg: 7, reps: 10, completed: true }], c: [{ kg: 20, reps: 12, completed: true }] }, es);
+    assert.deepEqual(s.todo, ['a', 'd']);
+    assert.deepEqual(s.superserie, []);
+    assert.deepEqual(s.completed.map(e => [e.exerciseId, e.name, e.superserie, e.sets.length]), [['b', 'Curl', 'b+c', 1], ['c', 'Tricipiti', 'b+c', 1]]);
+});
+
+test('giri = il massimo delle serie', () => {
+    assert.equal(giriSuperserie({ b: [{}, {}, {}], c: [{}, {}, {}, {}] }), 4);
+});

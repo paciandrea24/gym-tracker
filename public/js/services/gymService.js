@@ -1,5 +1,7 @@
 // public/js/services/gymService.js
 
+import { unisciSuperserie as unisci, separaSuperserie as separa, completaSuperserie as completa } from './gymLogic.js?v=27';
+
 export async function getRoutines() {
     try { const res = await fetch('/api/gym/routines'); return await res.json(); } catch (e) { return []; }
 }
@@ -44,9 +46,10 @@ export async function removeExerciseFromRoutine(routineId, exerciseId) {
 }
 
 export function getActiveSession() { return JSON.parse(localStorage.getItem('activeWorkoutSession')) || null; }
+const salvaSessione = (session) => localStorage.setItem('activeWorkoutSession', JSON.stringify(session));
 
 export function startSession(routineId, exerciseIds) {
-    const session = { id: Date.now(), routineId, todo: exerciseIds, completed: [] };
+    const session = { id: Date.now(), routineId, todo: exerciseIds, completed: [], superserie: [] };
     localStorage.setItem('activeWorkoutSession', JSON.stringify(session));
     return session;
 }
@@ -55,10 +58,28 @@ export function completeExerciseInSession(exercise, sessionData) {
     const session = getActiveSession();
     if (!session) return;
     session.todo = session.todo.filter(id => id !== exercise.id);
-    // FIX: Rimuove l'esercizio se era già nei completati, così lo sovrascrive
+    session.superserie = (session.superserie || []).map(g => g.filter(id => id !== exercise.id)).filter(g => g.length >= 2);
+    // Rimuove l'esercizio se era già nei completati, così lo sovrascrive (tenendo il segno della superserie)
+    const prima = session.completed.find(c => String(c.exerciseId) === String(exercise.id));
     session.completed = session.completed.filter(c => String(c.exerciseId) !== String(exercise.id));
-    session.completed.push({ exerciseId: exercise.id, name: exercise.name, type: exercise.type, sets: sessionData });
-    localStorage.setItem('activeWorkoutSession', JSON.stringify(session));
+    session.completed.push({ exerciseId: exercise.id, name: exercise.name, type: exercise.type, sets: sessionData, ...(prima?.superserie ? { superserie: prima.superserie } : {}) });
+    salvaSessione(session);
+}
+
+// Superserie decise in allenamento: valgono solo per la sessione attiva
+export function unisciSuperserie(idTrascinato, idBersaglio) {
+    const session = getActiveSession();
+    if (session) salvaSessione(unisci(session, idTrascinato, idBersaglio));
+}
+
+export function separaSuperserie(idMembro) {
+    const session = getActiveSession();
+    if (session) salvaSessione(separa(session, idMembro));
+}
+
+export function completeSuperserieInSession(ids, setsPerId, esercizi) {
+    const session = getActiveSession();
+    if (session) salvaSessione(completa(session, ids, setsPerId, esercizi));
 }
 
 export async function endActiveSession() {
