@@ -141,3 +141,40 @@ export function completaSuperserie(session, ids, setsPerId, esercizi) {
 export function giriSuperserie(setsPerId) {
     return Math.max(0, ...Object.values(setsPerId).map(sets => sets.length));
 }
+
+// Serie con cui si apre un esercizio: la bozza, se no peso e ripetizioni dell'ultima volta
+// (i drop si decidono di nuovo), se no i valori della scheda
+export function serieIniziali(esercizio, ultimaVolta, bozza) {
+    return Array.from({ length: Number(esercizio.targetSets) || 0 }, (_, i) => {
+        if (bozza?.[i]) return { ...bozza[i], completed: bozza[i].completed || false };
+        const prima = ultimaVolta?.sets?.[i];
+        if (prima) return { kg: prima.kg, reps: prima.reps, completed: false };
+        return { kg: numero(esercizio.baseKg) ? esercizio.baseKg : '', reps: esercizio.targetReps, completed: false };
+    });
+}
+
+// Giri di un blocco con chi c'è in ciascuno (chi ha la serie N) e se è fatto
+export function giriDelBlocco(ids, setsPerId) {
+    return Array.from({ length: giriSuperserie(setsPerId) }, (_, giro) => {
+        const presenti = ids.filter(id => setsPerId[id]?.[giro]);
+        return { giro, ids: presenti, fatto: presenti.every(id => setsPerId[id][giro].completed) };
+    });
+}
+
+// "Salva giro": la serie N di ogni esercizio che ce l'ha diventa fatta (pulita come in pulisciSerie)
+export function salvaGiro(setsPerId, giro) {
+    const s = structuredClone(setsPerId);
+    for (const sets of Object.values(s)) if (sets[giro]) sets[giro] = { ...pulisciSerie(sets[giro]), completed: true };
+    return s;
+}
+
+// Recupero dopo un giro: il più lungo fra gli esercizi del blocco (90 s se non è indicato), il cardio non conta
+export function recuperoBlocco(esercizi) {
+    return Math.max(0, ...esercizi.filter(e => e.type !== 'cardio').map(e => Number(e.restSeconds) || 90));
+}
+
+export function modificaGiro(setsPerId, giro) {
+    const s = structuredClone(setsPerId);
+    for (const sets of Object.values(s)) if (sets[giro]) sets[giro].completed = false;
+    return s;
+}

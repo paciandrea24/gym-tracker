@@ -7,7 +7,7 @@ import { icona } from '../components/icons.js?v=27';
 import { apriFoglio } from '../components/sheet.js?v=27';
 import * as modal from '../components/modal.js?v=27';
 import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=27';
-import { testoSerie, volumeSerie, passoPeso } from '../services/gymLogic.js?v=27';
+import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco } from '../services/gymLogic.js?v=27';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -596,4 +596,65 @@ export function renderEsercizio(container, ex, ultimaVolta, serie, { onCambia, o
     container.querySelectorAll('.togli-drop').forEach(b => b.addEventListener('click', () => onTogliDrop(indice(b.dataset.idx), indice(b.dataset.drop))));
     container.querySelectorAll('.salva-serie').forEach(b => b.addEventListener('click', () => onSalvaSerie(indice(b.dataset.idx))));
     container.querySelectorAll('.modifica-serie').forEach(b => b.addEventListener('click', () => onModificaSerie(indice(b.dataset.idx))));
+}
+
+// ─── SUPERSERIE A GIRI ─────────────────────────────────────────────────────
+// Un giro = una serie di ogni esercizio del blocco. setsPerId: { [id]: serie }; ultimeVolte: { [id]: record | null }
+export function renderSuperserie(container, esercizi, setsPerId, ultimeVolte, { onCambia, onAggiungiDrop, onTogliDrop, onSalvaGiro, onModificaGiro, onTermina, onIndietro }) {
+    const ids = esercizi.map(e => String(e.id));
+    const perId = Object.fromEntries(esercizi.map(e => [String(e.id), e]));
+    const giri = giriDelBlocco(ids, setsPerId);
+    const attivo = giri.find(g => !g.fatto);
+    const recupero = recuperoBlocco(esercizi);
+
+    const conStorico = esercizi.filter(e => ultimeVolte[e.id]?.sets?.length);
+    const ultimaVolta = conStorico.length ? `
+        <div class="bg-gray-100 rounded-xl px-3 py-2 text-[13px] font-semibold text-gray-600 space-y-0.5">
+            <p>Ultima volta</p>
+            ${conStorico.map(e => `<p><span class="font-bold text-gray-900">${esc(e.name)}</span> ${serieInRiga(ultimeVolte[e.id].sets, e.type)}</p>`).join('')}
+        </div>` : `<div class="bg-gray-100 rounded-xl px-3 py-2 text-[13px] font-semibold text-gray-600">Prima volta con questi esercizi</div>`;
+
+    const fatto = (g) => `
+        <div class="giro-fatto bg-white rounded-2xl border border-green-200 px-4 py-3">
+            <div class="flex items-center gap-3">
+                <span class="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0">${icona.spunta()}</span>
+                <p class="flex-1 font-bold text-gray-800">Giro ${g.giro + 1}</p>
+                <button type="button" class="modifica-giro text-[13px] font-bold text-indigo-600" data-giro="${g.giro}">Modifica</button>
+            </div>
+            <p class="text-[13px] font-semibold text-gray-500 mt-1 ml-9">${g.ids.map(id => `${esc(perId[id].name)} ${serieInRiga([setsPerId[id][g.giro]], perId[id].type)}`).join(' · ')}</p>
+        </div>`;
+    const inCorso = (g) => `
+        <div class="giro-attivo bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
+            <p class="font-black text-gray-900">Giro ${g.giro + 1}</p>
+            ${g.ids.map((id, k) => `
+                <div class="blocco-esercizio ${k ? 'border-t border-gray-100 pt-3' : ''}">
+                    <p class="text-[14px] font-bold text-gray-800 mb-2">${esc(perId[id].name)}</p>
+                    ${campiSerie(perId[id], setsPerId[id][g.giro], `data-id="${esc(id)}" data-idx="${g.giro}"`)}
+                    ${perId[id].type === 'sala-pesi' ? `<button type="button" class="aggiungi-drop text-[13px] font-bold text-indigo-600 mt-2 py-1" data-id="${esc(id)}" data-idx="${g.giro}">+ Drop</button>` : ''}
+                </div>`).join('')}
+            <button id="salva-giro-btn" type="button" class="w-full bg-gray-900 text-white font-black text-[15px] py-3 rounded-xl active:scale-95 transition-transform" data-giro="${g.giro}">Salva giro</button>
+        </div>`;
+    const dopo = (g) => `
+        <div class="giro-dopo bg-white rounded-2xl border border-gray-100 px-4 py-3 opacity-70">
+            <p class="font-bold text-gray-800">Giro ${g.giro + 1}</p>
+            ${g.ids.length < ids.length ? `<p class="text-[12px] font-semibold text-gray-400">Solo ${g.ids.map(id => esc(perId[id].name)).join(' e ')}</p>` : ''}
+        </div>`;
+
+    const sotto = esercizi.map(e => esc(e.name)).join(' + ') + (recupero ? ` · recupero ${minuti(recupero)}` : '');
+    container.innerHTML = `
+        ${intestazione('Superserie', { idIndietro: 'back-btn', sotto })}
+        <main class="p-4 space-y-3 pb-24 safe-pb bg-gray-50">
+            ${ultimaVolta}
+            ${giri.map(g => g.fatto ? fatto(g) : g === attivo ? inCorso(g) : dopo(g)).join('')}
+            <button id="termina-superserie-btn" class="${attivo ? BTN_SECONDARIO : BTN_PRINCIPALE}">Termina superserie</button>
+        </main>
+    `;
+
+    document.getElementById('back-btn').addEventListener('click', onIndietro);
+    document.getElementById('termina-superserie-btn').addEventListener('click', onTermina);
+    document.getElementById('salva-giro-btn')?.addEventListener('click', (e) => onSalvaGiro(indice(e.currentTarget.dataset.giro)));
+    collegaStepper(container, (st, valore) => onCambia(st.dataset.id, indice(st.dataset.idx), st.dataset.campo, valore, indice(st.dataset.drop)));
+    container.querySelectorAll('.aggiungi-drop').forEach(b => b.addEventListener('click', () => onAggiungiDrop(b.dataset.id, indice(b.dataset.idx))));
+    container.querySelectorAll('.togli-drop').forEach(b => b.addEventListener('click', () => onTogliDrop(b.dataset.id, indice(b.dataset.idx), indice(b.dataset.drop))));
+    container.querySelectorAll('.modifica-giro').forEach(b => b.addEventListener('click', () => onModificaGiro(indice(b.dataset.giro))));
 }

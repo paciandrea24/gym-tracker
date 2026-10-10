@@ -5,7 +5,7 @@ import * as modal from '../components/modal.js?v=27';
 import * as userService from '../services/userService.js?v=27';
 import * as ui from '../ui.js?v=27';
 import * as gymUi from './gymUi.js?v=27';
-import { elementiDaFare, nuovoDrop, pulisciSerie } from '../services/gymLogic.js?v=27';
+import { elementiDaFare, nuovoDrop, pulisciSerie, serieIniziali, salvaGiro, modificaGiro, recuperoBlocco } from '../services/gymLogic.js?v=27';
 import { exportToCSV } from '../utils.js?v=27';
 
 export class GymView {
@@ -176,9 +176,55 @@ export class GymView {
         });
     }
 
-    // Superserie: arriva con il Task 6 (per ora apre il primo esercizio del blocco)
-    handleOpenSuperserie(ids) {
-        this.handleOpenExercise(ids[0]);
+    // Superserie a giri: ogni esercizio tiene le sue serie; la bozza ha la chiave "superserie:idA+idB"
+    async handleOpenSuperserie(ids) {
+        const routine = await gymService.getRoutine(this.currentRoutineId);
+        const esercizi = ids.map(id => routine.exercises.find(ex => String(ex.id) === String(id))).filter(Boolean);
+        if (esercizi.length === 0) return;
+        const chiave = 'superserie:' + esercizi.map(e => e.id).join('+');
+        const bozza = gymService.getDraft(chiave) || {};
+        const ultimeVolte = {};
+        const setsPerId = {};
+        for (const ex of esercizi) {
+            ultimeVolte[ex.id] = await gymService.getLastSession(this.currentRoutineId, ex.id);
+            setsPerId[ex.id] = serieIniziali(ex, ultimeVolte[ex.id], bozza[ex.id]);
+        }
+        this.superserie = { chiave, esercizi, setsPerId, ultimeVolte };
+        this.renderSuperserieUI();
+    }
+
+    renderSuperserieUI() {
+        const ss = this.superserie;
+        const salva = () => gymService.saveDraft(ss.chiave, ss.setsPerId);
+        const ridisegna = () => { salva(); this.renderSuperserieUI(); };
+        gymUi.renderSuperserie(this.container, ss.esercizi, ss.setsPerId, ss.ultimeVolte, {
+            onCambia: (id, idx, campo, valore, dropIdx) => {
+                const set = ss.setsPerId[id][idx];
+                (dropIdx === null ? set : set.drop[dropIdx])[campo] = valore;
+                salva();
+            },
+            onAggiungiDrop: (id, idx) => {
+                const set = ss.setsPerId[id][idx];
+                set.drop = [...(set.drop || []), nuovoDrop(set)];
+                ridisegna();
+            },
+            onTogliDrop: (id, idx, dropIdx) => { ss.setsPerId[id][idx].drop.splice(dropIdx, 1); ridisegna(); },
+            onSalvaGiro: (giro) => {
+                ss.setsPerId = salvaGiro(ss.setsPerId, giro);
+                ridisegna();
+                const recupero = recuperoBlocco(ss.esercizi);
+                if (recupero) this.startRecoveryTimer(recupero);
+            },
+            onModificaGiro: (giro) => { ss.setsPerId = modificaGiro(ss.setsPerId, giro); ridisegna(); },
+            onTermina: () => {
+                const pulite = Object.fromEntries(ss.esercizi.map(e => [e.id, ss.setsPerId[e.id].map(pulisciSerie)]));
+                gymService.completeSuperserieInSession(ss.esercizi.map(e => e.id), pulite, ss.esercizi);
+                gymService.clearDraft();
+                this.superserie = null;
+                this.showActiveSession();
+            },
+            onIndietro: () => this.showActiveSession()
+        });
     }
 
     async handleEndSession() {
@@ -205,28 +251,9 @@ export class GymView {
         this.currentLastSession = await gymService.getLastSession(this.currentRoutineId, exerciseId);
 
         const completedEx = session.completed.find(e => String(e.exerciseId) === String(exerciseId));
-
-        this.currentSessionData = [];
-
-        if (completedEx) {
-            this.currentSessionData = JSON.parse(JSON.stringify(completedEx.sets));
-        } else {
-            for (let i = 0; i < this.currentExercise.targetSets; i++) {
-                if (draft && draft[i]) {
-                    this.currentSessionData.push({ ...draft[i], completed: draft[i].completed || false });
-                } else if (this.currentLastSession && this.currentLastSession.sets[i]) {
-                    // Peso e ripetizioni dell'ultima volta; i drop si decidono di nuovo
-                    const { kg, reps } = this.currentLastSession.sets[i];
-                    this.currentSessionData.push({ kg, reps, completed: false });
-                } else {
-                    this.currentSessionData.push({
-                        kg: this.currentExercise.baseKg !== 0 ? this.currentExercise.baseKg : '',
-                        reps: this.currentExercise.targetReps,
-                        completed: false
-                    });
-                }
-            }
-        }
+        this.currentSessionData = completedEx
+            ? JSON.parse(JSON.stringify(completedEx.sets))
+            : serieIniziali(this.currentExercise, this.currentLastSession, draft);
         this.renderActiveExerciseUI();
     }
 

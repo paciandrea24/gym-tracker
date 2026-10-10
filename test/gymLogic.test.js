@@ -122,3 +122,47 @@ test('nuovo drop: circa 80% dell\'ultimo peso della serie, ripetizioni da scrive
     assert.deepEqual(nuovoDrop({ kg: '7,5', reps: 10 }), { kg: 6, reps: '' });
     assert.deepEqual(nuovoDrop({ kg: 65, reps: 8, drop: [{ kg: 50, reps: 5 }] }), { kg: 40, reps: '' });
 });
+
+import { serieIniziali, giriDelBlocco, salvaGiro, modificaGiro } from '../public/js/services/gymLogic.js';
+
+test('serie iniziali: prima la bozza, poi l\'ultima volta (senza drop), poi la scheda', () => {
+    const es = { targetSets: 3, targetReps: 10, baseKg: 5 };
+    const ultima = { sets: [{ kg: 6.5, reps: 9 }, { kg: 6.5, reps: 8, drop: [{ kg: 5, reps: 4 }] }] };
+    const bozza = [{ kg: 7, reps: 10, completed: true }];
+    assert.deepEqual(serieIniziali(es, ultima, bozza), [
+        { kg: 7, reps: 10, completed: true },
+        { kg: 6.5, reps: 8, completed: false },
+        { kg: 5, reps: 10, completed: false }
+    ]);
+    assert.deepEqual(serieIniziali({ targetSets: 1, targetReps: 8, baseKg: 0 }, null, null), [{ kg: '', reps: 8, completed: false }]);
+});
+
+const serieDi = (n, fatte = 0) => Array.from({ length: n }, (_, i) => ({ kg: 10, reps: 10, completed: i < fatte }));
+
+test('giri del blocco: 3 e 4 serie fanno 4 giri, l\'ultimo con un solo esercizio', () => {
+    const giri = giriDelBlocco(['b', 'c'], { b: serieDi(3, 1), c: serieDi(4, 1) });
+    assert.deepEqual(giri.map(g => [g.ids, g.fatto]), [[['b', 'c'], true], [['b', 'c'], false], [['b', 'c'], false], [['c'], false]]);
+});
+
+test('salva giro: segna e pulisce la serie N di chi ce l\'ha, senza toccare il resto', () => {
+    const prima = { b: [{ kg: '7,5', reps: '10', completed: false }], c: [{ kg: 20, reps: 12, completed: false }, { kg: 20, reps: 12, completed: false }] };
+    const ultimo = salvaGiro(prima, 1);
+    assert.deepEqual(ultimo.b, prima.b);
+    assert.equal(ultimo.c[1].completed, true);
+    assert.equal(ultimo.c[0].completed, false);
+    assert.deepEqual(salvaGiro(prima, 0).b[0], { kg: 7.5, reps: 10, completed: true });
+    assert.equal(prima.b[0].completed, false);
+});
+
+test('modifica giro: riapre la serie N di tutti', () => {
+    const s = modificaGiro({ b: serieDi(2, 2), c: serieDi(1, 1) }, 0);
+    assert.deepEqual([s.b[0].completed, s.b[1].completed, s.c[0].completed], [false, true, false]);
+});
+
+import { recuperoBlocco } from '../public/js/services/gymLogic.js';
+
+test('recupero del blocco: il più lungo, il cardio non conta', () => {
+    assert.equal(recuperoBlocco([{ type: 'sala-pesi', restSeconds: 60 }, { type: 'sala-pesi', restSeconds: 120 }]), 120);
+    assert.equal(recuperoBlocco([{ type: 'sala-pesi' }, { type: 'cardio', restSeconds: 0 }]), 90);
+    assert.equal(recuperoBlocco([{ type: 'cardio', restSeconds: 0 }]), 0);
+});
