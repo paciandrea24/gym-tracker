@@ -1,21 +1,23 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=25';
-import * as scanner from '../components/scanner.js?v=25';
-import * as modal from '../components/modal.js?v=25';
-import * as voice from '../components/voice.js?v=25';
-import * as ui from '../ui.js?v=25';
-import { exportToCSV } from '../utils.js?v=25';
-import * as pantryService from '../services/pantryService.js?v=25';
-import * as pantrySync from '../services/pantrySync.js?v=25';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=25';
-import { renderChiusuraGiornata } from '../components/dayClosure.js?v=25';
+import * as nutriService from '../services/nutriService.js?v=26';
+import * as scanner from '../components/scanner.js?v=26';
+import * as modal from '../components/modal.js?v=26';
+import * as voice from '../components/voice.js?v=26';
+import * as ui from '../ui.js?v=26';
+import { exportToCSV } from '../utils.js?v=26';
+import * as pantryService from '../services/pantryService.js?v=26';
+import * as pantrySync from '../services/pantrySync.js?v=26';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=26';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=26';
+import { apriFoglio } from '../components/sheet.js?v=26';
+import { intero, macroTesto } from '../components/format.js?v=26';
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Ogni cambio di sezione crea una nuova NutritionView: gli eventi globali vanno sempre
 // all'istanza corrente (prima restavano legati alla prima, con dati vecchi).
 let vistaAttiva = null;
-window.addEventListener('editIngredient', (e) => vistaAttiva?.handleEditIngredient(e.detail));
-window.addEventListener('openFavSelector', (e) => vistaAttiva?.handleOpenFavSelector(e.detail));
 window.addEventListener('exportNutritionCSV', () => vistaAttiva?.handleExportCSV());
 
 export class NutritionView {
@@ -40,20 +42,18 @@ export class NutritionView {
             this.currentFavorites = favsData;
             const goals = nutriService.getNutritionGoals();
 
-            ui.renderNutritionDashboard(
-                this.container, this.currentMealsData, goals, this.currentTab, this.currentFavorites,
-                (tab) => { this.currentTab = tab; this.render(); },
-                () => this.handleMicRecord(),
-                () => this.handleManualMealClick(),
-                (id) => this.handleDeleteMeal(id),
-                () => this.handleEditGoals(),
-                (id) => this.handleMealClick(id),
-                (id) => this.handleScanClick(id),
-                () => this.handleCloseScanner(),
-                (id) => this.handlePreviewFavorite(id),
-                () => this.handleAskAI(),
-                (dateStr) => this.handleDailyHistoryClick(dateStr)
-            );
+            ui.renderNutritionDashboard(this.container, {
+                mealsData: this.currentMealsData, goals, currentTab: this.currentTab,
+                onTabSwitch: (tab) => { this.currentTab = tab; this.render(); },
+                onMicClick: () => this.handleMicRecord(),
+                onManualClick: () => this.handleManualMealClick(),
+                onEditGoals: () => this.handleEditGoals(),
+                onMealClick: (id) => this.handleMealClick(id),
+                onScanClick: () => this.handleScanClick(),
+                onCloseScanner: () => this.handleCloseScanner(),
+                onAskAI: () => this.handleAskAI(),
+                onDailyHistoryClick: (dateStr) => this.handleDailyHistoryClick(dateStr)
+            });
 
             document.getElementById('favorites-page-btn')?.addEventListener('click', () => this.showFavoritesPage());
             document.getElementById('prep-btn')?.addEventListener('click', () => this.showMealPrep());
@@ -158,17 +158,18 @@ export class NutritionView {
     handleMealClick(mealId) {
         const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
         if (meal) {
-            ui.renderMealDetails(
-                this.container, meal,
-                () => this.render(),
-                (id, status) => this.handleToggleFavorite(id, status),
-                () => this.handleMicRecord(mealId),
-                () => this.handleScanClick(mealId),
-                () => this.handleCloseScanner(),
-                (ingIdx) => this.handleRemoveIngredient(mealId, ingIdx),
-                () => this.handleManualMealClick(mealId),
-                () => this.handleAddPrepPortion(mealId)
-            );
+            ui.renderMealDetails(this.container, meal, {
+                onBack: () => this.render(),
+                onToggleFavorite: (id, status) => this.handleToggleFavorite(id, status),
+                onAddVoice: () => this.handleMicRecord(mealId),
+                onAddScan: () => this.handleScanClick(mealId),
+                onCloseScanner: () => this.handleCloseScanner(),
+                onAddManual: () => this.handleManualMealClick(mealId),
+                onAddPrep: () => this.handleAddPrepPortion(mealId),
+                onAddFavorite: () => this.handleOpenFavSelector(mealId),
+                onIngredientClick: (idx) => this.apriIngrediente(mealId, idx),
+                onDeleteMeal: () => this.handleDeleteMeal(mealId)
+            });
         }
     }
 
@@ -188,7 +189,7 @@ export class NutritionView {
     }
 
     async handleRemoveIngredient(mealId, ingIdx) {
-        const confirm = await modal.showModal({ type: 'confirm', title: 'Rimuovi', message: "Vuoi rimuovere questo alimento dal pasto?", confirmText: 'Sì', cancelText: 'No' });
+        const confirm = await modal.showModal({ type: 'confirm', title: 'Togli', message: "Togliere questo alimento dal pasto?", confirmText: 'Togli', cancelText: 'Annulla' });
         if (!confirm) return;
 
         const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
@@ -314,10 +315,11 @@ export class NutritionView {
         if (targetMealId) {
             const existingMeal = this.currentMealsData.find(m => String(m._id) === String(targetMealId));
             if (existingMeal) {
+                // Si aggiunge a un pasto esistente: il tipo di pasto è già deciso
                 const mPastoInput = document.getElementById('m-pasto');
                 if (mPastoInput) {
                     mPastoInput.value = existingMeal.pasto;
-                    mPastoInput.disabled = true;
+                    document.getElementById('m-pasto-box')?.classList.add('hidden');
                 }
             }
         }
@@ -507,29 +509,44 @@ export class NutritionView {
         }, cached, goals, consumate);
     }
 
-    async handleEditIngredient({ mealId, ingIdx }) {
+    // Tocco su un ingrediente del pasto: foglio per cambiare i grammi o toglierlo
+    apriIngrediente(mealId, ingIdx) {
         const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
-        if (!meal) return;
-        const ing = meal.ingredienti[ingIdx];
+        const ing = meal?.ingredienti?.[ingIdx];
         if (!ing) return;
 
-        if (ing.prepId) return this.handleEditPrepPortion(meal, ing);
+        const grammi = ing.prepId ? (ing.prepGrammi > 0 ? ing.prepGrammi : ing.grammi) : ing.grammi;
+        const sottotitolo = ing.prepId && ing.prepDaCompletare
+            ? 'Meal prep: scrivi i grammi per calcolare i valori'
+            : `${ing.prepId ? 'Meal prep · ' : ''}${intero(ing.calorie)} kcal · ${macroTesto(ing, { breve: true })}`;
+        const { box, chiudi, intestazione, collegaChiudi } = apriFoglio({ id: 'pasto-ing-sheet' });
+        box.innerHTML = `
+            ${intestazione(esc(ing.nome), sottotitolo)}
+            <label for="ing-pasto-grammi" class="block text-xs font-semibold text-gray-400 uppercase mb-2">Grammi</label>
+            <input id="ing-pasto-grammi" type="number" inputmode="decimal" step="any" value="${grammi > 0 ? Math.round(grammi) : ''}" placeholder="es. 150"
+                class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-2xl font-black text-center outline-none focus:ring-2 focus:ring-gray-900 mb-4">
+            <button id="ing-pasto-salva" class="w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform">Salva</button>
+            <button id="ing-pasto-togli" class="w-full text-red-600 font-bold text-sm py-3 mt-2">Togli dal pasto</button>`;
+        collegaChiudi();
 
-        const vecchiGrammi = ing.grammi || 100; // Valore base di sicurezza
-
-        const res = await modal.showModal({
-            type: 'prompt',
-            title: `Modifica: ${ing.nome}`,
-            message: `Quanti grammi hai consumato?`,
-            inputValue: String(vecchiGrammi)
+        box.querySelector('#ing-pasto-salva').addEventListener('click', () => {
+            const nuovi = parseFloat(String(box.querySelector('#ing-pasto-grammi').value).replace(',', '.'));
+            if (!(nuovi > 0)) return modal.showModal({ type: 'error', title: 'Grammi', message: 'Scrivi quanti grammi hai mangiato.' });
+            chiudi();
+            if (ing.prepId) this.handleEditPrepPortion(meal, ing, nuovi);
+            else if (nuovi !== Number(ing.grammi)) this.cambiaGrammiIngrediente(mealId, ingIdx, nuovi);
         });
+        box.querySelector('#ing-pasto-togli').addEventListener('click', () => {
+            chiudi();
+            this.handleRemoveIngredient(mealId, ingIdx);
+        });
+    }
 
-        if (res === null || res === false) return;
-
-        const nuoviGrammi = parseFloat(String(res).replace(',', '.'));
-        if (isNaN(nuoviGrammi) || nuoviGrammi <= 0) {
-            return modal.showModal({ type: 'error', title: 'Errore', message: "Valore non valido." });
-        }
+    async cambiaGrammiIngrediente(mealId, ingIdx, nuoviGrammi) {
+        const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
+        const ing = meal?.ingredienti?.[ingIdx];
+        if (!ing) return;
+        const vecchiGrammi = ing.grammi || 100; // Valore base di sicurezza
 
         // Calcoliamo la proporzione e aggiorniamo tutti i macros
         const mult = nuoviGrammi / vecchiGrammi;
@@ -577,21 +594,8 @@ export class NutritionView {
 
     // Porzione di meal prep: si cambiano i grammi, i valori li ricalcola il server dalla preparazione.
     // Una porzione vecchia registrata "a porzioni" diventa in grammi.
-    async handleEditPrepPortion(meal, ing) {
-        const attuali = ing.prepGrammi > 0 ? ing.prepGrammi : ing.grammi;
-        const res = await modal.showModal({
-            type: 'prompt',
-            title: `Modifica: ${ing.nome}`,
-            message: 'Quanti grammi hai mangiato?',
-            inputValue: attuali > 0 ? String(Math.round(attuali)) : ''
-        });
-        if (res === null || res === false) return;
-
-        const valore = parseFloat(String(res).replace(',', '.'));
-        if (isNaN(valore) || valore <= 0) {
-            return modal.showModal({ type: 'error', title: 'Errore', message: "Valore non valido." });
-        }
-        ing.prepGrammi = valore;
+    async handleEditPrepPortion(meal, ing, grammi) {
+        ing.prepGrammi = grammi;
         ing.prepPorzioni = 0;
 
         try {

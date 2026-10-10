@@ -45,12 +45,12 @@ function cardSuggerimento(s, idx) {
     return `
         <div class="sugg-card bg-white rounded-2xl shadow-sm border border-gray-100 p-4" data-idx="${idx}">
             <p class="text-[15px] font-black text-gray-900">Come ${esc(etichettaGiorno(s.giorno))}</p>
-            <p class="text-[11px] font-bold text-gray-400 mt-0.5">A quel punto: ${intero(q.calorie)} kcal · P ${intero(q.proteine)} · C ${intero(q.carboidrati)} · G ${intero(q.grassi)}</p>
-            ${uguali > 0 ? `<p class="text-[11px] font-bold text-emerald-600 mt-0.5">Finito così anche ${uguali === 1 ? 'un altro giorno' : `altri ${uguali} giorni`}</p>` : ''}
+            <p class="text-[12px] font-semibold text-gray-400 mt-0.5">A quel punto: ${intero(q.calorie)} kcal · Proteine ${intero(q.proteine)} g · Carbo ${intero(q.carboidrati)} g · Grassi ${intero(q.grassi)} g</p>
+            ${uguali > 0 ? `<p class="text-[12px] font-bold text-emerald-600 mt-0.5">Finito così anche ${uguali === 1 ? 'un altro giorno' : `altri ${uguali} giorni`}</p>` : ''}
             <div class="mb-3"></div>
             <div class="space-y-2">${s.pasti.map(rigaPasto).join('')}</div>
-            <p class="sugg-proiezione text-[11px] font-bold text-gray-500 mt-3 leading-relaxed"></p>
-            <button class="sugg-add w-full mt-3 bg-gray-900 text-white font-bold py-3 rounded-xl active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100"></button>
+            <p class="sugg-proiezione text-[12px] font-bold text-gray-500 mt-3 leading-relaxed"></p>
+            <button class="sugg-add w-full mt-3 bg-white border border-gray-300 text-gray-900 font-bold py-3 rounded-xl active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100"></button>
         </div>`;
 }
 
@@ -59,12 +59,8 @@ export function renderChiusuraGiornata(el, suggerimenti, { consumate, goals, onA
     if (!el) return;
     if (!suggerimenti || suggerimenti.length === 0) { el.innerHTML = ''; return; }
 
-    el.innerHTML = `
-        <div class="mt-8">
-            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Come chiudi di solito</h2>
-            <p class="text-[12px] font-medium text-gray-500 mt-1 mb-3">L'ultima giornata con macro simili a oggi a questo punto, e come l'hai finita.</p>
-            <div class="space-y-3">${suggerimenti.map(cardSuggerimento).join('')}</div>
-        </div>`;
+    // L'intestazione ("Idee per il resto della giornata") è nella dashboard, insieme a "Chiedi all'IA"
+    el.innerHTML = `<div class="space-y-3 mb-3">${suggerimenti.map(cardSuggerimento).join('')}</div>`;
 
     el.querySelectorAll('.sugg-card').forEach(card => {
         const s = suggerimenti[Number(card.dataset.idx)];
@@ -85,7 +81,7 @@ export function renderChiusuraGiornata(el, suggerimenti, { consumate, goals, onA
             const oltre = t.calorie > Number(goals.calorie);
             card.querySelector('.sugg-proiezione').innerHTML = `
                 Chiuderesti a <span class="${oltre ? 'text-red-500' : 'text-gray-900'} font-black">${intero(t.calorie)}</span> / ${intero(goals.calorie)} kcal<br>
-                P ${intero(t.proteine)}/${goals.proteine}g · C ${intero(t.carbo)}/${goals.carbo}g · G ${intero(t.grassi)}/${goals.grassi}g`;
+                Proteine ${intero(t.proteine)}/${goals.proteine} g · Carbo ${intero(t.carbo)}/${goals.carbo} g · Grassi ${intero(t.grassi)}/${goals.grassi} g`;
             bottone.disabled = lista.length === 0;
             bottone.textContent = lista.length === s.pasti.length && lista.length > 1
                 ? `Aggiungi tutti (${lista.length})`

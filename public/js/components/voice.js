@@ -12,7 +12,8 @@
 //   prima si chiudeva dopo 1,5 s scartando tutto in silenzio. Ora senza testo si aspetta di più e,
 //   se non arriva niente, il pulsante lo dice.
 
-import * as modal from './modal.js?v=25';
+import * as modal from './modal.js?v=26';
+import { icona } from './icons.js?v=26';
 
 const MAX_DURATA_MS = 60000;
 const ATTESA_FINE_MS = 1500;      // testo già arrivato: quanto aspettare "onend" prima di chiudere noi
@@ -99,7 +100,7 @@ function avvia(button, onText) {
     rec.onerror = (event) => { s.errore = event.error; };
     rec.onend = () => concludi(s);
 
-    button.innerHTML = "⏹️ Ascoltando... tocca per terminare";
+    button.innerHTML = `${icona.stop()} Ascoltando… tocca per terminare`;
     button.className = orig.classe;
     button.classList.add('animate-pulse', 'bg-red-600');
 
@@ -117,7 +118,7 @@ function ferma(s) {
     if (s.chiusa || s.fase !== 'ascolto') return;
     s.fase = 'chiusura';
     clearTimeout(s.timerMax);
-    s.button.innerHTML = "⏳ Un attimo...";
+    s.button.innerHTML = `${icona.attesa()} Un attimo…`;
     s.button.className = s.originalClass;
     s.button.classList.add('bg-red-600');
     try { s.rec.stop(); } catch { }
@@ -161,13 +162,13 @@ async function concludi(s) {
             ripristinaPulsante(s);
             await modal.showModal({ type: 'error', title: 'Microfono', message: messaggioErrore(s.errore) });
         } else {
-            mostraMessaggio(s, "🤷 Non ho sentito nulla, riprova");
+            mostraMessaggio(s, "Non ho sentito nulla, riprova");
         }
         return;
     }
 
     s.fase = 'analisi';
-    s.button.innerHTML = "⏳ Analisi in corso...";
+    s.button.innerHTML = `${icona.attesa()} Analisi in corso…`;
     s.button.className = s.originalClass;
     s.button.classList.add('bg-orange-500');
 

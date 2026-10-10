@@ -3,16 +3,17 @@
 // Si pesano gli ingredienti crudi e, ogni giorno, i grammi che si mangiano. Il cotto si considera
 // pesante quanto il crudo (stima scelta dall'utente): niente pentola da pesare, niente porzioni.
 
-import * as prepService from '../services/mealPrepService.js?v=25';
-import * as nutriService from '../services/nutriService.js?v=25';
-import * as pantryService from '../services/pantryService.js?v=25';
-import * as pantrySync from '../services/pantrySync.js?v=25';
-import * as scanner from '../components/scanner.js?v=25';
-import * as voice from '../components/voice.js?v=25';
-import * as modal from '../components/modal.js?v=25';
-import * as ui from '../ui.js?v=25';
-import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=25';
-import { apriFoglio } from '../components/sheet.js?v=25';
+import * as prepService from '../services/mealPrepService.js?v=26';
+import * as nutriService from '../services/nutriService.js?v=26';
+import * as pantryService from '../services/pantryService.js?v=26';
+import * as pantrySync from '../services/pantrySync.js?v=26';
+import * as scanner from '../components/scanner.js?v=26';
+import * as voice from '../components/voice.js?v=26';
+import * as modal from '../components/modal.js?v=26';
+import * as ui from '../ui.js?v=26';
+import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=26';
+import { apriFoglio } from '../components/sheet.js?v=26';
+import { icona } from '../components/icons.js?v=26';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const leggiNumero = (v) => parseFloat(String(v).replace(',', '.')) || 0;
@@ -69,15 +70,15 @@ function quantitaPorzione(por) {
 
 // Voce (principale) e Manuale / Scanner / Preferiti, più lo scanner che si apre al posto dei pulsanti
 function metodiAggiunta() {
-    const tasto = (id, icona, testo) => `
-        <button id="${id}" class="bg-white border border-gray-200 text-gray-800 font-bold text-[13px] py-3 rounded-2xl flex flex-col items-center gap-0.5 active:scale-95 transition-transform">
-            <span class="text-lg leading-none">${icona}</span>${testo}
+    const tasto = (id, simbolo, testo) => `
+        <button id="${id}" class="bg-white border border-gray-200 text-gray-800 font-bold text-[13px] py-3 rounded-2xl flex flex-col items-center gap-1 active:scale-95 transition-transform">
+            ${simbolo}${testo}
         </button>`;
     return `
         <div id="prep-action-buttons" class="space-y-2">
             <button id="prep-voice-btn" class="${BTN_PRINCIPALE} flex justify-center items-center gap-2">${ICONA_MIC} Voce</button>
             <div class="grid grid-cols-3 gap-2">
-                ${tasto('prep-manual-btn', '➕', 'Manuale')}${tasto('prep-scan-btn', '📷', 'Scanner')}${tasto('prep-fav-btn', '⭐', 'Preferiti')}
+                ${tasto('prep-manual-btn', icona.piu('w-5 h-5 text-gray-700'), 'Manuale')}${tasto('prep-scan-btn', icona.fotocamera('w-5 h-5 text-blue-600'), 'Scanner')}${tasto('prep-fav-btn', icona.stella('w-5 h-5 text-yellow-500'), 'Preferiti')}
             </div>
         </div>
         <div id="prep-scanner-container" class="hidden bg-gray-900 p-2 rounded-2xl shadow-xl border border-gray-800">
@@ -147,7 +148,7 @@ export class MealPrepView {
             <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50 min-h-screen">
                 ${attive.length === 0 ? `
                     <div class="text-center py-6 px-4">
-                        <p class="text-4xl mb-3">🍲</p>
+                        <div class="flex justify-center mb-3">${icona.pentola('w-10 h-10 text-gray-300')}</div>
                         <p class="text-gray-600 font-medium text-[15px] leading-relaxed">Quando cucini qualcosa che dura più giorni (es. il ragù), registralo qui una volta sola con i suoi ingredienti crudi. Poi ogni giorno scrivi solo quanti grammi ne mangi.</p>
                     </div>
                     <button id="new-prep-btn" class="${BTN_PRINCIPALE}">+ Nuova preparazione</button>
@@ -264,7 +265,7 @@ export class MealPrepView {
             : p.porzioni.map(por => `
                 <div class="flex justify-between items-center gap-2 py-3 text-[14px]">
                     <span class="font-bold text-gray-700">${giornoBreve(por.data)} · ${esc(por.pasto)}</span>
-                    <span class="font-bold text-gray-500 whitespace-nowrap">${por.prepDaCompletare ? '⚠️ da completare' : `${quantitaPorzione(por)} · ${intero(por.calorie)} kcal`}</span>
+                    <span class="font-bold text-gray-500 whitespace-nowrap">${por.prepDaCompletare ? 'da completare' : `${quantitaPorzione(por)} · ${intero(por.calorie)} kcal`}</span>
                 </div>`).join('');
 
         return `
@@ -334,7 +335,7 @@ export class MealPrepView {
         this.prep = r.prep;
         this.drawDetail();
         if (r.pastiAggiornati > 0) {
-            pantrySync.showToast(`🔄 Ricalcolati ${r.pastiAggiornati} ${r.pastiAggiornati === 1 ? 'pasto' : 'pasti'}`, 'bg-gray-900');
+            pantrySync.showToast(`Ricalcolati ${r.pastiAggiornati} ${r.pastiAggiornati === 1 ? 'pasto' : 'pasti'}`, 'bg-gray-900');
         }
         return r;
     }
@@ -485,7 +486,7 @@ export class MealPrepView {
         const conclusa = this.prep.attiva;
         const r = await this.salva({ attiva: !this.prep.attiva });
         if (r && r.success && conclusa) {
-            pantrySync.showToast(`✅ ${this.prep.nome} conclusa`, 'bg-gray-900');
+            pantrySync.showToast(`${this.prep.nome} conclusa`, 'bg-gray-900');
             this.renderList();
         }
     }
@@ -618,7 +619,7 @@ export async function openPortionSheet({ prepId = null, mealId = null, onDone = 
                 const res = await prepService.addPortion(p._id, { ...(mealId ? { mealId } : { pasto: stato.pasto }), prepGrammi: qty });
                 if (!res.success) throw new Error(res.error || 'Salvataggio non riuscito.');
                 chiudi();
-                pantrySync.showToast(`🍲 ${p.nome}: ${intero(qty)} g aggiunti`, 'bg-gray-900');
+                pantrySync.showToast(`${p.nome}: ${intero(qty)} g aggiunti`, 'bg-gray-900');
                 onDone(res.meal);
             } catch (e) {
                 btn.disabled = false;

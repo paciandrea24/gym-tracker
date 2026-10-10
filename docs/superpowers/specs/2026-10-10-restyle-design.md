@@ -31,8 +31,10 @@ push (l'utente prova sul telefono). Ordine: 1. Meal prep · 2. Nutrizione Oggi +
    - azzurro (`indigo`) solo per link testuali, barre di avanzamento, selezioni e barra in basso;
    - rosso solo per eliminare (e solo dentro dettagli o conferme).
 
-Helper condivisi lato client: `components/format.js` (numeri e macro) e `components/sheet.js`
-(foglio dal basso).
+8. **Niente emoji**: le icone sono SVG a tratto (`components/icons.js`), colorate con il testo.
+
+Helper condivisi lato client: `components/format.js` (numeri e macro), `components/sheet.js`
+(foglio dal basso), `components/icons.js` (icone).
 
 ## Sezione 1 — Meal prep
 
@@ -70,6 +72,26 @@ non divide in porzioni. Scelta esplicita dell'utente ("solo stima"): il peso di 
 - **Foglio "Aggiungi"**: "Quanti grammi?" già compilato con i grammi dell'ultima volta, scelta del
   pasto, anteprima (kcal + macro) e "Dopo ne restano circa X g".
 - **Dettaglio pasto**: la matita su una porzione chiede solo i grammi.
+
+## Sezione 2 — Nutrizione Oggi
+
+Approvata con l'anteprima https://claude.ai/artifact/QrvGkG3QGF5hQSGu8dcNUN (più la regola 8).
+
+- **Oggi**: riquadro scuro "Mangiato oggi" con barra delle calorie e una per macro (nomi per
+  esteso, numeri interi), "Mancano / Oltre di X kcal"; "Obiettivi" al posto dell'ingranaggio;
+  Voce (nero) e Manuale / Scanner / Preferiti / Prep (bianchi con icona); pasti in elenco con il
+  tipo come titolo, kcal e alimenti, senza cestini; "Idee per il resto della giornata" raccoglie
+  "Come chiudi di solito" (pulsante bianco) e "Chiedi un'idea all'IA".
+- **Dettaglio pasto**: titolo = tipo di pasto; quando, kcal e macro; ingredienti prima dei
+  pulsanti, una riga ciascuno; il tocco apre un foglio (grammi, "Togli dal pasto"); anche le
+  porzioni di meal prep si correggono lì, in grammi; "Elimina pasto" in fondo.
+- **Preferiti**: elenco semplice; foglio con kcal, macro, ingredienti con i grammi,
+  "+ Aggiungi a oggi" e "Togli dai preferiti".
+- **Chiedi all'IA**: titolo "Idee per la cena"; ogni opzione: cos'è, kcal e macro, ingredienti,
+  "Con questo arrivi a" (barre, rosse se si supera), "+ Aggiungi a oggi"; "Vedi variante" bianco.
+- **Aggiungi a mano**: pasto con quattro pulsanti (preimpostato in base all'ora, nascosto se si
+  aggiunge a un pasto esistente), alimento, grammi, valori ogni 100 g, anteprima della porzione.
+- **Obiettivi**: una riga che spiega a cosa servono; "Salva".
 
 ## Test
 

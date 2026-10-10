@@ -1,10 +1,10 @@
 // public/js/views/PantryView.js
 
-import * as pantryService from '../services/pantryService.js?v=25';
-import * as scanner from '../components/scanner.js?v=25';
-import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.js?v=25';
-import * as modal from '../components/modal.js?v=25';
-import { searchFoodTable } from '../data/foodTable.js?v=25';
+import * as pantryService from '../services/pantryService.js?v=26';
+import * as scanner from '../components/scanner.js?v=26';
+import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.js?v=26';
+import * as modal from '../components/modal.js?v=26';
+import { searchFoodTable } from '../data/foodTable.js?v=26';
 
 const CATEGORIE = ['Proteina', 'Carboidrato', 'Latticino', 'Verdura', 'Frutta', 'Condimento/Grassi', 'Altro'];
 

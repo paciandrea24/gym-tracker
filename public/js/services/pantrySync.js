@@ -3,8 +3,8 @@
 // Le porzioni di meal prep (ingredienti con prepId) non toccano mai la dispensa:
 // i loro ingredienti crudi sono già stati scalati quando è stata creata la preparazione.
 
-import * as pantryService from './pantryService.js?v=25';
-import * as modal from '../components/modal.js?v=25';
+import * as pantryService from './pantryService.js?v=26';
+import * as modal from '../components/modal.js?v=26';
 
 // Cache localStorage: nomeNormalizzato → pantryItemId (o null = "non scalare")
 const PANTRY_CACHE_KEY = 'pantryMatchCache';
@@ -128,8 +128,8 @@ export async function ripristinaDispensa(meal, ingredienti, motivo) {
 }
 
 export function showPantryToast(avviso) {
-    if (avviso.esaurito) showToast(`🔴 "${avviso.nome}" è esaurito dalla dispensa!`, 'bg-red-500');
-    else showToast(`⚠️ "${avviso.nome}" in esaurimento (${avviso.grammiRimasti}g rimasti)`, 'bg-orange-500');
+    if (avviso.esaurito) showToast(`"${avviso.nome}" è finito in dispensa`, 'bg-red-500');
+    else showToast(`"${avviso.nome}" sta finendo: restano ${avviso.grammiRimasti} g`, 'bg-orange-500');
 }
 
 export function showToast(testo, colore = 'bg-gray-900') {
