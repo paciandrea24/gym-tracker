@@ -5,6 +5,7 @@ import * as modal from '../components/modal.js?v=27';
 import * as userService from '../services/userService.js?v=27';
 import * as ui from '../ui.js?v=27';
 import * as gymUi from './gymUi.js?v=27';
+import { elementiDaFare } from '../services/gymLogic.js?v=27';
 import { debounce, exportToCSV } from '../utils.js?v=27';
 
 export class GymView {
@@ -172,7 +173,19 @@ export class GymView {
     async showActiveSession() {
         const session = gymService.getActiveSession();
         const routine = await gymService.getRoutine(this.currentRoutineId);
-        ui.renderActiveSession(this.container, session, routine, (id) => this.handleOpenExercise(id), () => this.handleEndSession());
+        if (!session || !routine) return this.showRoutinesList();
+        gymUi.renderAllenamento(this.container, session, routine, elementiDaFare(session), {
+            onApri: (el) => el.tipo === 'superserie' ? this.handleOpenSuperserie(el.ids) : this.handleOpenExercise(el.id),
+            onApriFatto: (id) => this.handleOpenExercise(id),
+            onUnisci: (idTrascinato, idBersaglio) => { gymService.unisciSuperserie(idTrascinato, idBersaglio); this.showActiveSession(); },
+            onSepara: (id) => { gymService.separaSuperserie(id); this.showActiveSession(); },
+            onTermina: () => this.handleEndSession()
+        });
+    }
+
+    // Superserie: arriva con il Task 6 (per ora apre il primo esercizio del blocco)
+    handleOpenSuperserie(ids) {
+        this.handleOpenExercise(ids[0]);
     }
 
     async handleEndSession() {

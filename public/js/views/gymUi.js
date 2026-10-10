@@ -349,3 +349,132 @@ export function renderModuloEsercizio(container, ex, { onSalva, onAnnulla, onEli
         });
     });
 }
+
+// ─── ALLENAMENTO IN CORSO ──────────────────────────────────────────────────
+// elementi: da elementiDaFare(session) — esercizi singoli e blocchi superserie
+const riassuntoBreve = (ex) => riassuntoEsercizio(ex).replace(/ · recupero \d+:\d+$/, '').replace(' + bilanciere', '');
+
+export function renderAllenamento(container, session, routine, elementi, { onApri, onApriFatto, onUnisci, onSepara, onTermina }) {
+    const trova = (id) => routine.exercises.find(e => String(e.id) === String(id));
+    const cardEsercizio = (ex) => `
+        <div class="card-da-fare bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-1 p-2 transition" data-id="${esc(ex.id)}">
+            <span class="maniglia p-2 text-gray-300 cursor-grab select-none" style="touch-action: none" aria-label="Trascina per fare la superserie">${icona.maniglia()}</span>
+            <button class="apri-esercizio flex-1 min-w-0 flex items-center gap-2 text-left py-2 pr-2" data-id="${esc(ex.id)}">
+                <span class="flex-1 min-w-0">
+                    <span class="block font-bold text-gray-900">${esc(ex.name)}</span>
+                    <span class="block text-[12px] font-semibold text-gray-400">${riassuntoBreve(ex)}</span>
+                    <span class="testo-rilascio hidden text-[12px] font-bold text-indigo-600">Rilascia qui per fare la superserie</span>
+                </span>
+                ${chevron()}
+            </button>
+        </div>`;
+    const blocco = (ids) => `
+        <div class="blocco-superserie bg-white rounded-2xl border border-gray-100 shadow-sm p-4 transition" data-id="${esc(ids[0])}">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-[11px] font-black bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg">Superserie</span>
+                <button class="separa-btn text-[13px] font-bold text-indigo-600" data-id="${esc(ids[0])}">Separa</button>
+            </div>
+            <button class="apri-blocco w-full flex items-center gap-3 text-left" data-ids="${ids.map(esc).join(',')}">
+                <span class="w-1 self-stretch rounded-full bg-indigo-400"></span>
+                <span class="flex-1 min-w-0 space-y-2">
+                    ${ids.map(trova).filter(Boolean).map(ex => `<span class="block"><span class="block font-bold text-gray-900">${esc(ex.name)}</span><span class="block text-[12px] font-semibold text-gray-400">${riassuntoBreve(ex)}</span></span>`).join('')}
+                </span>
+                ${chevron()}
+            </button>
+            <span class="testo-rilascio hidden text-[12px] font-bold text-indigo-600 mt-2">Rilascia qui per aggiungerlo alla superserie</span>
+        </div>`;
+    const fatti = session.completed || [];
+    const rigaFatto = (c) => {
+        const sets = c.sets || [];
+        const migliore = sets.reduce((m, x) => (!m || numero(x.kg) > numero(m.kg)) ? x : m, null);
+        const riassunto = migliore ? `${sets.length} serie · ${testoSerie({ ...migliore, drop: [] }, c.type)}` : 'nessuna serie';
+        return `
+            <button class="riga-fatto w-full flex items-center gap-3 py-3 text-left active:opacity-60" data-id="${esc(c.exerciseId)}">
+                <span class="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0">${icona.spunta()}</span>
+                <span class="flex-1 min-w-0"><span class="block font-bold text-gray-800">${esc(c.name)}</span><span class="block text-[12px] font-semibold text-gray-400">${riassunto}</span></span>
+                <span class="text-[13px] font-bold text-indigo-600">Modifica</span>
+            </button>`;
+    };
+
+    container.innerHTML = `
+        ${intestazione('Allenamento in corso', { sopra: esc(routine.name), sotto: elementi.length ? `${session.todo.length} da fare` : 'Tutto fatto' })}
+        <main class="p-4 space-y-3 pb-24 safe-pb bg-gray-50">
+            ${elementi.length >= 2 ? `<p class="text-[12px] font-semibold text-gray-400 px-1 flex items-center gap-1.5">${icona.maniglia('w-4 h-4')} Trascina un esercizio sopra un altro per farli in superserie</p>` : ''}
+            ${elementi.length ? `
+                <h3 class="${ETICHETTA} px-1">Da fare</h3>
+                ${elementi.map(el => el.tipo === 'superserie' ? blocco(el.ids) : (trova(el.id) ? cardEsercizio(trova(el.id)) : '')).join('')}
+            ` : `
+                <div class="bg-white rounded-[20px] border border-gray-100 p-5 text-center">
+                    <p class="font-black text-gray-900">Hai fatto tutto</p>
+                    <p class="text-[14px] font-medium text-gray-500 mt-1">Salva l'allenamento per ritrovarlo nello storico.</p>
+                </div>
+            `}
+            ${fatti.length ? `
+                <h3 class="${ETICHETTA} px-1 pt-2">Fatti</h3>
+                <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">${fatti.map(rigaFatto).join('')}</div>
+            ` : ''}
+            <button id="end-session-btn" class="${elementi.length ? BTN_SECONDARIO : BTN_PRINCIPALE}">${elementi.length ? 'Termina allenamento' : 'Salva allenamento'}</button>
+        </main>
+    `;
+
+    container.querySelectorAll('.apri-esercizio').forEach(b => b.addEventListener('click', () => onApri({ tipo: 'esercizio', id: b.dataset.id })));
+    container.querySelectorAll('.apri-blocco').forEach(b => b.addEventListener('click', () => onApri({ tipo: 'superserie', ids: b.dataset.ids.split(',') })));
+    container.querySelectorAll('.separa-btn').forEach(b => b.addEventListener('click', () => onSepara(b.dataset.id)));
+    container.querySelectorAll('.riga-fatto').forEach(b => b.addEventListener('click', () => onApriFatto(b.dataset.id)));
+    document.getElementById('end-session-btn').addEventListener('click', onTermina);
+    attivaTrascinamento(container, onUnisci);
+}
+
+// Trascinamento dalla maniglia (Pointer Events: dito e mouse). Un clone segue il dito; la card
+// o il blocco sotto si evidenzia; al rilascio sopra un altro elemento nasce la superserie.
+function attivaTrascinamento(container, onUnisci) {
+    const evidenzia = (el, attivo) => {
+        el.classList.toggle('ring-2', attivo);
+        el.classList.toggle('ring-indigo-400', attivo);
+        el.classList.toggle('bg-indigo-50', attivo);
+        el.querySelector('.testo-rilascio')?.classList.toggle('hidden', !attivo);
+    };
+    container.querySelectorAll('.card-da-fare .maniglia').forEach(maniglia => {
+        maniglia.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            const card = maniglia.closest('.card-da-fare');
+            const r = card.getBoundingClientRect();
+            const dx = e.clientX - r.left;
+            const dy = e.clientY - r.top;
+            const clone = card.cloneNode(true);
+            Object.assign(clone.style, {
+                position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, margin: '0',
+                zIndex: '9999', pointerEvents: 'none', transform: 'rotate(-2deg)', boxShadow: '0 20px 40px rgba(0,0,0,0.18)'
+            });
+            document.body.appendChild(clone);
+            card.style.opacity = '0.4';
+            try { maniglia.setPointerCapture(e.pointerId); } catch { }
+
+            let bersaglio = null;
+            const muovi = (ev) => {
+                clone.style.left = `${ev.clientX - dx}px`;
+                clone.style.top = `${ev.clientY - dy}px`;
+                const sotto = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.card-da-fare, .blocco-superserie');
+                const nuovo = sotto && sotto !== card && container.contains(sotto) ? sotto : null;
+                if (nuovo === bersaglio) return;
+                if (bersaglio) evidenzia(bersaglio, false);
+                if (nuovo) evidenzia(nuovo, true);
+                bersaglio = nuovo;
+            };
+            const termina = (annullato) => {
+                maniglia.removeEventListener('pointermove', muovi);
+                maniglia.removeEventListener('pointerup', rilascia);
+                maniglia.removeEventListener('pointercancel', annulla);
+                clone.remove();
+                card.style.opacity = '';
+                if (bersaglio) evidenzia(bersaglio, false);
+                if (!annullato && bersaglio) onUnisci(card.dataset.id, bersaglio.dataset.id);
+            };
+            const rilascia = () => termina(false);
+            const annulla = () => termina(true);
+            maniglia.addEventListener('pointermove', muovi);
+            maniglia.addEventListener('pointerup', rilascia);
+            maniglia.addEventListener('pointercancel', annulla);
+        });
+    });
+}
