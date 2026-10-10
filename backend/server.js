@@ -11,6 +11,7 @@ import {
 } from './mealPrep.js';
 import { tokenizza, classificaMatch } from './matching.js';
 import { componiConsigli } from './nutrizionista.js';
+import { suggerisciChiusure } from './giornateSimili.js';
 
 dotenv.config();
 console.log("Prime lettere della chiave API:", process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 8) : "CHIAVE NON TROVATA");
@@ -828,6 +829,51 @@ app.get('/api/today-meals', async (req, res) => {
         const meals = await Meal.find({ data: { $gte: todayMidnight } });
         res.json(meals);
     } catch (error) { res.status(500).json({ success: false }); }
+});
+
+// --- API: COME CHIUDI DI SOLITO ---
+// Giorni degli ultimi 120 arrivati allo stesso punto con macro simili e i pasti con cui sono finiti,
+// pronti da copiare. Body: { obiettivi: { calorie, proteine, carboidrati, grassi } }
+app.post('/api/day-suggestions', async (req, res) => {
+    try {
+        const mezzanotte = getItalyMidnight();
+        const pastiOggi = await Meal.find({ data: { $gte: mezzanotte } }).lean();
+        if (pastiOggi.length === 0) return res.json({ success: true, suggerimenti: [] });
+
+        const inizio = new Date(mezzanotte.getTime() - 120 * 24 * 60 * 60 * 1000);
+        const storico = await Meal.find({ data: { $gte: inizio, $lt: mezzanotte } }).lean();
+
+        const perGiorno = new Map();
+        for (const m of storico) {
+            const giorno = new Date(m.data).toLocaleDateString('fr-CA', { timeZone: 'Europe/Rome' });
+            if (!perGiorno.has(giorno)) perGiorno.set(giorno, []);
+            perGiorno.get(giorno).push(m);
+        }
+        const giorni = [...perGiorno].map(([giorno, pasti]) => ({ giorno, pasti }));
+
+        const o = req.body?.obiettivi || {};
+        const obiettivi = {
+            calorie: Number(o.calorie) || 2000, proteine: Number(o.proteine) || 150,
+            carboidrati: Number(o.carboidrati) || 200, grassi: Number(o.grassi) || 60
+        };
+        const suggerimenti = suggerisciChiusure(pastiOggi, giorni, { obiettivi });
+
+        // Porzioni di preparazioni ormai finite: diventano ingredienti normali, non tolgono porzioni al lotto
+        const attive = new Set((await MealPrep.find({ attiva: true }).select('_id').lean()).map(p => String(p._id)));
+        for (const s of suggerimenti) {
+            s.pasti = s.pasti.map(m => ({
+                pasto: m.pasto, alimenti: m.alimenti,
+                calorie: m.calorie, proteine: m.proteine, carboidrati: m.carboidrati, grassi: m.grassi,
+                ingredienti: (m.ingredienti || []).map(({ _id, ...ing }) =>
+                    ing.prepId && !attive.has(String(ing.prepId)) ? senzaCollegamentiPrep([ing])[0] : ing)
+            }));
+        }
+
+        res.json({ success: true, suggerimenti });
+    } catch (error) {
+        console.error("❌ ERRORE CONSIGLI GIORNATA:", error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // --- API: NUTRIZIONISTA AI BASATO SULLA DISPENSA (E SUI MEAL PREP) ---

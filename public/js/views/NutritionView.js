@@ -1,14 +1,15 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=22';
-import * as scanner from '../components/scanner.js?v=22';
-import * as modal from '../components/modal.js?v=22';
-import * as voice from '../components/voice.js?v=22';
-import * as ui from '../ui.js?v=22';
-import { exportToCSV } from '../utils.js?v=22';
-import * as pantryService from '../services/pantryService.js?v=22';
-import * as pantrySync from '../services/pantrySync.js?v=22';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=22';
+import * as nutriService from '../services/nutriService.js?v=23';
+import * as scanner from '../components/scanner.js?v=23';
+import * as modal from '../components/modal.js?v=23';
+import * as voice from '../components/voice.js?v=23';
+import * as ui from '../ui.js?v=23';
+import { exportToCSV } from '../utils.js?v=23';
+import * as pantryService from '../services/pantryService.js?v=23';
+import * as pantrySync from '../services/pantrySync.js?v=23';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=23';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=23';
 
 // Ogni cambio di sezione crea una nuova NutritionView: gli eventi globali vanno sempre
 // all'istanza corrente (prima restavano legati alla prima, con dati vecchi).
@@ -57,10 +58,53 @@ export class NutritionView {
             document.getElementById('favorites-page-btn')?.addEventListener('click', () => this.showFavoritesPage());
             document.getElementById('prep-btn')?.addEventListener('click', () => this.showMealPrep());
 
+            if (this.currentTab === 'oggi' && mealsData.length > 0) this.caricaChiusure(goals);
             if (openAddMeal) this.handleManualMealClick();
         } catch (error) {
             this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Errore di connessione al database.</div>`;
         }
+    }
+
+    // Card "Come chiudi di solito": arriva dopo la dashboard per non rallentarla
+    async caricaChiusure(goals) {
+        let suggerimenti = [];
+        try {
+            const r = await nutriService.getDaySuggestions(goals);
+            if (r.success) suggerimenti = r.suggerimenti;
+        } catch (e) { return; } // è un aiuto in più: se fallisce non si mostra
+        const el = document.getElementById('chiusura-giornata');
+        if (!el || vistaAttiva !== this || this.currentTab !== 'oggi') return;
+
+        const consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
+        for (const m of this.currentMealsData) {
+            consumate.calorie += Number(m.calorie) || 0;
+            consumate.proteine += Number(m.proteine) || 0;
+            consumate.carbo += Number(m.carboidrati) || 0;
+            consumate.grassi += Number(m.grassi) || 0;
+        }
+        renderChiusuraGiornata(el, suggerimenti, { consumate, goals, onAggiungi: (pasti) => this.handleAggiungiChiusura(pasti) });
+    }
+
+    // Registra oggi i pasti scelti da un giorno simile, nell'ordine in cui erano stati mangiati
+    async handleAggiungiChiusura(pasti) {
+        this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Aggiunta pasti...</div>`;
+        const salvati = [];
+        try {
+            for (const p of pasti) {
+                const saved = await nutriService.saveMeal({
+                    pasto: p.pasto, alimenti: p.alimenti,
+                    calorie: p.calorie, proteine: p.proteine, carboidrati: p.carboidrati, grassi: p.grassi,
+                    ingredienti: JSON.parse(JSON.stringify(p.ingredienti || []))
+                });
+                if (!saved.success) throw new Error(saved.error);
+                salvati.push(saved.meal);
+            }
+        } catch (e) {
+            await modal.showModal({ type: 'error', title: 'Errore', message: salvati.length ? `Registrati ${salvati.length} su ${pasti.length}: errore di connessione.` : "Errore di connessione" });
+        }
+        await this.render();
+        // Uno alla volta: la dispensa può chiedere quale prodotto scalare
+        for (const meal of salvati) await pantrySync.scalaDispensa(meal);
     }
 
     showFavoritesPage() {

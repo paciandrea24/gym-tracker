@@ -1,14 +1,14 @@
 // public/js/views/MealPrepView.js
 // Meal prep: un lotto cucinato una volta (es. ragù) e mangiato in più giorni.
 
-import * as prepService from '../services/mealPrepService.js?v=22';
-import * as nutriService from '../services/nutriService.js?v=22';
-import * as pantryService from '../services/pantryService.js?v=22';
-import * as pantrySync from '../services/pantrySync.js?v=22';
-import * as scanner from '../components/scanner.js?v=22';
-import * as voice from '../components/voice.js?v=22';
-import * as modal from '../components/modal.js?v=22';
-import * as ui from '../ui.js?v=22';
+import * as prepService from '../services/mealPrepService.js?v=23';
+import * as nutriService from '../services/nutriService.js?v=23';
+import * as pantryService from '../services/pantryService.js?v=23';
+import * as pantrySync from '../services/pantrySync.js?v=23';
+import * as scanner from '../components/scanner.js?v=23';
+import * as voice from '../components/voice.js?v=23';
+import * as modal from '../components/modal.js?v=23';
+import * as ui from '../ui.js?v=23';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (n) => String(Math.round((Number(n) || 0) * 10) / 10).replace('.', ',');

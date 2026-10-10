@@ -75,6 +75,16 @@ export async function analyzeVoice(text, mealId = null) {
     return await leggiJSON(res);
 }
 
+// Giorni passati arrivati allo stesso punto con macro simili e i pasti con cui sono finiti
+export async function getDaySuggestions(goals) {
+    const obiettivi = { calorie: goals.calorie, proteine: goals.proteine, carboidrati: goals.carbo, grassi: goals.grassi };
+    const res = await fetch('/api/day-suggestions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ obiettivi })
+    });
+    return await leggiJSON(res);
+}
+
 export async function recommendMeal(question, goals, consumate, giaMangiati = []) {
     const res = await fetch('/api/recommend-meal', {
         method: "POST", headers: { "Content-Type": "application/json" },
