@@ -1,11 +1,11 @@
-import { formatDate, getWeekLabel } from './utils.js?v=28';
-import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=28';
-import { cercaProdottoOFF } from './services/pantryService.js?v=28';
-import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=28';
-import * as modal from './components/modal.js?v=28';
-import { icona } from './components/icons.js?v=28';
-import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=28';
-import { apriFoglio } from './components/sheet.js?v=28';
+import { formatDate, getWeekLabel } from './utils.js?v=29';
+import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=29';
+import { cercaProdottoOFF } from './services/pantryService.js?v=29';
+import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=29';
+import * as modal from './components/modal.js?v=29';
+import { icona } from './components/icons.js?v=29';
+import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=29';
+import { apriFoglio } from './components/sheet.js?v=29';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const BTN_PRINCIPALE = 'w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform';
@@ -169,12 +169,11 @@ export function renderNutritionDashboard(container, { mealsData, goals, currentT
                 </button>`;
         };
 
-        // Media dei giorni finiti (oggi non conta: abbasserebbe la media)
+        // Media dei giorni con pasti, oggi compreso: si aggiorna appena si aggiunge qualcosa
+        // (scelto dall'utente; di giorno è più bassa perché oggi non è finito, e la riga lo dice)
         const mediaSettimana = (chiavi) => {
-            const finiti = chiavi.filter(k => k !== oggi);
-            if (finiti.length === 0) return '';
-            const somma = totaliPasti(finiti.flatMap(k => giorni.get(k)));
-            const m = Object.fromEntries(Object.entries(somma).map(([k, v]) => [k, v / finiti.length]));
+            const somma = totaliPasti(chiavi.flatMap(k => giorni.get(k)));
+            const m = Object.fromEntries(Object.entries(somma).map(([k, v]) => [k, v / chiavi.length]));
             const colonna = (nome, colore, v, obiettivo) => `<div><p class="text-[11px] font-bold ${colore}">${nome}</p><p class="font-black text-[14px]">${intero(v)} <span class="text-[11px] font-normal text-gray-400">/ ${obiettivo} g</span></p></div>`;
             return `
                 <div class="bg-gray-900 text-white rounded-2xl p-4">
@@ -182,6 +181,7 @@ export function renderNutritionDashboard(container, { mealsData, goals, currentT
                         <p class="text-[12px] font-bold text-gray-400">Media al giorno</p>
                         <p><span class="text-xl font-black">${intero(m.calorie)}</span> <span class="text-[12px] text-gray-400">/ ${goals.calorie} kcal</span></p>
                     </div>
+                    ${chiavi.includes(oggi) ? `<p class="text-[12px] font-semibold text-gray-400">${chiavi.length} ${chiavi.length === 1 ? 'giorno' : 'giorni'}, oggi compreso</p>` : ''}
                     <div class="grid grid-cols-3 gap-3 mt-2">
                         ${colonna('Proteine', 'text-blue-300', m.proteine, goals.proteine)}
                         ${colonna('Carboidrati', 'text-green-300', m.carbo, goals.carbo)}

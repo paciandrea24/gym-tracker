@@ -98,7 +98,8 @@ Approvata con l'anteprima https://claude.ai/artifact/QrvGkG3QGF5hQSGu8dcNUN (pi�
 Approvata con l'anteprima https://claude.ai/artifact/TJKQnsN36Jva3cP2BrfZ4h.
 
 - **Elenco**: settimane dal lunedì ("5 – 11 ottobre"), ognuna con il riquadro scuro "Media al
-  giorno" (calorie e macro sugli obiettivi; oggi non conta perché non è finito) e una riga per
+  giorno" (calorie e macro sugli obiettivi; conta anche oggi, così cambia appena si aggiunge un
+  pasto, e nella settimana in corso la riga "6 giorni, oggi compreso" lo dice) e una riga per
   giorno: "Oggi", "Ieri", "Giovedì 8 ottobre", calorie / obiettivo (rosse se sopra), barra, macro
   per esteso. "Scarica i dati (CSV)" in fondo, bianco con icona.
 - **Giorno**: titolo con il nome del giorno; lo stesso riquadro di Oggi con le calorie del giorno

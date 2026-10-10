@@ -2,7 +2,7 @@
 // Riga "Codice a barre + Cerca" dei form manuali (pasto, ingrediente meal prep, dispensa).
 // Lo scanner resta solo fotocamera: il codice scritto a mano si inserisce qui.
 
-import { normalizzaBarcode } from './scanner.js?v=28';
+import { normalizzaBarcode } from './scanner.js?v=29';
 
 export function campoCodiceHtml() {
     return `

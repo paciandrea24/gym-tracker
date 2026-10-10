@@ -1,11 +1,11 @@
 // public/js/views/GymView.js
 
-import * as gymService from '../services/gymService.js?v=28';
-import * as modal from '../components/modal.js?v=28';
-import * as userService from '../services/userService.js?v=28';
-import * as gymUi from './gymUi.js?v=28';
-import { elementiDaFare, nuovoDrop, pulisciSerie, serieIniziali, salvaGiro, modificaGiro, recuperoBlocco, progressiEsercizio, righeCsv } from '../services/gymLogic.js?v=28';
-import { exportToCSV } from '../utils.js?v=28';
+import * as gymService from '../services/gymService.js?v=29';
+import * as modal from '../components/modal.js?v=29';
+import * as userService from '../services/userService.js?v=29';
+import * as gymUi from './gymUi.js?v=29';
+import { elementiDaFare, nuovoDrop, pulisciSerie, serieIniziali, salvaGiro, modificaGiro, recuperoBlocco, progressiEsercizio, righeCsv } from '../services/gymLogic.js?v=29';
+import { exportToCSV } from '../utils.js?v=29';
 
 export class GymView {
     constructor(container) {
