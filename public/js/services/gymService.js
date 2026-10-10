@@ -1,6 +1,6 @@
 // public/js/services/gymService.js
 
-import { unisciSuperserie as unisci, separaSuperserie as separa, completaSuperserie as completa } from './gymLogic.js?v=28';
+import { unisciSuperserie as unisci, separaSuperserie as separa, completaSuperserie as completa, completaEsercizio } from './gymLogic.js?v=28';
 
 export async function getRoutines() {
     try { const res = await fetch('/api/gym/routines'); return await res.json(); } catch (e) { return []; }
@@ -56,14 +56,7 @@ export function startSession(routineId, exerciseIds) {
 
 export function completeExerciseInSession(exercise, sessionData) {
     const session = getActiveSession();
-    if (!session) return;
-    session.todo = session.todo.filter(id => id !== exercise.id);
-    session.superserie = (session.superserie || []).map(g => g.filter(id => id !== exercise.id)).filter(g => g.length >= 2);
-    // Rimuove l'esercizio se era già nei completati, così lo sovrascrive (tenendo il segno della superserie)
-    const prima = session.completed.find(c => String(c.exerciseId) === String(exercise.id));
-    session.completed = session.completed.filter(c => String(c.exerciseId) !== String(exercise.id));
-    session.completed.push({ exerciseId: exercise.id, name: exercise.name, type: exercise.type, sets: sessionData, ...(prima?.superserie ? { superserie: prima.superserie } : {}) });
-    salvaSessione(session);
+    if (session) salvaSessione(completaEsercizio(session, exercise, sessionData));
 }
 
 // Superserie decise in allenamento: valgono solo per la sessione attiva

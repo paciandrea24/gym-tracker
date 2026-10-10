@@ -180,6 +180,20 @@ export function separaSuperserie(session, idMembro) {
     return s;
 }
 
+// Fine di un esercizio singolo: va fra i fatti. Se c'era già (Modifica) resta al suo posto e tiene
+// il segno della superserie, così nello storico il blocco resta unito.
+export function completaEsercizio(session, esercizio, sets) {
+    const s = copia(session);
+    s.todo = s.todo.filter(id => id !== esercizio.id);
+    s.superserie = s.superserie.map(g => g.filter(id => id !== esercizio.id)).filter(g => g.length >= 2);
+    s.completed = s.completed || [];
+    const voce = { exerciseId: esercizio.id, name: esercizio.name, type: esercizio.type, sets };
+    const i = s.completed.findIndex(c => String(c.exerciseId) === String(esercizio.id));
+    if (i === -1) s.completed.push(voce);
+    else s.completed[i] = { ...voce, ...(s.completed[i].superserie ? { superserie: s.completed[i].superserie } : {}) };
+    return s;
+}
+
 // Fine di un blocco: ogni esercizio va fra i fatti con le sue serie e il segno del blocco
 export function completaSuperserie(session, ids, setsPerId, esercizi) {
     const s = copia(session);

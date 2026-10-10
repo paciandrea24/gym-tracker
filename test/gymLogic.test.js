@@ -203,3 +203,15 @@ test('CSV: una riga per serie con la colonna Drop', () => {
         { Data: '07/10/2026', Scheda: 'Scheda A', Esercizio: 'Trazioni', Tipo: 'Corpo Libero', Serie: 1, Kg: 0, Reps_o_Minuti: 10, Drop: '' }
     ]);
 });
+
+import { completaEsercizio } from '../public/js/services/gymLogic.js';
+
+test('rimodificare un esercizio fatto lo lascia al suo posto, col segno della superserie', () => {
+    const es = [{ id: 'b', name: 'Curl', type: 'sala-pesi' }, { id: 'c', name: 'Tricipiti', type: 'sala-pesi' }];
+    let s = completaSuperserie(unisciSuperserie(sessione(), 'c', 'b'), ['b', 'c'], { b: [], c: [] }, es);
+    s = completaEsercizio(s, { id: 'a', name: 'Panca', type: 'sala-pesi' }, []);
+    s = completaEsercizio(s, es[0], [{ kg: 8, reps: 10, completed: true }]);
+    assert.deepEqual(s.completed.map(c => [c.exerciseId, c.superserie]), [['b', 'b+c'], ['c', 'b+c'], ['a', undefined]]);
+    assert.equal(s.completed[0].sets[0].kg, 8);
+    assert.deepEqual(s.todo, ['d']);
+});
