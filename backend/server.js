@@ -832,15 +832,15 @@ app.get('/api/today-meals', async (req, res) => {
 });
 
 // --- API: COME CHIUDI DI SOLITO ---
-// Giorni degli ultimi 120 arrivati allo stesso punto con macro simili e i pasti con cui sono finiti,
-// pronti da copiare. Body: { obiettivi: { calorie, proteine, carboidrati, grassi } }
+// L'ultimo giorno (negli ultimi 60) arrivato allo stesso punto con macro simili e i pasti con cui
+// è finito, pronti da copiare. Body: { obiettivi: { calorie, proteine, carboidrati, grassi } }
 app.post('/api/day-suggestions', async (req, res) => {
     try {
         const mezzanotte = getItalyMidnight();
         const pastiOggi = await Meal.find({ data: { $gte: mezzanotte } }).lean();
         if (pastiOggi.length === 0) return res.json({ success: true, suggerimenti: [] });
 
-        const inizio = new Date(mezzanotte.getTime() - 120 * 24 * 60 * 60 * 1000);
+        const inizio = new Date(mezzanotte.getTime() - 60 * 24 * 60 * 60 * 1000);
         const storico = await Meal.find({ data: { $gte: inizio, $lt: mezzanotte } }).lean();
 
         const perGiorno = new Map();

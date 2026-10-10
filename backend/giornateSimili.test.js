@@ -122,31 +122,29 @@ test('giorni finiti allo stesso modo diventano un solo consiglio', () => {
     const r = suggerisciChiusure(oggiColazionePranzo(), giorni, { obiettivi: OBIETTIVI });
 
     assert.equal(r.length, 1);
-    assert.equal(r[0].giorno, '2026-10-03'); // a parità, il più recente
+    assert.equal(r[0].giorno, '2026-10-03'); // il più recente
     assert.deepEqual(r[0].giorniUguali, ['2026-10-02', '2026-10-01']);
 });
 
-test('ordine: prima i macro più vicini, a parità la chiusura che si avvicina di più all\'obiettivo', () => {
-    const uguale = [[400, 20, 60, 12], [600, 40, 70, 18]];
+test('tra i giorni simili si propone il più recente, anche se un altro ha macro più vicini', () => {
     const giorni = [
-        giorno('2026-10-01', uguale, ['Pizza', [1300, 45, 150, 50]]),
-        giorno('2026-10-02', uguale, ['Pollo e patate', [950, 85, 65, 28]]),
-        giorno('2026-10-03', [[450, 25, 65, 14], [650, 42, 75, 20]], ['Salmone', [600, 40, 30, 25]])
+        giorno('2026-10-01', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Pizza', [1300, 45, 150, 50]]),        // identico
+        giorno('2026-10-03', [[450, 25, 65, 14], [650, 42, 75, 20]], ['Salmone', [600, 40, 30, 25]]),        // simile, più recente
+        giorno('2026-10-04', [[150, 10, 20, 4], [300, 15, 40, 8]], ['Bistecca', [700, 60, 0, 40]])            // troppo diverso
     ];
 
     const r = suggerisciChiusure(oggiColazionePranzo(), giorni, { obiettivi: OBIETTIVI });
 
-    assert.deepEqual(r.map(x => x.giorno), ['2026-10-02', '2026-10-01', '2026-10-03']);
+    assert.deepEqual(r.map(x => x.giorno), ['2026-10-03']);
 });
 
-test('al massimo tre consigli', () => {
+test('un solo consiglio di default', () => {
     const giorni = [];
     for (let i = 1; i <= 5; i++) {
         giorni.push(giorno(`2026-09-0${i}`, [[400, 20, 60, 12], [600 + i * 10, 40, 70, 18]], [`Cena ${"abcde"[i - 1]}`, [500, 40, 40, 15]]));
     }
     const r = suggerisciChiusure(oggiColazionePranzo(), giorni, { obiettivi: OBIETTIVI });
-    assert.equal(r.length, 3);
-    assert.deepEqual(r.map(x => x.giorno), ['2026-09-01', '2026-09-02', '2026-09-03']);
+    assert.deepEqual(r.map(x => x.giorno), ['2026-09-05']);
 });
 
 test('pasti di oggi spezzati in più voci dello stesso tipo: conta il totale', () => {

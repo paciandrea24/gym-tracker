@@ -1,6 +1,7 @@
 // backend/giornateSimili.js
-// "Come chiudi di solito": trova i giorni passati arrivati allo stesso punto con macro simili
-// a quelli di oggi e propone come sono finiti.
+// "Come chiudi di solito": trova l'ultimo giorno arrivato allo stesso punto con macro simili
+// a quelli di oggi e propone come è finito. Il più recente, non il più simile: è quello di cui
+// verosimilmente si hanno ancora gli ingredienti.
 //
 // Ogni pasto ha un posto nella giornata: Colazione 1, Pranzo 3, Cena 5; gli spuntini (e ogni altro
 // tipo) prendono il posto subito dopo il pasto principale che li precede (2, 4, 6).
@@ -68,8 +69,8 @@ function firma(pasti) {
 }
 
 // pastiOggi: pasti già segnati oggi. giorni: [{ giorno: 'YYYY-MM-DD', pasti }] dei giorni passati.
-// Ritorna al massimo `max` consigli: [{ giorno, distanza, aQuelPunto, pasti, totali, giorniUguali }]
-export function suggerisciChiusure(pastiOggi, giorni, { obiettivi = OBIETTIVI_BASE, max = 3, soglia = 0.15 } = {}) {
+// Ritorna al massimo `max` consigli, dal più recente: [{ giorno, distanza, aQuelPunto, pasti, totali, giorniUguali }]
+export function suggerisciChiusure(pastiOggi, giorni, { obiettivi = OBIETTIVI_BASE, max = 1, soglia = 0.15 } = {}) {
     if (!pastiOggi || pastiOggi.length === 0) return [];
 
     const arrivati = Math.max(...slotPasti(pastiOggi).map(x => x.slot));
@@ -85,22 +86,19 @@ export function suggerisciChiusure(pastiOggi, giorni, { obiettivi = OBIETTIVI_BA
         const distanza = distanzaMacro(oggi, aQuelPunto, obiettivi);
         if (distanza > soglia) continue;
 
-        const t = totali(rimanenti);
-        const finale = Object.fromEntries(MACRO.map(k => [k, oggi[k] + t[k]]));
         candidati.push({
             giorno,
             distanza: Math.round(distanza * 1000) / 1000,
             aQuelPunto,
             pasti: rimanenti,
-            totali: t,
-            scartoObiettivo: distanzaMacro(finale, obiettivi, obiettivi),
+            totali: totali(rimanenti),
             firma: firma(rimanenti)
         });
     }
 
-    candidati.sort((a, b) => a.distanza - b.distanza || a.scartoObiettivo - b.scartoObiettivo || b.giorno.localeCompare(a.giorno));
+    candidati.sort((a, b) => b.giorno.localeCompare(a.giorno));
 
-    // Chiusure identiche: un solo consiglio (il migliore) con l'elenco degli altri giorni
+    // Chiusure identiche: un solo consiglio (il più recente) con l'elenco degli altri giorni
     const perFirma = new Map();
     for (const c of candidati) {
         if (perFirma.has(c.firma)) perFirma.get(c.firma).giorniUguali.push(c.giorno);

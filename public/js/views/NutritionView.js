@@ -1,15 +1,15 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=23';
-import * as scanner from '../components/scanner.js?v=23';
-import * as modal from '../components/modal.js?v=23';
-import * as voice from '../components/voice.js?v=23';
-import * as ui from '../ui.js?v=23';
-import { exportToCSV } from '../utils.js?v=23';
-import * as pantryService from '../services/pantryService.js?v=23';
-import * as pantrySync from '../services/pantrySync.js?v=23';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=23';
-import { renderChiusuraGiornata } from '../components/dayClosure.js?v=23';
+import * as nutriService from '../services/nutriService.js?v=24';
+import * as scanner from '../components/scanner.js?v=24';
+import * as modal from '../components/modal.js?v=24';
+import * as voice from '../components/voice.js?v=24';
+import * as ui from '../ui.js?v=24';
+import { exportToCSV } from '../utils.js?v=24';
+import * as pantryService from '../services/pantryService.js?v=24';
+import * as pantrySync from '../services/pantrySync.js?v=24';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=24';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=24';
 
 // Ogni cambio di sezione crea una nuova NutritionView: gli eventi globali vanno sempre
 // all'istanza corrente (prima restavano legati alla prima, con dati vecchi).

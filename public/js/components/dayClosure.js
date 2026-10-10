@@ -1,6 +1,6 @@
 // public/js/components/dayClosure.js
-// Card "Come chiudi di solito": giorni passati arrivati allo stesso punto con macro simili a oggi
-// e i pasti con cui sono finiti. Si spuntano i pasti da registrare oggi; il totale previsto
+// Card "Come chiudi di solito": l'ultimo giorno arrivato allo stesso punto con macro simili a oggi
+// e i pasti con cui è finito. Si spuntano i pasti da registrare oggi; il totale previsto
 // si aggiorna con la selezione.
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -62,7 +62,7 @@ export function renderChiusuraGiornata(el, suggerimenti, { consumate, goals, onA
     el.innerHTML = `
         <div class="mt-8">
             <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Come chiudi di solito</h2>
-            <p class="text-[12px] font-medium text-gray-500 mt-1 mb-3">Giornate con macro simili a oggi a questo punto, e come le hai finite.</p>
+            <p class="text-[12px] font-medium text-gray-500 mt-1 mb-3">L'ultima giornata con macro simili a oggi a questo punto, e come l'hai finita.</p>
             <div class="space-y-3">${suggerimenti.map(cardSuggerimento).join('')}</div>
         </div>`;
 

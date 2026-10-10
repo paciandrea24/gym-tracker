@@ -1,7 +1,7 @@
-import { HomeView } from './views/HomeView.js?v=23';
-import { GymView } from './views/GymView.js?v=23';
-import { NutritionView } from './views/NutritionView.js?v=23';
-import { PantryView } from './views/PantryView.js?v=23';
+import { HomeView } from './views/HomeView.js?v=24';
+import { GymView } from './views/GymView.js?v=24';
+import { NutritionView } from './views/NutritionView.js?v=24';
+import { PantryView } from './views/PantryView.js?v=24';
 
 const appContainer = document.getElementById('app');
 let currentAppModule = 'home';
