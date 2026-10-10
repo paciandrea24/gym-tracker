@@ -302,6 +302,13 @@ export function renderDaComprare(container, items, { onIndietro, onMetti }) {
             r.querySelector('[id^="spesa-grammi-"]')?.addEventListener('input', (e) => { s.grammiLuna = numero(e.target.value); aggiorna(); });
         });
         document.getElementById('metti-in-dispensa-btn')?.addEventListener('click', (e) => {
+            // Un prodotto senza peso della confezione (dati vecchi): si chiedono i grammi, mai 0 g
+            const senzaPeso = lista.find(i => scelte[i._id].spuntato && !(scelte[i._id].grammiLuna > 0));
+            if (senzaPeso) {
+                scelte[senzaPeso._id].aperto = true;
+                disegna();
+                return modal.showModal({ type: 'error', title: 'Manca il peso', message: `Scrivi i grammi di una confezione di ${esc(senzaPeso.nome)}.` });
+            }
             e.currentTarget.disabled = true;
             onMetti(lista.filter(i => scelte[i._id].spuntato).map(i => ({ id: i._id, confezioni: scelte[i._id].confezioni, grammiLuna: scelte[i._id].grammiLuna })));
         });
