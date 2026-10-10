@@ -68,3 +68,17 @@ test('"finito" concorda con il nome del prodotto (prima parola)', () => {
     const casi = { 'Bresaola': 'finita', 'Pasta Barilla': 'finita', 'Latte parzialmente scremato': 'finito', 'Pane in cassetta': 'finito', 'Uova': 'finite', 'Mele': 'finite', 'Banane': 'finite', 'Olive': 'finite', 'Riso basmati': 'finito', 'Fagioli': 'finiti', 'Salmone': 'finito', 'Yogurt greco 0%': 'finito', 'Miele': 'finito' };
     for (const [nome, atteso] of Object.entries(casi)) assert.equal(parolaFinito(nome), atteso, nome);
 });
+
+import { pesoConfezioneOFF } from '../public/js/services/pantryLogic.js';
+
+test('peso di una confezione da Open Food Facts: grammi, kg e litri, multipack; 0 se non si sa', () => {
+    assert.equal(pesoConfezioneOFF({ product_quantity: 450 }), 450);
+    assert.equal(pesoConfezioneOFF({ product_quantity: '450' }), 450);
+    assert.equal(pesoConfezioneOFF({ quantity: '400 g' }), 400);
+    assert.equal(pesoConfezioneOFF({ quantity: '1,5 kg' }), 1500);
+    assert.equal(pesoConfezioneOFF({ quantity: '1 l' }), 1000);
+    assert.equal(pesoConfezioneOFF({ quantity: '500ml' }), 500);
+    assert.equal(pesoConfezioneOFF({ quantity: '6 x 125 g' }), 750);
+    assert.equal(pesoConfezioneOFF({ quantity: 'confezione' }), 0);
+    assert.equal(pesoConfezioneOFF({}), 0);
+});

@@ -81,6 +81,19 @@ export function rigaUtilizzo(u, oggi = new Date()) {
     };
 }
 
+// Grammi di una confezione da Open Food Facts: product_quantity (già in g/ml) o il testo
+// "quantity" ("400 g", "1,5 kg", "1 l", "6 x 125 g"); 0 se non si capisce
+export function pesoConfezioneOFF(product = {}) {
+    const diretto = numero(product.product_quantity);
+    if (diretto > 0) return diretto;
+    const testo = String(product.quantity || '').toLowerCase().replace(',', '.');
+    const m = testo.match(/(?:(\d+)\s*[x×]\s*)?(\d+(?:\.\d+)?)\s*(kg|g|l|cl|ml)\b/);
+    if (!m) return 0;
+    const pezzi = m[1] ? Number(m[1]) : 1;
+    const per = { kg: 1000, l: 1000, cl: 10, g: 1, ml: 1 }[m[3]];
+    return Math.round(pezzi * Number(m[2]) * per * 100) / 100;
+}
+
 // Lo stesso prodotto già in dispensa: stesso codice a barre, o stesso nome (maiuscole e spazi a parte)
 const normale = (s) => String(s || '').trim().toLowerCase();
 export function trovaEsistente(items, { barcode, nome }) {

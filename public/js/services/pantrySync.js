@@ -133,15 +133,20 @@ export function showPantryToast(avviso) {
     else showToast(`"${avviso.nome}" sta finendo: restano ${avviso.grammiRimasti} g`, 'bg-orange-500');
 }
 
+// Avviso breve in alto. Uno alla volta: il nuovo toglie quello di prima.
+// Restituisce chiudi() per toglierlo prima dei 4 secondi (es. "Cerco il codice…").
 export function showToast(testo, colore = 'bg-gray-900') {
+    document.querySelectorAll('.toast-app').forEach(t => t.remove());
     const toast = document.createElement('div');
-    toast.className = `fixed top-4 left-1/2 -translate-x-1/2 z-[999999] ${colore} text-white font-bold text-sm px-4 py-3 rounded-2xl shadow-xl max-w-xs text-center opacity-0 transition-all duration-300`;
+    toast.className = `toast-app fixed top-4 left-1/2 -translate-x-1/2 z-[999999] ${colore} text-white font-bold text-sm px-4 py-3 rounded-2xl shadow-xl max-w-xs text-center opacity-0 transition-all duration-300`;
     toast.textContent = testo;
 
     document.body.appendChild(toast);
     requestAnimationFrame(() => toast.classList.remove('opacity-0'));
-    setTimeout(() => {
+    const chiudi = () => {
         toast.classList.add('opacity-0');
         setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    };
+    setTimeout(chiudi, 4000);
+    return chiudi;
 }

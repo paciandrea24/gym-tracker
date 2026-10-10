@@ -1,25 +1,15 @@
 // public/js/views/PantryView.js
+// Dispensa: dati, chiamate al server e flussi. Il disegno è in pantryUi.js, i calcoli in pantryLogic.js.
 
 import * as pantryService from '../services/pantryService.js?v=31';
 import * as scanner from '../components/scanner.js?v=31';
-import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.js?v=31';
 import * as modal from '../components/modal.js?v=31';
-import { searchFoodTable } from '../data/foodTable.js?v=31';
+import { intero } from '../components/format.js?v=31';
 import * as pantryUi from './pantryUi.js?v=31';
-import { rifornimento, correzioneGrammi } from '../services/pantryLogic.js?v=31';
+import { rifornimento, correzioneGrammi, trovaEsistente, pesoConfezioneOFF } from '../services/pantryLogic.js?v=31';
 import { showToast } from '../services/pantrySync.js?v=31';
 
-const CATEGORIE = ['Proteina', 'Carboidrato', 'Latticino', 'Verdura', 'Frutta', 'Condimento/Grassi', 'Altro'];
-
-const CATEGORIA_STYLE = {
-    'Proteina': { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100', icon: '🥩' },
-    'Carboidrato': { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100', icon: '🌾' },
-    'Latticino': { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100', icon: '🥛' },
-    'Verdura': { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-100', icon: '🥦' },
-    'Frutta': { bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100', icon: '🍎' },
-    'Condimento/Grassi': { bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-100', icon: '🫒' },
-    'Altro': { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-100', icon: '📦' },
-};
+const ERRORE_RETE = { type: 'error', title: 'Non salvato', message: 'Controlla la connessione e riprova.' };
 
 export class PantryView {
     constructor(container) {
@@ -42,7 +32,7 @@ export class PantryView {
             onApri: (id) => this.showProdotto(id),
             onDaComprare: () => this.showShoppingList(),
             onScansiona: () => this.apriScanner(),
-            onAMano: () => this.handleVoiceAdd(),
+            onAMano: () => this.apriAMano(),
             onChiudiScanner: () => this.chiudiScanner()
         });
     }
@@ -62,11 +52,6 @@ export class PantryView {
     chiudiScanner() {
         scanner.stopScanner();
         pantryUi.mostraScanner(false);
-    }
-
-    // Codice letto dallo scanner o scritto a mano
-    handleCodice(codice) {
-        return this.fetchAndAddProduct(codice, 1);
     }
 
     // ─── PRODOTTO ───────────────────────────────────────────────────────────────
@@ -95,7 +80,7 @@ export class PantryView {
             await pantryService.updatePantryItem(item._id, modifiche);
             this.items = await pantryService.getPantryItems();
         } catch (e) {
-            await modal.showModal({ type: 'error', title: 'Non salvato', message: 'Controlla la connessione e riprova.' });
+            await modal.showModal(ERRORE_RETE);
         }
         this.showProdotto(item._id);
     }
@@ -113,459 +98,84 @@ export class PantryView {
                     }));
                     showToast(scelte.length === 1 ? '1 prodotto messo in dispensa' : `${scelte.length} prodotti messi in dispensa`);
                 } catch (e) {
-                    await modal.showModal({ type: 'error', title: 'Non salvato', message: 'Controlla la connessione e riprova.' });
+                    await modal.showModal(ERRORE_RETE);
                 }
                 this.render();
             }
         });
     }
 
-    // ─── AGGIUNGI DA SCANNER ─────────────────────────────────────────────────────
-    async fetchAndAddProduct(barcode, quantitaConfezioni = 1) {
-        this.container.innerHTML = `
-            <div class="flex flex-col justify-center items-center min-h-screen gap-4">
-                <p class="animate-pulse font-bold text-blue-600 text-lg">Ricerca nel database...</p>
-                <p class="text-gray-400 text-sm font-medium tracking-widest">${barcode}</p>
-            </div>`;
-
+    // ─── AGGIUNGERE ─────────────────────────────────────────────────────────────
+    // Codice letto dallo scanner o scritto nel foglio "A mano" (con le confezioni scelte lì)
+    async handleCodice(codice, confezioni = 1) {
+        const chiudiAvviso = showToast('Cerco il codice…');
+        let data;
         try {
-            const data = await pantryService.fetchOpenFoodFacts(barcode);
-
-            if (data.status !== 1) {
-                // IL PRODOTTO NON ESISTE. Chiediamo all'utente se vuole aggiungerlo.
-                const vuoiAggiungere = await modal.showModal({
-                    type: 'confirm',
-                    title: 'Prodotto non trovato',
-                    message: `Il codice a barre ${barcode} è corretto, ma nessuno ha mai inserito i valori nutrizionali nel database mondiale.\n\nVuoi aggiungerlo tu a Open Food Facts e alla tua dispensa?`,
-                    confirmText: 'Sì, inserisco i dati',
-                    cancelText: 'Annulla'
-                });
-
-                if (vuoiAggiungere) {
-                    // Passiamo il codice a barre al form di aggiunta manuale
-                    const result = await this.showManualAddForm(barcode);
-                    if (result) this.render();
-                    return;
-                } else {
-                    return this.render();
-                }
-            }
-
-            // ... (Da qui in poi resta uguale il codice originale per quando lo trova)
-            const p = data.product;
-            const n = p.nutriments || {};
-
-            const nome = p.product_name || p.product_name_it || 'Prodotto sconosciuto';
-            const immagine = p.image_front_small_url || p.image_front_url || '';
-
-            let cal = n['energy-kcal_100g'];
-            if (cal === undefined || cal === null) {
-                if (n['energy-kj_100g']) cal = n['energy-kj_100g'] / 4.184;
-                else if (n['energy_100g']) cal = n['energy_100g'] / 4.184;
-                else cal = 0;
-            }
-            if (cal > 900) cal = cal / 4.184;
-            cal = parseFloat(Number(cal).toFixed(1));
-
-            const pro = parseFloat(n['proteins_100g'] || 0);
-            const carbo = parseFloat(n['carbohydrates_100g'] || 0);
-            const fat = parseFloat(n['fat_100g'] || 0);
-
-            let pesoConfezione = 0;
-            if (p.product_quantity) {
-                pesoConfezione = parseFloat(p.product_quantity);
-            } else if (p.quantity) {
-                const match = p.quantity.match(/(\d+[\.,]?\d*)/);
-                if (match) pesoConfezione = parseFloat(match[1].replace(',', '.'));
-            }
-
-            if (!pesoConfezione || isNaN(pesoConfezione) || pesoConfezione <= 0) {
-                const pesoStr = await modal.showModal({
-                    type: 'prompt',
-                    title: 'Peso Confezione',
-                    message: `Ho trovato:\n"${nome}"\n\nQuanto pesa una singola confezione in grammi?`,
-                    inputValue: '500'
-                });
-                if (pesoStr === false || pesoStr === null) return this.render();
-                pesoConfezione = parseFloat(pesoStr) || 500;
-            }
-
-            const categoria = pantryService.determinaCategoria(nome, pro, carbo, fat, cal);
-
-            const ok = await modal.showModal({
-                type: 'confirm',
-                title: 'Aggiungi Prodotto',
-                message: `${nome}\n\n📦 ${quantitaConfezioni}x ${pesoConfezione}g = ${quantitaConfezioni * pesoConfezione}g totali\n🏷️ Categoria: ${categoria}\n⚡ ${cal} kcal/100g`,
-                confirmText: 'Aggiungi',
-                cancelText: 'Annulla'
-            });
-
-            if (!ok) return this.render();
-
-            const result = await pantryService.addPantryItem({
-                barcode, nome, immagine, calorie100: cal,
-                proteine100: pro, carbo100: carbo, grassi100: fat,
-                pesoConfezione, quantitaConfezioni, categoria
-            });
-
-            if (result.success) {
-                const msg = result.wasExisting
-                    ? `Aggiunto a stock esistente!\n\nOra hai ${result.item.grammiRimasti}g di "${nome}".`
-                    : `"${nome}" aggiunto alla dispensa!\n\n${quantitaConfezioni * pesoConfezione}g disponibili.`;
-                await modal.showModal({ type: 'success', title: 'Fatto!', message: msg });
-            }
-
-            this.render();
+            data = await pantryService.fetchOpenFoodFacts(codice);
         } catch (e) {
-            await modal.showModal({ type: 'error', title: 'Errore', message: 'Errore di connessione.' });
-            this.render();
+            chiudiAvviso();
+            return modal.showModal({ type: 'error', title: 'Codice non cercato', message: 'Non riesco a cercare il codice. Controlla la connessione.' });
         }
-    }
+        chiudiAvviso();
+        if (data?.status !== 1) {
+            const ok = await modal.showModal({ type: 'confirm', title: 'Codice non trovato', message: `Il codice ${codice} non è su Open Food Facts. Scrivi tu i dati: lo aggiungo alla dispensa e anche lì.`, confirmText: 'Scrivo i dati', cancelText: 'Annulla' });
+            if (ok) this.apriAMano({ codiceOFF: codice, confezioni });
+            return;
+        }
 
-    // ─── AGGIUNGI MANUALE / VOCE ─────────────────────────────────────────────────
-    async handleVoiceAdd() {
-        const result = await this.showManualAddForm();
-        // Codice a barre scritto nel form: stesso percorso dello scanner
-        if (result?.codice) return this.fetchAndAddProduct(result.codice, result.qty);
-        if (result) this.render();
-    }
-
-    showManualAddForm(prefillBarcode = '') {
-        return new Promise((resolve) => {
-            const modalId = 'manual-add-modal';
-            let m = document.getElementById(modalId);
-            if (m) m.remove();
-
-            m = document.createElement('div');
-            m.id = modalId;
-            m.className = "fixed inset-0 z-[99999] flex items-end justify-center bg-gray-900/60 backdrop-blur-sm opacity-0 transition-opacity duration-300";
-
-            // Se stiamo aggiungendo un codice nuovo a OFF, mostriamo i campi aggiuntivi
-            const isAddingToOFF = prefillBarcode !== '';
-
-            m.innerHTML = `
-                <div class="bg-white w-full max-w-md rounded-t-[2rem] p-6 shadow-2xl transform translate-y-full transition-transform duration-300 max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-xl font-black text-gray-900">Aggiungi Prodotto</h2>
-                        <button id="close-manual-modal" class="text-gray-400 hover:text-gray-900 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </div>
-
-                    ${isAddingToOFF ? `<div class="mb-4 bg-blue-50 text-blue-700 p-3 rounded-xl border border-blue-100 text-xs font-bold flex gap-2"><span class="text-lg">🌍</span> Stai contribuendo al database mondiale Open Food Facts! Più dati inserisci, meglio è.</div>` : ''}
-
-                    <div class="space-y-4 pb-6">
-                        ${isAddingToOFF ? '' : campoCodiceHtml()}
-                        <div>
-                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Nome prodotto</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="m-nome" placeholder="es. Mozzarella, Bresaola..."
-                                    class="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 transition-all"
-                                    autocomplete="off">
-                                <button id="voice-nome-btn" class="bg-gray-900 text-white p-4 rounded-xl active:scale-95 transition-transform shadow-md flex items-center justify-center min-w-[56px]" title="Dettare nome">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                                </button>
-                            </div>
-                            <!-- Dropdown autocompletamento tabella CREA -->
-                            <div id="food-autocomplete" class="hidden mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-50"></div>
-                            <!-- Badge valori CREA -->
-                            <div id="crea-badge" class="hidden mt-2 flex items-center gap-1.5 text-[11px] font-bold text-green-700 bg-green-50 border border-green-100 px-3 py-1.5 rounded-lg w-fit">
-                                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                                Valori CREA (ufficiali italiani)
-                            </div>
-                        </div>
-
-                        ${isAddingToOFF ? `
-                        <div>
-                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Marca (Opzionale)</label>
-                            <input type="text" id="m-marca" placeholder="es. Barilla, Mulino Bianco..." class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 transition-all">
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Foto Fronte Confezione (Opzionale)</label>
-                            <input type="file" id="m-foto" accept="image/*" capture="environment" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold text-gray-500 outline-none focus:ring-2 focus:ring-gray-900 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-gray-900 file:text-white hover:file:bg-gray-800">
-                        </div>
-                        ` : ''}
-
-                        <div class="grid grid-cols-2 gap-3 pt-2">
-                            <div>
-                                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Peso conf. (g)</label>
-                                <input type="number" id="m-peso" placeholder="es. 125"
-                                    class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-center outline-none focus:ring-2 focus:ring-gray-900 transition-all">
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Q.tà Confezioni</label>
-                                <input type="number" id="m-qty" value="1" min="1"
-                                    class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-center outline-none focus:ring-2 focus:ring-gray-900 transition-all">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Categoria</label>
-                            <select id="m-categoria" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 transition-all">
-                                ${CATEGORIE.map(c => `<option value="${c}">${CATEGORIA_STYLE[c]?.icon || ''} ${c}</option>`).join('')}
-                            </select>
-                        </div>
-
-                        <div class="border-t border-gray-100 pt-4 mt-2">
-                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Valori Nutrizionali (per 100g) <span class="normal-case font-medium text-gray-300">(richiesti per OFF)</span></p>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Calorie</label>
-                                    <input type="number" id="m-cal" placeholder="0"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
-                                </div>
-                                <div>
-                                    <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Proteine (g)</label>
-                                    <input type="number" id="m-pro" placeholder="0"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
-                                </div>
-                                <div>
-                                    <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Carboidrati (g)</label>
-                                    <input type="number" id="m-carbo" placeholder="0"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
-                                </div>
-                                <div>
-                                    <label class="text-[9px] text-gray-400 font-bold uppercase block mb-1">Grassi (g)</label>
-                                    <input type="number" id="m-fat" placeholder="0"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
-                                </div>
-                            </div>
-                        </div>
-
-                        <button id="save-manual-btn"
-                            class="w-full bg-gray-900 text-white font-black text-lg py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform mt-4">
-                            Salva in Dispensa
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(m);
-            document.body.style.overflow = 'hidden';
-
-            requestAnimationFrame(() => {
-                m.classList.remove('opacity-0');
-                m.querySelector('div').classList.remove('translate-y-full');
-            });
-
-            const closeModal = (val) => {
-                m.classList.add('opacity-0');
-                m.querySelector('div').classList.add('translate-y-full');
-                setTimeout(() => {
-                    m.remove();
-                    document.body.style.overflow = '';
-                    resolve(val);
-                }, 300);
-            };
-
-            m.querySelector('#close-manual-modal').addEventListener('click', () => closeModal(false));
-
-            collegaCampoCodice(m, async (codice) => {
-                const qty = parseInt(m.querySelector('#m-qty')?.value) || 1;
-                closeModal({ codice, qty });
-            });
-
-            // Logica dettatura vocale (rimane inalterata)
-            const voiceBtn = m.querySelector('#voice-nome-btn');
-            const originalVoiceHtml = voiceBtn.innerHTML;
-            voiceBtn.addEventListener('click', () => {
-                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (!SpeechRecognition) {
-                    modal.showModal({ type: 'error', title: 'Errore', message: 'Riconoscimento vocale non supportato' });
-                    return;
-                }
-                const rec = new SpeechRecognition();
-                rec.lang = 'it-IT';
-                rec.continuous = false;
-                rec.interimResults = false;
-                voiceBtn.innerHTML = '⏳';
-                voiceBtn.classList.replace('bg-gray-900', 'bg-red-500');
-                voiceBtn.classList.add('animate-pulse');
-
-                rec.onresult = (e) => {
-                    const text = e.results[0][0].transcript;
-                    m.querySelector('#m-nome').value = text;
-                    voiceBtn.innerHTML = '✅';
-                    voiceBtn.classList.remove('animate-pulse');
-                    voiceBtn.classList.replace('bg-red-500', 'bg-green-500');
-                    setTimeout(() => {
-                        voiceBtn.innerHTML = originalVoiceHtml;
-                        voiceBtn.classList.replace('bg-green-500', 'bg-gray-900');
-                    }, 1500);
-                };
-                rec.onerror = () => {
-                    voiceBtn.innerHTML = originalVoiceHtml;
-                    voiceBtn.classList.replace('bg-red-500', 'bg-gray-900');
-                    voiceBtn.classList.remove('animate-pulse');
-                };
-                rec.start();
-            });
-
-            // ─── AUTOCOMPLETAMENTO TABELLA CREA ───────────────────────────────────
-            const nomeInput = m.querySelector('#m-nome');
-            const autocompleteDiv = m.querySelector('#food-autocomplete');
-            const creaBadge = m.querySelector('#crea-badge');
-            let selectedFromCREA = false;
-
-            const fillFromCREA = (voce) => {
-                nomeInput.value = voce.nome;
-                m.querySelector('#m-cal').value = voce.calorie100;
-                m.querySelector('#m-pro').value = voce.proteine100;
-                m.querySelector('#m-carbo').value = voce.carbo100;
-                m.querySelector('#m-fat').value = voce.grassi100;
-                // Imposta la categoria nel select
-                const sel = m.querySelector('#m-categoria');
-                if (sel) {
-                    for (let opt of sel.options) {
-                        if (opt.value === voce.categoria) { sel.value = voce.categoria; break; }
-                    }
-                }
-                autocompleteDiv.classList.add('hidden');
-                autocompleteDiv.innerHTML = '';
-                creaBadge.classList.remove('hidden');
-                selectedFromCREA = true;
-            };
-
-            nomeInput.addEventListener('input', () => {
-                // Se l'utente ritocca il campo a mano dopo aver selezionato, togli il badge
-                if (selectedFromCREA) {
-                    creaBadge.classList.add('hidden');
-                    selectedFromCREA = false;
-                }
-
-                const risultati = searchFoodTable(nomeInput.value);
-                if (risultati.length === 0) {
-                    autocompleteDiv.classList.add('hidden');
-                    autocompleteDiv.innerHTML = '';
-                    return;
-                }
-
-                autocompleteDiv.innerHTML = risultati.map((v, i) => `
-                    <button type="button" data-idx="${i}"
-                        class="crea-suggestion w-full text-left px-4 py-3 text-[13px] font-semibold text-gray-800 hover:bg-indigo-50 active:bg-indigo-100 border-b border-gray-100 last:border-b-0 flex justify-between items-center gap-2">
-                        <span>${v.nome}</span>
-                        <span class="text-[11px] font-bold text-indigo-500 flex-shrink-0">${v.calorie100} kcal · ${v.proteine100}g P</span>
-                    </button>
-                `).join('');
-
-                autocompleteDiv.classList.remove('hidden');
-
-                // Salva i risultati per recuperarli al click
-                autocompleteDiv._risultati = risultati;
-            });
-
-            autocompleteDiv.addEventListener('click', (e) => {
-                const btn = e.target.closest('.crea-suggestion');
-                if (!btn) return;
-                const idx = parseInt(btn.dataset.idx);
-                const voce = autocompleteDiv._risultati[idx];
-                if (voce) fillFromCREA(voce);
-            });
-
-            // Chiudi dropdown cliccando fuori
-            document.addEventListener('click', (e) => {
-                if (!nomeInput.contains(e.target) && !autocompleteDiv.contains(e.target)) {
-                    autocompleteDiv.classList.add('hidden');
-                }
-            }, { once: false });
-
-            // SALVATAGGIO
-            m.querySelector('#save-manual-btn').addEventListener('click', async () => {
-                const nome = m.querySelector('#m-nome').value.trim();
-                const peso = parseFloat(m.querySelector('#m-peso').value) || 0;
-                const qty = parseInt(m.querySelector('#m-qty').value) || 1;
-                const categoria = m.querySelector('#m-categoria').value;
-                const cal = parseFloat(m.querySelector('#m-cal').value) || 0;
-                const pro = parseFloat(m.querySelector('#m-pro').value) || 0;
-                const carbo = parseFloat(m.querySelector('#m-carbo').value) || 0;
-                const fat = parseFloat(m.querySelector('#m-fat').value) || 0;
-
-                const marcaInput = m.querySelector('#m-marca');
-                const marca = marcaInput ? marcaInput.value.trim() : '';
-
-                const fotoInput = m.querySelector('#m-foto');
-                let fotoBase64 = null;
-
-                if (!nome || peso <= 0 || cal <= 0) {
-                    await modal.showModal({ type: 'error', title: 'Campi mancanti', message: 'Assicurati di inserire Nome, Peso e Calorie.' });
-                    return;
-                }
-
-                const saveBtn = m.querySelector('#save-manual-btn');
-                saveBtn.innerHTML = "⏳ Salvataggio...";
-                saveBtn.disabled = true;
-
-                // Converte l'immagine in Base64 se l'utente l'ha caricata
-                // Converte e COMPRIME l'immagine se l'utente l'ha caricata
-                if (fotoInput && fotoInput.files.length > 0) {
-                    const file = fotoInput.files[0];
-                    fotoBase64 = await new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            const img = new Image();
-                            img.onload = () => {
-                                // Creiamo una tela virtuale per ridimensionare la foto
-                                const canvas = document.createElement('canvas');
-                                let width = img.width;
-                                let height = img.height;
-                                const max_size = 800; // Impostiamo un lato massimo di 800 pixel
-
-                                if (width > height) {
-                                    if (width > max_size) { height *= max_size / width; width = max_size; }
-                                } else {
-                                    if (height > max_size) { width *= max_size / height; height = max_size; }
-                                }
-
-                                canvas.width = width;
-                                canvas.height = height;
-                                const ctx = canvas.getContext('2d');
-                                ctx.drawImage(img, 0, 0, width, height);
-
-                                // Esportiamo la foto rimpicciolita e compressa al 70% in JPEG
-                                resolve(canvas.toDataURL('image/jpeg', 0.7));
-                            };
-                            img.src = event.target.result;
-                        };
-                        reader.readAsDataURL(file);
-                    });
-                }
-
-                try {
-                    // 1. Salvataggio LOCALE nella dispensa
-                    await pantryService.addPantryItem({
-                        barcode: prefillBarcode,
-                        nome, immagine: '',
-                        calorie100: cal, proteine100: pro, carbo100: carbo, grassi100: fat,
-                        pesoConfezione: peso, quantitaConfezioni: qty, categoria
-                    });
-
-                    // 2. Invio a Open Food Facts con marca e foto
-                    if (prefillBarcode && cal > 0) {
-                        try {
-                            await pantryService.addToOpenFoodFacts({
-                                barcode: prefillBarcode,
-                                nome: nome,
-                                marca: marca,
-                                foto: fotoBase64,
-                                calorie100: cal,
-                                proteine100: pro,
-                                carbo100: carbo,
-                                grassi100: fat
-                            });
-                        } catch (errOff) {
-                            console.warn("L'invio a OFF è fallito", errOff);
-                        }
-                    }
-
-                    closeModal(true);
-                } catch (e) {
-                    await modal.showModal({ type: 'error', title: 'Errore', message: 'Errore nel salvataggio.' });
-                    saveBtn.innerHTML = "Riprova";
-                    saveBtn.disabled = false;
-                }
-            });
+        const p = data.product;
+        const valori = { ...pantryService.valoriDaOFF(p), nome: p.product_name || p.product_name_it || 'Prodotto sconosciuto' };
+        const categoria = pantryService.determinaCategoria(valori.nome, valori.proteine100, valori.carbo100, valori.grassi100, valori.calorie100);
+        const esistente = trovaEsistente(this.items, { barcode: codice, nome: valori.nome });
+        pantryUi.apriFoglioTrovato({ codice, valori, grammiLuna: pesoConfezioneOFF(p), categoria, esistente, confezioni }, async (scelta) => {
+            try {
+                await this.aggiungi({
+                    esistente, confezioni: scelta.confezioni, grammiLuna: scelta.grammiLuna,
+                    nuovo: { barcode: codice, immagine: p.image_front_small_url || p.image_front_url || '', ...valori, categoria: scelta.categoria }
+                });
+            } catch (e) {
+                await modal.showModal(ERRORE_RETE);
+            }
         });
+    }
+
+    apriAMano({ codiceOFF = '', confezioni = 1 } = {}) {
+        pantryUi.apriFoglioAMano({ codiceOFF, confezioni }, {
+            onCodice: (codice, n) => this.handleCodice(codice, n),
+            onSalva: async (dati) => {
+                const { marca, foto, pesoConfezione, quantitaConfezioni, ...prodotto } = dati;
+                try {
+                    await this.aggiungi({
+                        esistente: trovaEsistente(this.items, { barcode: codiceOFF, nome: dati.nome }),
+                        confezioni: quantitaConfezioni, grammiLuna: pesoConfezione,
+                        nuovo: { barcode: codiceOFF, immagine: '', ...prodotto }
+                    });
+                } catch (e) {
+                    await modal.showModal(ERRORE_RETE);
+                    throw e;
+                }
+                // Codice sconosciuto: lo aggiunge anche a Open Food Facts (se non riesce, la dispensa resta)
+                if (codiceOFF) {
+                    pantryService.addToOpenFoodFacts({ barcode: codiceOFF, nome: dati.nome, marca, foto, calorie100: dati.calorie100, proteine100: dati.proteine100, carbo100: dati.carbo100, grassi100: dati.grassi100 })
+                        .catch(err => console.warn("L'invio a Open Food Facts è fallito", err));
+                }
+            }
+        });
+    }
+
+    // Un prodotto già in dispensa si somma (stessa regola della spesa), uno nuovo si crea
+    async aggiungi({ esistente, nuovo, confezioni, grammiLuna }) {
+        let totale;
+        if (esistente) {
+            const modifiche = rifornimento(esistente, confezioni, grammiLuna);
+            await pantryService.updatePantryItem(esistente._id, modifiche);
+            totale = modifiche.grammiRimasti;
+        } else {
+            const esito = await pantryService.addPantryItem({ ...nuovo, pesoConfezione: grammiLuna, quantitaConfezioni: confezioni });
+            if (!esito?.success) throw new Error(esito?.error || 'salvataggio non riuscito');
+            totale = esito.item.grammiRimasti;
+        }
+        showToast(`${esistente ? esistente.nome : nuovo.nome}: ${intero(totale)} g in dispensa`);
+        this.render();
     }
 }

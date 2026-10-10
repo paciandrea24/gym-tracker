@@ -5,7 +5,10 @@
 import { icona } from '../components/icons.js?v=31';
 import { intero, decimale } from '../components/format.js?v=31';
 import { apriFoglio } from '../components/sheet.js?v=31';
-import { gruppiDispensa, daComprare, statoProdotto, percentuale, parolaFinito, nomeTipo, rigaUtilizzo, rifornimento } from '../services/pantryLogic.js?v=31';
+import * as modal from '../components/modal.js?v=31';
+import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.js?v=31';
+import { searchFoodTable } from '../data/foodTable.js?v=31';
+import { TIPI, gruppiDispensa, daComprare, statoProdotto, percentuale, parolaFinito, nomeTipo, rigaUtilizzo, rifornimento } from '../services/pantryLogic.js?v=31';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const numero = (v) => parseFloat(String(v ?? '').replace(',', '.')) || 0;
@@ -318,5 +321,219 @@ export function apriFoglioCorreggi(item, onConferma) {
         const valore = box.querySelector('#correggi-input').value;
         chiudi();
         onConferma(valore);
+    });
+}
+
+// ─── AGGIUNGERE ────────────────────────────────────────────────────────────
+// Pulsanti per scegliere il tipo: uno solo, nero quello scelto
+const chipTipi = (scelto) => `
+    <div>
+        <p class="text-[11px] font-semibold text-gray-400 uppercase mb-1.5">Tipo</p>
+        <div class="flex flex-wrap gap-1.5">
+            ${TIPI.map(t => `<button type="button" data-tipo="${esc(t.chiave)}" class="chip-tipo px-3 py-1.5 rounded-xl border text-[13px] font-bold transition-colors ${t.chiave === scelto ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-600 border-gray-200'}">${t.nome}</button>`).join('')}
+        </div>
+    </div>`;
+
+function collegaChip(root, onScelta) {
+    const chips = root.querySelectorAll('.chip-tipo');
+    chips.forEach(b => b.addEventListener('click', () => {
+        chips.forEach(c => {
+            const attivo = c === b;
+            ['bg-gray-900', 'text-white', 'border-gray-900'].forEach(k => c.classList.toggle(k, attivo));
+            ['bg-gray-50', 'text-gray-600', 'border-gray-200'].forEach(k => c.classList.toggle(k, !attivo));
+        });
+        onScelta(b.dataset.tipo);
+    }));
+}
+
+const valoriInRiga = (v) => `Per 100 g: ${decimale(v.calorie100)} kcal · Proteine ${decimale(v.proteine100)} g · Carboidrati ${decimale(v.carbo100)} g · Grassi ${decimale(v.grassi100)} g`;
+const pulsanteChiudi = () => `<button class="chiudi-foglio flex-shrink-0 text-gray-400 bg-gray-100 p-2 rounded-full active:scale-90 transition-transform" aria-label="Chiudi">${icona.chiudi()}</button>`;
+
+// Foglio dopo lo scanner (o il codice scritto): confezioni, grammi l'una e tipo in una volta sola.
+// esistente: lo stesso prodotto già in dispensa (si somma). onConferma({ confezioni, grammiLuna, categoria })
+export function apriFoglioTrovato({ codice, valori, grammiLuna, categoria, esistente = null, confezioni = 1 }, onConferma) {
+    const { box, chiudi, collegaChiudi } = apriFoglio({ id: 'foglio-trovato' });
+    let tipo = categoria;
+    box.innerHTML = `
+        <div class="flex justify-between items-start gap-3 mb-2">
+            <div class="min-w-0">
+                <p class="text-[12px] font-semibold text-gray-400">Trovato con il codice ${esc(codice)}</p>
+                <h2 class="text-xl font-black text-gray-900 leading-tight">${esc(valori.nome)}</h2>
+            </div>
+            ${pulsanteChiudi()}
+        </div>
+        <p class="text-[13px] font-semibold text-gray-500 mb-4">${valoriInRiga(valori)}</p>
+        <div class="grid grid-cols-2 gap-2">${contatore('trovato-qty', confezioni)}${campoGrammi('trovato-grammi', grammiLuna > 0 ? grammiLuna : '', "Grammi l'una")}</div>
+        ${esistente ? '<p class="gia-presente text-[13px] font-semibold text-gray-500 mt-3"></p>' : ''}
+        <div class="mt-4">${chipTipi(tipo)}</div>
+        <button id="trovato-conferma-btn" class="${BTN_PRINCIPALE} mt-5"></button>`;
+    collegaChiudi();
+    const leggi = () => [Math.max(1, Math.round(numero(box.querySelector('#trovato-qty').value)) || 1), numero(box.querySelector('#trovato-grammi').value)];
+    const aggiorna = () => {
+        const [n, g] = leggi();
+        box.querySelector('#trovato-conferma-btn').textContent = g > 0 ? `Aggiungi ${grammi(n * g)}` : 'Aggiungi';
+        const gia = box.querySelector('.gia-presente');
+        if (gia) gia.innerHTML = `Ne hai ${grammi(esistente.grammiRimasti)}, diventano <b class="text-gray-900">${grammi(rifornimento(esistente, n, g).grammiRimasti)}</b>`;
+    };
+    collegaContatori(box, aggiorna);
+    box.querySelector('#trovato-grammi').addEventListener('input', aggiorna);
+    collegaChip(box, (t) => { tipo = t; });
+    aggiorna();
+    box.querySelector('#trovato-conferma-btn').addEventListener('click', () => {
+        const [n, g] = leggi();
+        if (!(g > 0)) return modal.showModal({ type: 'error', title: 'Manca il peso', message: 'Scrivi i grammi di una confezione.' });
+        chiudi();
+        onConferma({ confezioni: n, grammiLuna: g, categoria: tipo });
+    });
+}
+
+// Foto della confezione per Open Food Facts: lato massimo 800 px, JPEG al 70%
+function comprimiFoto(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const scala = Math.min(1, 800 / Math.max(img.width, img.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width * scala;
+                canvas.height = img.height * scala;
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.onerror = () => resolve(null);
+            img.src = event.target.result;
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+    });
+}
+
+// Foglio "Aggiungi alla dispensa" a mano. codiceOFF: codice che non è su Open Food Facts (chiede
+// anche marca e foto per aggiungerlo lì). onCodice(codice, confezioni): codice scritto nel campo.
+// onSalva(dati) async; se fallisce il foglio resta aperto con "Riprova".
+export function apriFoglioAMano({ codiceOFF = '', confezioni = 1 } = {}, { onCodice, onSalva }) {
+    const { box, chiudi, intestazione, collegaChiudi } = apriFoglio({ id: 'foglio-a-mano' });
+    let tipo = 'Altro';
+    const valore = (id, etichetta, colore) => `
+        <div class="min-w-0">
+            <label for="${id}" class="block text-[10px] font-bold ${colore} mb-1 truncate">${etichetta}</label>
+            <input id="${id}" type="text" inputmode="decimal" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 text-center font-bold outline-none focus:ring-2 focus:ring-gray-900">
+        </div>`;
+    const testo = (id, etichetta, segnaposto) => `
+        <div>
+            <label for="${id}" class="block text-[11px] font-semibold text-gray-400 uppercase mb-1">${etichetta}</label>
+            <input id="${id}" type="text" placeholder="${segnaposto}" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900">
+        </div>`;
+    box.innerHTML = `
+        ${intestazione('Aggiungi alla dispensa')}
+        <div class="space-y-4">
+            ${codiceOFF ? `<p class="text-[13px] font-semibold text-gray-500">Questo codice non è ancora su Open Food Facts: con questi dati lo aggiungi anche lì. <span class="text-gray-400">Codice ${esc(codiceOFF)}</span></p>` : campoCodiceHtml()}
+            <div>
+                <label for="m-nome" class="block text-[11px] font-semibold text-gray-400 uppercase mb-1">Nome</label>
+                <div class="flex gap-2">
+                    <input id="m-nome" type="text" autocomplete="off" placeholder="es. Mozzarella" class="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-xl p-3 font-bold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900">
+                    <button type="button" id="voice-nome-btn" class="bg-white border border-gray-200 text-gray-700 px-3.5 rounded-xl active:scale-95 transition-transform" aria-label="Detta il nome">${icona.mic()}</button>
+                </div>
+                <div id="food-autocomplete" class="hidden mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden"></div>
+                <p id="crea-badge" class="hidden text-[12px] font-semibold text-green-700 mt-1">Valori dalla tabella CREA</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2">${contatore('m-qty', confezioni)}${campoGrammi('m-peso', '', "Grammi l'una")}</div>
+            ${chipTipi(tipo)}
+            ${codiceOFF ? `
+                ${testo('m-marca', 'Marca (facoltativa)', 'es. Granarolo')}
+                <div>
+                    <label for="m-foto" class="block text-[11px] font-semibold text-gray-400 uppercase mb-1">Foto della confezione (facoltativa)</label>
+                    <input id="m-foto" type="file" accept="image/*" capture="environment" class="w-full text-sm font-bold text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-gray-200 file:bg-white file:text-gray-800 file:font-bold">
+                </div>` : ''}
+            <div>
+                <p class="text-[12px] font-bold text-gray-400 mb-1.5">Per 100 g</p>
+                <div class="grid grid-cols-4 gap-1.5">
+                    ${valore('m-cal', 'Calorie', 'text-gray-400')}${valore('m-pro', 'Proteine', 'text-blue-500')}${valore('m-carbo', 'Carboidrati', 'text-green-600')}${valore('m-fat', 'Grassi', 'text-yellow-600')}
+                </div>
+            </div>
+            <button id="save-manual-btn" class="${BTN_PRINCIPALE}">Salva in dispensa</button>
+        </div>`;
+    collegaChiudi();
+    const $ = (id) => box.querySelector(`#${id}`);
+    const confezioniScritte = () => Math.max(1, Math.round(numero($('m-qty').value)) || 1);
+    collegaContatori(box, () => { });
+    collegaChip(box, (t) => { tipo = t; });
+    // Codice scritto: stesso percorso dello scanner, con le confezioni già scelte qui
+    collegaCampoCodice(box, async (codice) => { const n = confezioniScritte(); chiudi(); onCodice(codice, n); });
+
+    // Nome dettato
+    const nome = $('m-nome');
+    const mic = $('voice-nome-btn');
+    mic.addEventListener('click', () => {
+        const Riconoscimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!Riconoscimento) return modal.showModal({ type: 'error', title: 'Voce', message: 'Il riconoscimento vocale non è disponibile su questo telefono.' });
+        const rec = new Riconoscimento();
+        rec.lang = 'it-IT';
+        rec.continuous = false;
+        rec.interimResults = false;
+        const inAscolto = (attivo) => ['border-red-400', 'text-red-500', 'animate-pulse'].forEach(k => mic.classList.toggle(k, attivo));
+        inAscolto(true);
+        rec.onresult = (e) => {
+            nome.value = e.results[0][0].transcript;
+            nome.dispatchEvent(new Event('input'));
+            inAscolto(false);
+            mic.innerHTML = icona.spunta('w-5 h-5 text-green-600');
+            setTimeout(() => { mic.innerHTML = icona.mic(); }, 1500);
+        };
+        rec.onerror = () => inAscolto(false);
+        rec.onend = () => inAscolto(false);
+        rec.start();
+    });
+
+    // Suggerimenti dalla tabella CREA: compilano valori e tipo
+    const lista = $('food-autocomplete');
+    const crea = $('crea-badge');
+    let suggerimenti = [];
+    const compila = (v) => {
+        nome.value = v.nome;
+        [['m-cal', v.calorie100], ['m-pro', v.proteine100], ['m-carbo', v.carbo100], ['m-fat', v.grassi100]].forEach(([id, x]) => { $(id).value = String(x).replace('.', ','); });
+        box.querySelector(`.chip-tipo[data-tipo="${v.categoria}"]`)?.click();
+        lista.classList.add('hidden');
+        lista.innerHTML = '';
+        crea.classList.remove('hidden');
+    };
+    nome.addEventListener('input', () => {
+        crea.classList.add('hidden');
+        suggerimenti = searchFoodTable(nome.value);
+        lista.classList.toggle('hidden', suggerimenti.length === 0);
+        lista.innerHTML = suggerimenti.map((v, i) => `
+            <button type="button" data-idx="${i}" class="crea-suggestion w-full text-left px-4 py-3 text-[13px] border-b border-gray-100 last:border-b-0 flex justify-between items-center gap-2 active:bg-gray-50">
+                <span class="font-semibold text-gray-800">${esc(v.nome)}</span>
+                <span class="text-[11px] font-bold text-gray-400 flex-shrink-0">${intero(v.calorie100)} kcal · Proteine ${decimale(v.proteine100)} g</span>
+            </button>`).join('');
+    });
+    lista.addEventListener('click', (e) => {
+        const b = e.target.closest('.crea-suggestion');
+        if (b) compila(suggerimenti[Number(b.dataset.idx)]);
+    });
+    box.addEventListener('click', (e) => { if (!nome.contains(e.target) && !lista.contains(e.target)) lista.classList.add('hidden'); });
+
+    const salva = $('save-manual-btn');
+    salva.addEventListener('click', async () => {
+        const dati = {
+            nome: nome.value.trim(), pesoConfezione: numero($('m-peso').value), quantitaConfezioni: confezioniScritte(), categoria: tipo,
+            calorie100: numero($('m-cal').value), proteine100: numero($('m-pro').value), carbo100: numero($('m-carbo').value), grassi100: numero($('m-fat').value),
+            marca: $('m-marca')?.value.trim() || '', foto: null
+        };
+        if (!dati.nome || !(dati.pesoConfezione > 0) || !(dati.calorie100 > 0)) {
+            return modal.showModal({ type: 'error', title: 'Manca qualcosa', message: 'Scrivi nome, grammi di una confezione e calorie.' });
+        }
+        salva.disabled = true;
+        salva.textContent = 'Salvataggio…';
+        const file = $('m-foto')?.files?.[0];
+        if (file) dati.foto = await comprimiFoto(file);
+        try {
+            await onSalva(dati);
+            chiudi();
+        } catch (e) {
+            salva.disabled = false;
+            salva.textContent = 'Riprova';
+        }
     });
 }
