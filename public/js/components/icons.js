@@ -24,5 +24,6 @@ export const icona = {
     matita: crea('<path d="M15.23 5.23l3.54 3.54m-2.04-5.04a2.5 2.5 0 113.54 3.54L6.5 21.04H3v-3.57L16.73 3.73z"/>'),
     stop: crea('<rect x="6" y="6" width="12" height="12" rx="2"/>'),
     attesa: crea('<path d="M12 3a9 9 0 109 9"/>', 'w-5 h-5 animate-spin'),
+    scarica: crea('<path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"/>'),
     avviso: crea('<path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>', 'w-4 h-4')
 };

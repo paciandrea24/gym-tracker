@@ -1,24 +1,23 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=26';
-import * as scanner from '../components/scanner.js?v=26';
-import * as modal from '../components/modal.js?v=26';
-import * as voice from '../components/voice.js?v=26';
-import * as ui from '../ui.js?v=26';
-import { exportToCSV } from '../utils.js?v=26';
-import * as pantryService from '../services/pantryService.js?v=26';
-import * as pantrySync from '../services/pantrySync.js?v=26';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=26';
-import { renderChiusuraGiornata } from '../components/dayClosure.js?v=26';
-import { apriFoglio } from '../components/sheet.js?v=26';
-import { intero, macroTesto } from '../components/format.js?v=26';
+import * as nutriService from '../services/nutriService.js?v=27';
+import * as scanner from '../components/scanner.js?v=27';
+import * as modal from '../components/modal.js?v=27';
+import * as voice from '../components/voice.js?v=27';
+import * as ui from '../ui.js?v=27';
+import { exportToCSV } from '../utils.js?v=27';
+import * as pantryService from '../services/pantryService.js?v=27';
+import * as pantrySync from '../services/pantrySync.js?v=27';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=27';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=27';
+import { apriFoglio } from '../components/sheet.js?v=27';
+import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=27';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Ogni cambio di sezione crea una nuova NutritionView: gli eventi globali vanno sempre
 // all'istanza corrente (prima restavano legati alla prima, con dati vecchi).
 let vistaAttiva = null;
-window.addEventListener('exportNutritionCSV', () => vistaAttiva?.handleExportCSV());
 
 export class NutritionView {
     constructor(container) {
@@ -31,6 +30,7 @@ export class NutritionView {
     }
 
     async render(openAddMeal = false) {
+        this.indietroPasto = null;
         this.container.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento dati dal server...</p></div>`;
         try {
             const [mealsData, favsData] = await Promise.all([
@@ -52,7 +52,8 @@ export class NutritionView {
                 onScanClick: () => this.handleScanClick(),
                 onCloseScanner: () => this.handleCloseScanner(),
                 onAskAI: () => this.handleAskAI(),
-                onDailyHistoryClick: (dateStr) => this.handleDailyHistoryClick(dateStr)
+                onDailyHistoryClick: (giorno) => this.handleDailyHistoryClick(giorno),
+                onExportCSV: () => this.handleExportCSV()
             });
 
             document.getElementById('favorites-page-btn')?.addEventListener('click', () => this.showFavoritesPage());
@@ -115,22 +116,15 @@ export class NutritionView {
         new MealPrepView(this.container, () => this.render()).renderList();
     }
 
-    handleDailyHistoryClick(dateStr) {
-        const goals = nutriService.getNutritionGoals();
-        const dayMeals = this.currentMealsData.filter(m => {
-            const mealDateStr = new Date(m.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
-            return mealDateStr === dateStr;
+    // giorno: 'YYYY-MM-DD'. Dai pasti di un giorno passato si apre il dettaglio e poi si torna qui
+    handleDailyHistoryClick(giorno) {
+        ui.renderDailyNutritionStats(this.container, {
+            giorno,
+            meals: this.currentMealsData.filter(m => chiaveGiorno(m.data) === giorno),
+            goals: nutriService.getNutritionGoals(),
+            onBack: () => this.render(),
+            onMealClick: (id) => this.handleMealClick(id, () => this.handleDailyHistoryClick(giorno))
         });
-
-        const totals = { cal: 0, pro: 0, carbo: 0, grassi: 0 };
-        dayMeals.forEach(m => {
-            totals.cal += Number(m.calorie) || 0;
-            totals.pro += Number(m.proteine) || 0;
-            totals.carbo += Number(m.carboidrati) || 0;
-            totals.grassi += Number(m.grassi) || 0;
-        });
-
-        ui.renderDailyNutritionStats(this.container, dateStr, dayMeals, totals, goals, () => this.render());
     }
 
     handlePreviewFavorite(favId) {
@@ -155,11 +149,13 @@ export class NutritionView {
         );
     }
 
-    handleMealClick(mealId) {
+    // indietro: dove torna la freccia (es. il giorno dello storico); resta valido mentre si modifica il pasto
+    handleMealClick(mealId, indietro) {
+        if (indietro) this.indietroPasto = indietro;
         const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
         if (meal) {
             ui.renderMealDetails(this.container, meal, {
-                onBack: () => this.render(),
+                onBack: () => (this.indietroPasto || (() => this.render()))(),
                 onToggleFavorite: (id, status) => this.handleToggleFavorite(id, status),
                 onAddVoice: () => this.handleMicRecord(mealId),
                 onAddScan: () => this.handleScanClick(mealId),

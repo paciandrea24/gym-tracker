@@ -1,11 +1,11 @@
-import { formatDate, getWeekLabel } from './utils.js?v=26';
-import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=26';
-import { cercaProdottoOFF } from './services/pantryService.js?v=26';
-import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=26';
-import * as modal from './components/modal.js?v=26';
-import { icona } from './components/icons.js?v=26';
-import { intero, macroColonne, macroTesto } from './components/format.js?v=26';
-import { apriFoglio } from './components/sheet.js?v=26';
+import { formatDate, getWeekLabel } from './utils.js?v=27';
+import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=27';
+import { cercaProdottoOFF } from './services/pantryService.js?v=27';
+import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=27';
+import * as modal from './components/modal.js?v=27';
+import { icona } from './components/icons.js?v=27';
+import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=27';
+import { apriFoglio } from './components/sheet.js?v=27';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const BTN_PRINCIPALE = 'w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform';
@@ -575,6 +575,67 @@ function riquadroScanner() {
         </div>`;
 }
 
+// Totali di un elenco di pasti, con le chiavi degli obiettivi (carbo)
+function totaliPasti(pasti) {
+    const t = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
+    for (const m of pasti) {
+        t.calorie += Number(m.calorie) || 0;
+        t.proteine += Number(m.proteine) || 0;
+        t.carbo += Number(m.carboidrati) || 0;
+        t.grassi += Number(m.grassi) || 0;
+    }
+    return t;
+}
+
+const percento = (v, obiettivo) => Math.min(100, obiettivo > 0 ? v / obiettivo * 100 : 0);
+
+// Riquadro scuro: calorie con la barra e una barra per macro rispetto agli obiettivi.
+// testoSotto: testo della pastiglia verde quando non si è superato l'obiettivo (es. "Mancano 300 kcal")
+function riquadroRiepilogo(t, goals, { titolo, testoSotto }) {
+    const oltre = t.calorie > goals.calorie;
+    const scarto = intero(Math.abs(goals.calorie - t.calorie));
+    const barraMacro = (nome, coloreTesto, coloreBarra, v, obiettivo) => `
+        <div class="min-w-0">
+            <p class="text-[11px] font-bold ${coloreTesto}">${nome}</p>
+            <p class="font-black text-[15px]">${intero(v)} <span class="text-[11px] font-normal text-gray-400">/ ${obiettivo} g</span></p>
+            <div class="w-full bg-white/10 rounded-full h-1 mt-1 overflow-hidden"><div class="${coloreBarra} h-1 rounded-full" style="width:${percento(v, obiettivo)}%"></div></div>
+        </div>`;
+    return `
+        <div class="bg-gray-900 text-white p-5 rounded-2xl shadow-xl">
+            <div class="flex justify-between items-center gap-2">
+                <p class="text-[13px] font-bold text-gray-400">${titolo}</p>
+                <span class="text-[12px] font-bold px-2.5 py-1 rounded-lg ${oltre ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-400'}">${oltre ? `Oltre di ${scarto} kcal` : testoSotto(scarto)}</span>
+            </div>
+            <p class="mt-1"><span class="text-4xl font-black">${intero(t.calorie)}</span> <span class="text-lg font-normal text-gray-400">/ ${goals.calorie} kcal</span></p>
+            <div class="w-full bg-white/10 rounded-full h-2 mt-3 overflow-hidden"><div class="${oltre ? 'bg-red-400' : 'bg-indigo-400'} h-2 rounded-full" style="width:${percento(t.calorie, goals.calorie)}%"></div></div>
+            <div class="grid grid-cols-3 gap-3 mt-5">
+                ${barraMacro('Proteine', 'text-blue-300', 'bg-blue-400', t.proteine, goals.proteine)}
+                ${barraMacro('Carboidrati', 'text-green-300', 'bg-green-400', t.carbo, goals.carbo)}
+                ${barraMacro('Grassi', 'text-yellow-300', 'bg-yellow-400', t.grassi, goals.grassi)}
+            </div>
+        </div>`;
+}
+
+// Elenco dei pasti di un giorno, dalla colazione in poi: tipo come titolo, kcal, alimenti
+function elencoPasti(pasti) {
+    const ordinati = [...pasti].sort((a, b) => new Date(a.data) - new Date(b.data));
+    return `
+        <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">
+            ${ordinati.map(meal => `
+                <button class="meal-row w-full flex items-center gap-2 py-3.5 text-left active:opacity-60" data-id="${meal._id}">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-baseline gap-2">
+                            <p class="text-[16px] font-black text-gray-900">${esc(meal.pasto)}</p>
+                            <p class="text-[15px] font-black text-gray-900 whitespace-nowrap">${intero(meal.calorie)} <span class="text-[12px] font-bold text-gray-400">kcal</span></p>
+                        </div>
+                        <p class="text-[13px] font-medium text-gray-500 leading-snug">${esc(meal.alimenti)}</p>
+                    </div>
+                    ${icona.avanti('w-4 h-4 text-gray-300 flex-shrink-0')}
+                </button>
+            `).join('')}
+        </div>`;
+}
+
 // "250 g · " per un ingrediente o una porzione di meal prep; vuoto se i grammi non si sanno
 function quantitaIngrediente(ing) {
     if (ing.prepId) {
@@ -586,42 +647,14 @@ function quantitaIngrediente(ing) {
 }
 
 // --- RENDER NUTRIZIONE (LIVE SCANNER E CAROSELLO) ---
-export function renderNutritionDashboard(container, { mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAskAI, onDailyHistoryClick }) {
+export function renderNutritionDashboard(container, { mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAskAI, onDailyHistoryClick, onExportCSV }) {
     let contentHtml = '';
 
     if (currentTab === 'oggi') {
-        const consumate = { calorie: 0, proteine: 0, carbo: 0, grassi: 0 };
-        mealsData.forEach(meal => {
-            consumate.calorie += Number(meal.calorie) || 0;
-            consumate.proteine += Number(meal.proteine) || 0;
-            consumate.carbo += Number(meal.carboidrati) || 0;
-            consumate.grassi += Number(meal.grassi) || 0;
-        });
-        const oltre = consumate.calorie > goals.calorie;
-        const scarto = intero(Math.abs(goals.calorie - consumate.calorie));
-        const perc = (v, obiettivo) => Math.min(100, obiettivo > 0 ? v / obiettivo * 100 : 0);
-        const barraMacro = (nome, coloreTesto, coloreBarra, v, obiettivo) => `
-            <div class="min-w-0">
-                <p class="text-[11px] font-bold ${coloreTesto}">${nome}</p>
-                <p class="font-black text-[15px]">${intero(v)} <span class="text-[11px] font-normal text-gray-400">/ ${obiettivo} g</span></p>
-                <div class="w-full bg-white/10 rounded-full h-1 mt-1 overflow-hidden"><div class="${coloreBarra} h-1 rounded-full" style="width:${perc(v, obiettivo)}%"></div></div>
-            </div>`;
-        const pasti = [...mealsData].sort((a, b) => new Date(a.data) - new Date(b.data));
+        const pasti = mealsData;
 
         contentHtml = `
-            <div class="bg-gray-900 text-white p-5 rounded-2xl shadow-xl">
-                <div class="flex justify-between items-center gap-2">
-                    <p class="text-[13px] font-bold text-gray-400">Mangiato oggi</p>
-                    <span class="text-[12px] font-bold px-2.5 py-1 rounded-lg ${oltre ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-400'}">${oltre ? `Oltre di ${scarto} kcal` : `Mancano ${scarto} kcal`}</span>
-                </div>
-                <p class="mt-1"><span class="text-4xl font-black">${intero(consumate.calorie)}</span> <span class="text-lg font-normal text-gray-400">/ ${goals.calorie} kcal</span></p>
-                <div class="w-full bg-white/10 rounded-full h-2 mt-3 overflow-hidden"><div class="${oltre ? 'bg-red-400' : 'bg-indigo-400'} h-2 rounded-full" style="width:${perc(consumate.calorie, goals.calorie)}%"></div></div>
-                <div class="grid grid-cols-3 gap-3 mt-5">
-                    ${barraMacro('Proteine', 'text-blue-300', 'bg-blue-400', consumate.proteine, goals.proteine)}
-                    ${barraMacro('Carboidrati', 'text-green-300', 'bg-green-400', consumate.carbo, goals.carbo)}
-                    ${barraMacro('Grassi', 'text-yellow-300', 'bg-yellow-400', consumate.grassi, goals.grassi)}
-                </div>
-            </div>
+            ${riquadroRiepilogo(totaliPasti(pasti), goals, { titolo: 'Mangiato oggi', testoSotto: (x) => `Mancano ${x} kcal` })}
 
             ${pulsanteVoce('mic-btn')}
             ${riquadroScanner()}
@@ -631,24 +664,9 @@ export function renderNutritionDashboard(container, { mealsData, goals, currentT
 
             <div>
                 <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 mb-2">Pasti di oggi</h2>
-                ${pasti.length === 0 ? `
-                    <div class="bg-white rounded-[20px] border border-gray-100 p-5 text-center text-gray-500 font-medium">Non hai ancora registrato nulla oggi.</div>
-                ` : `
-                    <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">
-                        ${pasti.map(meal => `
-                            <button class="meal-row w-full flex items-center gap-2 py-3.5 text-left active:opacity-60" data-id="${meal._id}">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex justify-between items-baseline gap-2">
-                                        <p class="text-[16px] font-black text-gray-900">${esc(meal.pasto)}</p>
-                                        <p class="text-[15px] font-black text-gray-900 whitespace-nowrap">${intero(meal.calorie)} <span class="text-[12px] font-bold text-gray-400">kcal</span></p>
-                                    </div>
-                                    <p class="text-[13px] font-medium text-gray-500 leading-snug">${esc(meal.alimenti)}</p>
-                                </div>
-                                ${icona.avanti('w-4 h-4 text-gray-300 flex-shrink-0')}
-                            </button>
-                        `).join('')}
-                    </div>
-                `}
+                ${pasti.length === 0
+                    ? `<div class="bg-white rounded-[20px] border border-gray-100 p-5 text-center text-gray-500 font-medium">Non hai ancora registrato nulla oggi.</div>`
+                    : elencoPasti(pasti)}
             </div>
 
             <div>
@@ -660,115 +678,71 @@ export function renderNutritionDashboard(container, { mealsData, goals, currentT
             </div>
         `;
     } else {
-        const weeklyGroups = {};
+        // Giorni (dal più recente) raggruppati per settimana, dal lunedì
+        const oggi = chiaveGiorno(new Date());
+        const giorni = new Map();
+        for (const meal of mealsData) {
+            const k = chiaveGiorno(meal.data);
+            if (!giorni.has(k)) giorni.set(k, []);
+            giorni.get(k).push(meal);
+        }
+        const settimane = new Map();
+        for (const k of [...giorni.keys()].sort().reverse()) {
+            const lunedi = lunediDi(k);
+            if (!settimane.has(lunedi)) settimane.set(lunedi, []);
+            settimane.get(lunedi).push(k);
+        }
 
-        mealsData.forEach(meal => {
-            const week = getWeekLabel(meal.data);
-            if (!weeklyGroups[week]) {
-                weeklyGroups[week] = {
-                    daysMap: {},
-                    totals: { cal: 0, pro: 0, car: 0, grassi: 0 }
-                };
-            }
-
-            const dateStr = new Date(meal.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
-            if (!weeklyGroups[week].daysMap[dateStr]) {
-                weeklyGroups[week].daysMap[dateStr] = { meals: [], totals: { cal: 0, pro: 0, car: 0, grassi: 0 } };
-            }
-
-            // Somma giornaliera
-            weeklyGroups[week].daysMap[dateStr].meals.push(meal);
-            weeklyGroups[week].daysMap[dateStr].totals.cal += Number(meal.calorie) || 0;
-            weeklyGroups[week].daysMap[dateStr].totals.pro += Number(meal.proteine) || 0;
-            weeklyGroups[week].daysMap[dateStr].totals.car += Number(meal.carboidrati) || 0;
-            weeklyGroups[week].daysMap[dateStr].totals.grassi += Number(meal.grassi) || 0;
-
-            // Somma Settimanale globale
-            weeklyGroups[week].totals.cal += Number(meal.calorie) || 0;
-            weeklyGroups[week].totals.pro += Number(meal.proteine) || 0;
-            weeklyGroups[week].totals.car += Number(meal.carboidrati) || 0;
-            weeklyGroups[week].totals.grassi += Number(meal.grassi) || 0;
-        });
-
-        contentHtml = `
-            <div class="mb-4 flex justify-end">
-                <button onclick="window.dispatchEvent(new CustomEvent('exportNutritionCSV'))" class="text-xs font-bold bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg flex items-center gap-1 active:scale-95 transition-transform">
-                    📥 Esporta CSV
-                </button>
-            </div>
-            ${Object.keys(weeklyGroups).length === 0 ? `
-                <div class="text-center py-10"><p class="text-gray-500 font-medium">Nessun pasto registrato nello storico.</p></div>
-            ` : `
-                <div class="space-y-8">
-                    ${Object.keys(weeklyGroups).map(week => {
-            const weekData = weeklyGroups[week];
-            const daysLogged = Object.keys(weekData.daysMap).length;
-            // Medie settimanali (Totale diviso i giorni in cui ha mangiato in quella settimana)
-            const avgCal = daysLogged > 0 ? (weekData.totals.cal / daysLogged).toFixed(0) : 0;
-            const avgPro = daysLogged > 0 ? (weekData.totals.pro / daysLogged).toFixed(0) : 0;
-            const avgCar = daysLogged > 0 ? (weekData.totals.car / daysLogged).toFixed(0) : 0;
-            const avgFat = daysLogged > 0 ? (weekData.totals.grassi / daysLogged).toFixed(0) : 0;
-
+        const rigaGiorno = (k) => {
+            const t = totaliPasti(giorni.get(k));
+            const oltre = t.calorie > goals.calorie;
             return `
-                        <div>
-                            <div class="mb-4 bg-indigo-50 border border-indigo-100 p-3 rounded-xl flex justify-between items-center shadow-sm">
-                                <div>
-    <h3 class="text-sm font-black text-indigo-900">${week}</h3>
-    <p class="text-[10px] font-bold text-indigo-500 uppercase mt-0.5">Media/giorno: ${avgCal} kcal • ${avgPro}g P • ${avgCar}g C • ${avgFat}g G</p>
-</div>
-                            </div>
-                            
-                            <div class="space-y-4">
-                            ${Object.keys(weekData.daysMap).map(dateStr => {
-                const day = weekData.daysMap[dateStr];
-                const calPercent = Math.min(100, (day.totals.cal / goals.calorie) * 100);
-                return `
-                                    <div class="daily-history-card bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 cursor-pointer active:scale-95 transition-transform" data-date="${dateStr}">
-                                        <div class="flex justify-between items-center mb-4">
-                                            <div class="flex items-center gap-3">
-                                                <div class="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                                </div>
-                                                <div>
-                                                    <h3 class="text-base font-bold text-gray-900 capitalize">${dateStr}</h3>
-                                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Vedi Statistiche</p>
-                                                </div>
-                                            </div>
-                                            <div class="text-gray-300">
-                                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="flex justify-between items-end mb-2">
-                                            <span class="text-2xl font-black text-gray-900">${Number(day.totals.cal).toFixed(0)} <span class="text-sm font-bold text-gray-400">/ ${goals.calorie} kcal</span></span>
-                                        </div>
-                                        <div class="w-full bg-gray-100 rounded-full h-2.5 mb-4 overflow-hidden">
-                                            <div class="bg-indigo-500 h-2.5 rounded-full" style="width: ${calPercent}%"></div>
-                                        </div>
-                                        
-                                        <div class="grid grid-cols-3 gap-2">
-                                            <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                                <p class="text-[9px] font-bold text-blue-500 uppercase">Pro</p>
-                                                <p class="text-sm font-black text-gray-800">${Number(day.totals.pro).toFixed(0)}g</p>
-                                            </div>
-                                            <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                                <p class="text-[9px] font-bold text-green-500 uppercase">Car</p>
-                                                <p class="text-sm font-black text-gray-800">${Number(day.totals.car).toFixed(0)}g</p>
-                                            </div>
-                                            <div class="text-center bg-gray-50 p-2 rounded-xl border border-gray-100">
-                                                <p class="text-[9px] font-bold text-yellow-500 uppercase">Fat</p>
-                                                <p class="text-sm font-black text-gray-800">${Number(day.totals.grassi).toFixed(0)}g</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-            }).join('')}
-                            </div>
-                        </div>
-                        `;
-        }).join('')}
+                <button class="daily-history-card w-full text-left py-3 active:opacity-60" data-date="${k}">
+                    <div class="flex justify-between items-baseline gap-2">
+                        <p class="text-[15px] font-black text-gray-900">${nomeGiorno(k)}</p>
+                        <p class="text-[14px] font-black ${oltre ? 'text-red-500' : 'text-gray-900'} whitespace-nowrap">${intero(t.calorie)} <span class="text-[11px] font-bold text-gray-400">/ ${goals.calorie} kcal</span></p>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-1.5 my-1.5 overflow-hidden"><div class="${oltre ? 'bg-red-500' : 'bg-indigo-500'} h-1.5 rounded-full" style="width:${percento(t.calorie, goals.calorie)}%"></div></div>
+                    <p class="text-[12px] font-semibold text-gray-400">${macroTesto({ proteine: t.proteine, carboidrati: t.carbo, grassi: t.grassi }, { breve: true, interi: true })}</p>
+                </button>`;
+        };
+
+        // Media dei giorni finiti (oggi non conta: abbasserebbe la media)
+        const mediaSettimana = (chiavi) => {
+            const finiti = chiavi.filter(k => k !== oggi);
+            if (finiti.length === 0) return '';
+            const somma = totaliPasti(finiti.flatMap(k => giorni.get(k)));
+            const m = Object.fromEntries(Object.entries(somma).map(([k, v]) => [k, v / finiti.length]));
+            const colonna = (nome, colore, v, obiettivo) => `<div><p class="text-[11px] font-bold ${colore}">${nome}</p><p class="font-black text-[14px]">${intero(v)} <span class="text-[11px] font-normal text-gray-400">/ ${obiettivo} g</span></p></div>`;
+            return `
+                <div class="bg-gray-900 text-white rounded-2xl p-4">
+                    <div class="flex justify-between items-baseline gap-2">
+                        <p class="text-[12px] font-bold text-gray-400">Media al giorno</p>
+                        <p><span class="text-xl font-black">${intero(m.calorie)}</span> <span class="text-[12px] text-gray-400">/ ${goals.calorie} kcal</span></p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3 mt-2">
+                        ${colonna('Proteine', 'text-blue-300', m.proteine, goals.proteine)}
+                        ${colonna('Carboidrati', 'text-green-300', m.carbo, goals.carbo)}
+                        ${colonna('Grassi', 'text-yellow-300', m.grassi, goals.grassi)}
+                    </div>
+                </div>`;
+        };
+
+        contentHtml = settimane.size === 0 ? `
+            <div class="bg-white rounded-[20px] border border-gray-100 p-6 text-center text-gray-500 font-medium">Nessun pasto registrato nello storico.</div>
+        ` : `
+            ${[...settimane].map(([lunedi, chiavi]) => `
+                <div class="space-y-2">
+                    <h2 class="text-[15px] font-black text-gray-900 px-1">${nomeSettimana(lunedi)}</h2>
+                    ${mediaSettimana(chiavi)}
+                    <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">
+                        ${chiavi.map(rigaGiorno).join('')}
+                    </div>
                 </div>
-            `}
+            `).join('')}
+            <button id="export-csv-btn" class="w-full bg-white border border-gray-200 text-gray-800 font-bold text-[14px] py-3 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-2">
+                ${icona.scarica('w-5 h-5 text-gray-600')} Scarica i dati (CSV)
+            </button>
         `;
     }
 
@@ -809,6 +783,7 @@ export function renderNutritionDashboard(container, { mealsData, goals, currentT
         container.querySelectorAll('.daily-history-card').forEach(card => {
             card.addEventListener('click', () => onDailyHistoryClick(card.dataset.date));
         });
+        document.getElementById('export-csv-btn')?.addEventListener('click', onExportCSV);
     }
 }
 
@@ -1427,86 +1402,43 @@ export function renderAIModal(onAsk, onSaveMeal, cachedData = null, goals = null
 }
 
 // --- RENDER STATISTICHE GIORNALIERE (STORICO) ---
-export function renderDailyNutritionStats(container, dateStr, meals, totals, goals, onBack) {
-    const pPro = Math.min(100, (totals.pro / goals.proteine) * 100);
-    const pCar = Math.min(100, (totals.carbo / goals.carbo) * 100);
-    const pFat = Math.min(100, (totals.grassi / goals.grassi) * 100);
+// giorno: 'YYYY-MM-DD'. onMealClick(id): apre il dettaglio del pasto, per correggerlo
+export function renderDailyNutritionStats(container, { giorno, meals, goals, onBack, onMealClick }) {
+    const t = totaliPasti(meals);
+    const r = ripartizioneCalorie({ proteine: t.proteine, carboidrati: t.carbo, grassi: t.grassi });
+    const quota = (nome, colore, valore) => `<div><p class="text-[11px] font-bold ${colore}">${nome}</p><p class="text-[15px] font-black text-gray-900">${valore}%</p></div>`;
 
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
-            <button id="back-daily-stats-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2 active:scale-90 transition-transform">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-            </button>
-            <h1 class="text-xl font-bold text-gray-900 truncate capitalize">${dateStr}</h1>
+            <button id="back-daily-stats-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2 active:scale-90 transition-transform" aria-label="Indietro">${icona.indietro()}</button>
+            <h1 class="text-xl font-bold text-gray-900 truncate">${nomeGiorno(giorno)}</h1>
         </header>
         <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
-            
-            <div class="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Ripartizione Macronutrienti</h3>
-                <div class="relative h-48 w-full flex justify-center">
-                    <canvas id="macroDonutChart"></canvas>
-                </div>
-            </div>
+            ${riquadroRiepilogo(t, goals, { titolo: 'Mangiato', testoSotto: (x) => `${x} kcal sotto l'obiettivo` })}
 
-            <div class="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 space-y-4">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Completamento Obiettivi</h3>
-                
-                <div>
-                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-blue-500">Proteine</span><span class="text-gray-600">${totals.pro.toFixed(0)} / ${goals.proteine}g</span></div>
-                    <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-blue-500 h-2 rounded-full" style="width: ${pPro}%"></div></div>
+            ${r ? `
+            <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+                <p class="text-[15px] font-black text-gray-900 mb-3">Da dove vengono le calorie</p>
+                <div class="flex w-full h-3 rounded-full overflow-hidden bg-gray-100">
+                    <div class="bg-blue-500" style="width:${r.proteine}%"></div>
+                    <div class="bg-green-500" style="width:${r.carboidrati}%"></div>
+                    <div class="bg-yellow-500" style="width:${r.grassi}%"></div>
                 </div>
-                <div>
-                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-green-500">Carboidrati</span><span class="text-gray-600">${totals.carbo.toFixed(0)} / ${goals.carbo}g</span></div>
-                    <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width: ${pCar}%"></div></div>
+                <div class="grid grid-cols-3 gap-2 mt-3">
+                    ${quota('Proteine', 'text-blue-500', r.proteine)}
+                    ${quota('Carboidrati', 'text-green-600', r.carboidrati)}
+                    ${quota('Grassi', 'text-yellow-600', r.grassi)}
                 </div>
-                <div>
-                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-yellow-500">Grassi</span><span class="text-gray-600">${totals.grassi.toFixed(0)} / ${goals.grassi}g</span></div>
-                    <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-yellow-500 h-2 rounded-full" style="width: ${pFat}%"></div></div>
-                </div>
-            </div>
+            </div>` : ''}
 
-            <div class="pt-2">
-                <h3 class="text-xs font-bold text-gray-800 uppercase tracking-widest mb-3 px-1">Diario Pasti</h3>
-                <div class="space-y-3">
-                    ${meals.map(meal => `
-                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                            <h4 class="text-[15px] font-bold text-gray-800">${meal.alimenti}</h4>
-                            <div class="flex justify-between items-center mt-2">
-                                <span class="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-md uppercase tracking-wider">${meal.pasto}</span>
-                                <span class="font-black text-gray-900">${Number(meal.calorie).toFixed(0)} kcal</span>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
+            <div>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 mb-2">Pasti</h3>
+                ${elencoPasti(meals)}
             </div>
-            
         </main>
     `;
 
     document.getElementById('back-daily-stats-btn').addEventListener('click', onBack);
-
-    // Crea il grafico a ciambella usando Chart.js
-    const ctx = document.getElementById('macroDonutChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Proteine (g)', 'Carboidrati (g)', 'Grassi (g)'],
-            datasets: [{
-                data: [totals.pro, totals.carbo, totals.grassi],
-                backgroundColor: ['#3b82f6', '#22c55e', '#eab308'],
-                borderWidth: 0,
-                hoverOffset: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '75%',
-            plugins: {
-                legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10, weight: 'bold' } } },
-                tooltip: { backgroundColor: '#111827', padding: 10 }
-            }
-        }
-    });
+    container.querySelectorAll('.meal-row').forEach(row => row.addEventListener('click', () => onMealClick(row.dataset.id)));
 }
 

@@ -93,6 +93,22 @@ Approvata con l'anteprima https://claude.ai/artifact/QrvGkG3QGF5hQSGu8dcNUN (pi�
   aggiunge a un pasto esistente), alimento, grammi, valori ogni 100 g, anteprima della porzione.
 - **Obiettivi**: una riga che spiega a cosa servono; "Salva".
 
+## Sezione 3 — Storico nutrizione
+
+Approvata con l'anteprima https://claude.ai/artifact/TJKQnsN36Jva3cP2BrfZ4h.
+
+- **Elenco**: settimane dal lunedì ("5 – 11 ottobre"), ognuna con il riquadro scuro "Media al
+  giorno" (calorie e macro sugli obiettivi; oggi non conta perché non è finito) e una riga per
+  giorno: "Oggi", "Ieri", "Giovedì 8 ottobre", calorie / obiettivo (rosse se sopra), barra, macro
+  per esteso. "Scarica i dati (CSV)" in fondo, bianco con icona.
+- **Giorno**: titolo con il nome del giorno; lo stesso riquadro di Oggi con le calorie del giorno
+  ("X kcal sotto l'obiettivo" / "Oltre di X kcal"); "Da dove vengono le calorie": barra con le
+  percentuali di calorie da proteine (4 kcal/g), carboidrati (4) e grassi (9) al posto della
+  ciambella in grammi; pasti dalla colazione alla cena. Toccando un pasto si apre il dettaglio e
+  si può correggere; la freccia torna al giorno.
+- Helper in `components/format.js`: `chiaveGiorno`, `lunediDi`, `nomeGiorno`, `nomeSettimana`,
+  `ripartizioneCalorie`.
+
 ## Test
 
 - Unit test (node:test) su peso crudo, riepilogo (rimasti, ultima volta), voce senza grammi,

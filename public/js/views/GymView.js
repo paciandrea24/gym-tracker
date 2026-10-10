@@ -1,10 +1,10 @@
 // public/js/views/GymView.js
 
-import * as gymService from '../services/gymService.js?v=26';
-import * as modal from '../components/modal.js?v=26';
-import * as userService from '../services/userService.js?v=26';
-import * as ui from '../ui.js?v=26';
-import { debounce, exportToCSV } from '../utils.js?v=26';
+import * as gymService from '../services/gymService.js?v=27';
+import * as modal from '../components/modal.js?v=27';
+import * as userService from '../services/userService.js?v=27';
+import * as ui from '../ui.js?v=27';
+import { debounce, exportToCSV } from '../utils.js?v=27';
 
 export class GymView {
     constructor(container) {

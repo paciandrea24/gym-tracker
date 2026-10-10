@@ -28,3 +28,40 @@ test('valori ogni 100 g da un totale e un peso', () => {
         { calorie: 134.4, proteine: 8.9, carboidrati: 2.9, grassi: 9.5 });
     assert.equal(perCento({ calorie: 100 }, 0), null);
 });
+
+import { chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from '../public/js/components/format.js';
+
+test('chiave del giorno in ora locale e lunedì della settimana', () => {
+    assert.equal(chiaveGiorno(new Date(2026, 9, 9, 23, 30)), '2026-10-09');
+    assert.equal(lunediDi('2026-10-10'), '2026-10-05');
+    assert.equal(lunediDi('2026-10-05'), '2026-10-05');
+    assert.equal(lunediDi('2026-10-11'), '2026-10-05'); // domenica
+    assert.equal(lunediDi('2026-10-01'), '2026-09-28');
+});
+
+test('nomi dei giorni come si direbbero: Oggi, Ieri, giorno per esteso (con l\'anno solo se diverso)', () => {
+    const oggi = new Date(2026, 9, 10, 12);
+    assert.equal(nomeGiorno('2026-10-10', oggi), 'Oggi');
+    assert.equal(nomeGiorno('2026-10-09', oggi), 'Ieri');
+    assert.equal(nomeGiorno('2026-10-08', oggi), 'Giovedì 8 ottobre');
+    assert.equal(nomeGiorno('2025-12-30', oggi), 'Martedì 30 dicembre 2025');
+});
+
+test('nome della settimana dal lunedì alla domenica', () => {
+    const oggi = new Date(2026, 9, 10, 12);
+    assert.equal(nomeSettimana('2026-10-05', oggi), '5 – 11 ottobre');
+    assert.equal(nomeSettimana('2026-09-28', oggi), '28 settembre – 4 ottobre');
+    assert.equal(nomeSettimana('2025-12-29', oggi), '29 dicembre 2025 – 4 gennaio 2026');
+    assert.equal(nomeSettimana('2025-06-02', oggi), '2 – 8 giugno 2025');
+});
+
+test('da dove vengono le calorie: percentuali dai grammi (4, 4, 9 kcal) che sommano a 100', () => {
+    assert.deepEqual(ripartizioneCalorie({ proteine: 105, carboidrati: 161, grassi: 10.8 }), { proteine: 36, carboidrati: 56, grassi: 8 });
+    // 40 + 40 + 90 kcal: 23,5% · 23,5% · 52,9% → il punto mancante va ai resti più grandi
+    assert.deepEqual(ripartizioneCalorie({ proteine: 10, carboidrati: 10, grassi: 10 }), { proteine: 24, carboidrati: 23, grassi: 53 });
+    assert.equal(ripartizioneCalorie({ proteine: 0, carboidrati: 0, grassi: 0 }), null);
+});
+
+test('macro in una riga con i grammi interi', () => {
+    assert.equal(macroTesto({ proteine: 104.6, carboidrati: 161.2, grassi: 10.8 }, { breve: true, interi: true }), 'Proteine 105 g · Carbo 161 g · Grassi 11 g');
+});
