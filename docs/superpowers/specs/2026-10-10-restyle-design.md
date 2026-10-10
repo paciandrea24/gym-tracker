@@ -109,6 +109,74 @@ Approvata con l'anteprima https://claude.ai/artifact/TJKQnsN36Jva3cP2BrfZ4h.
 - Helper in `components/format.js`: `chiaveGiorno`, `lunediDi`, `nomeGiorno`, `nomeSettimana`,
   `ripartizioneCalorie`.
 
+## Sezione 4 — Palestra
+
+Approvata con l'anteprima https://claude.ai/artifact/MciqCprFkkJJuvwFY3QRv1. Oltre al restyle, tre
+funzioni nuove decise in palestra, senza modificare la scheda (niente varianti di scheda).
+
+### Superserie (per allenamento)
+
+- Nell'allenamento in corso ogni card "Da fare" ha una maniglia: trascinando la card sopra un'altra
+  (o sopra un blocco) gli esercizi diventano un blocco "Superserie". "Separa" lo scioglie. Vale solo
+  per quell'allenamento: la scheda non cambia.
+- Il blocco si esegue a **giri**: in un giro si fa una serie di ogni esercizio, "Salva giro" fa
+  partire il recupero una volta sola (il più lungo fra gli esercizi). Giri = il massimo delle serie
+  previste; l'ultimo giro contiene solo chi ne ha di più.
+- Ogni esercizio tiene i suoi pesi e le sue serie: nella sessione e nello storico finisce come
+  esercizio separato, con un campo `superserie` (gli id del blocco uniti da "+") per raggrupparli.
+  Grafici e volume restano per esercizio: i calcoli non si mescolano.
+- Dati: nella sessione attiva (localStorage) `superserie: [[idA, idB, …]]`; la bozza del blocco si
+  salva con la chiave `superserie:idA+idB`.
+
+### Drop set
+
+- In una serie "+ Drop" aggiunge una riga (peso, ripetizioni) con il peso proposto a circa l'80%
+  arrotondato al passo; se ne possono aggiungere più, la x toglie la riga. "Salva serie" (o "Salva
+  giro") salva tutto e avvia il recupero.
+- Dati: `set.drop = [{ kg, reps }]`. Il massimale stimato (1RM) usa solo la serie principale; il
+  volume conta anche i drop. Testo: "65 × 8 → 50 × 5".
+
+### Pulsanti + e − del peso
+
+- Passo automatico: sotto 10 kg 0,5; da 10 a 30 kg 1; sopra 30 kg 2,5. "+" porta al gradino
+  successivo della griglia del passo (7,3 → 7,5; 30 → 32,5); "−" a quello precedente usando il passo
+  della fascia sotto (10 → 9,5; 30 → 29; 32,5 → 30). Ripetizioni e minuti: passo 1. Il numero si
+  tocca e si scrive (virgola accettata).
+
+### Peso per lato e bilanciere
+
+- Nel modulo dell'esercizio "Peso segnato: Totale / Per lato" (`weightMultiplier` 1 o 2) e
+  "Bilanciere o attrezzo da aggiungere" (`barbellWeight`). Peso reale = kg × moltiplicatore +
+  bilanciere (solo se kg > 0). Usato da grafici, massimale e volume (prima il volume ignorava
+  entrambi). Le etichette dicono "kg per lato".
+
+### Schermate
+
+- **Schede**: una riga per scheda (esercizi, ultimo allenamento); "+ Nuova scheda" bianco; rinomina
+  ed elimina nel menu "···" della scheda.
+- **Scheda**: "Inizia allenamento" nero; una riga per esercizio (serie × ripetizioni, peso con "per
+  lato" / "+ bilanciere", recupero); il tocco apre un foglio con "Vedi i progressi" e "Modifica";
+  "+ Aggiungi" azzurro.
+- **Modulo esercizio** (nuovo e modifica): nome, tipo a pulsanti (Pesi / Corpo libero / Cardio),
+  serie, ripetizioni (o minuti), peso iniziale, peso segnato, bilanciere, recupero a pulsanti;
+  "Salva"; "Elimina esercizio" in rosso. Sostituisce le tre domande dell'ingranaggio.
+- **Allenamento in corso**: "Da fare" con maniglie e blocchi superserie, suggerimento sul
+  trascinamento, "Fatti" con riassunto e "Modifica"; "Termina allenamento" bianco, "Salva
+  allenamento" nero quando è tutto fatto. Niente emoji.
+- **Esercizio**: "Ultima volta" su una riga; serie salvate ridotte a una riga con "Modifica"; serie
+  da fare con + e −, "+ Drop", "Salva serie" (nero sulla prima da fare); "Termina esercizio" bianco
+  finché restano serie, poi nero.
+- **Superserie**: "Ultima volta" per esercizio, giri fatti in una riga, giro attivo con ogni
+  esercizio e "Salva giro", "Termina superserie".
+- **Storico della scheda**: settimane "5 – 11 ottobre" con allenamenti e volume medio; un
+  allenamento aperto mostra una riga per esercizio con le serie, drop in arancione, superserie
+  raggruppate; "Scarica i dati (CSV)" in fondo.
+- **Progressi (grafici)**: stessi grafici, senza emoji, con "per lato" e il peso reale spiegato.
+
+Codice: le schermate della palestra escono da `ui.js` e vanno in `views/gymUi.js`; i calcoli puri
+(passo, drop, peso reale, volume, testo delle serie, operazioni sulle superserie) in
+`services/gymLogic.js` con i test.
+
 ## Test
 
 - Unit test (node:test) su peso crudo, riepilogo (rimasti, ultima volta), voce senza grammi,
