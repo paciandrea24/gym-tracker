@@ -3,8 +3,9 @@
 // della spesa, fogli per aggiungere. Solo disegno ed eventi: dati e salvataggi li gestisce PantryView.
 
 import { icona } from '../components/icons.js?v=31';
-import { intero } from '../components/format.js?v=31';
-import { gruppiDispensa, daComprare, statoProdotto, percentuale, parolaFinito } from '../services/pantryLogic.js?v=31';
+import { intero, decimale } from '../components/format.js?v=31';
+import { apriFoglio } from '../components/sheet.js?v=31';
+import { gruppiDispensa, daComprare, statoProdotto, percentuale, parolaFinito, nomeTipo, rigaUtilizzo, rifornimento } from '../services/pantryLogic.js?v=31';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const numero = (v) => parseFloat(String(v ?? '').replace(',', '.')) || 0;
@@ -100,4 +101,143 @@ export function renderDispensa(container, items, { onApri, onDaComprare, onScans
 export function mostraScanner(visibile) {
     document.getElementById('scanner-container')?.classList.toggle('hidden', !visibile);
     document.getElementById('action-buttons')?.classList.toggle('hidden', visibile);
+}
+
+// ─── PEZZI COMUNI ──────────────────────────────────────────────────────────
+// Numero di confezioni con + e − (minimo 1); il valore si può anche scrivere
+function contatore(id, valore = 1, etichetta = 'Confezioni') {
+    const tasto = 'px-3 py-2 text-gray-500 font-black text-lg leading-none active:bg-gray-200';
+    return `
+        <div class="contatore min-w-0">
+            ${etichetta ? `<p class="text-[11px] font-semibold text-gray-400 uppercase mb-1">${etichetta}</p>` : ''}
+            <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-gray-900">
+                <button type="button" class="contatore-meno ${tasto}" aria-label="Una in meno">−</button>
+                <input id="${id}" type="text" inputmode="numeric" value="${valore}" class="contatore-valore w-full min-w-0 text-center text-lg font-black bg-transparent outline-none p-0">
+                <button type="button" class="contatore-piu ${tasto}" aria-label="Una in più">+</button>
+            </div>
+        </div>`;
+}
+
+// Collega i contatori dentro root; onCambia(input, numero) a ogni + / − o a ogni cifra scritta
+function collegaContatori(root, onCambia) {
+    root.querySelectorAll('.contatore').forEach(c => {
+        const input = c.querySelector('input');
+        const vai = (delta) => {
+            input.value = Math.max(1, (Math.round(numero(input.value)) || 1) + delta);
+            onCambia(input, Number(input.value));
+        };
+        c.querySelector('.contatore-meno').addEventListener('click', () => vai(-1));
+        c.querySelector('.contatore-piu').addEventListener('click', () => vai(1));
+        input.addEventListener('input', () => onCambia(input, Math.max(1, Math.round(numero(input.value)) || 1)));
+    });
+}
+
+// Campo per i grammi (virgola accettata)
+const campoGrammi = (id, valore, etichetta) => `
+    <div class="min-w-0">
+        <label for="${id}" class="block text-[11px] font-semibold text-gray-400 uppercase mb-1">${etichetta}</label>
+        <input id="${id}" type="text" inputmode="decimal" value="${valore === '' || valore == null ? '' : String(valore).replace('.', ',')}" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 text-center text-lg font-black outline-none focus:ring-2 focus:ring-gray-900">
+    </div>`;
+
+// "Per 100 g": Calorie e macro per esteso, con i colori dell'app
+function valoriPer100(item) {
+    const colonna = (nome, colore, v, unita) => `<div><p class="text-[11px] font-bold ${colore}">${nome}</p> <p class="font-black text-gray-900">${decimale(v)}${unita}</p></div>`;
+    return `
+        <div class="grid grid-cols-4 gap-2 text-center">
+            ${colonna('Calorie', 'text-gray-400', item.calorie100, '')}
+            ${colonna('Proteine', 'text-blue-500', item.proteine100, ' g')}
+            ${colonna('Carboidrati', 'text-green-600', item.carbo100, ' g')}
+            ${colonna('Grassi', 'text-yellow-600', item.grassi100, ' g')}
+        </div>`;
+}
+
+// ─── PRODOTTO ──────────────────────────────────────────────────────────────
+export function renderProdotto(container, item, utilizzi, { onIndietro, onAggiungiConfezioni, onCorreggi, onTogli }) {
+    const righe = utilizzi.slice(0, 5).map(u => rigaUtilizzo(u));
+    container.innerHTML = `
+        <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between gap-2">
+            <div class="flex items-center min-w-0">
+                <button id="back-detail-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2" aria-label="Indietro">${icona.indietro()}</button>
+                <div class="min-w-0">
+                    <h1 class="text-xl font-bold text-gray-900 leading-tight">${esc(item.nome)}</h1>
+                    <p class="text-[12px] font-semibold text-gray-400">${nomeTipo(item.categoria)}</p>
+                </div>
+            </div>
+            ${item.immagine ? `<img src="${esc(item.immagine)}" alt="" class="w-10 h-10 rounded-xl object-cover border border-gray-100 flex-shrink-0">` : ''}
+        </header>
+        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
+            <div class="bg-white rounded-[20px] border border-gray-100 shadow-sm p-5">
+                <p><span class="text-4xl font-black text-gray-900">${grammi(item.grammiRimasti)}</span> <span class="text-[14px] font-bold text-gray-400">di ${grammi(item.grammiTotali)}</span>${etichettaStato(item)}</p>
+                <div class="my-3">${barra(item, 'h-2')}</div>
+                ${numero(item.pesoConfezione) > 0 ? `<p class="text-[12px] font-semibold text-gray-400">Confezioni da ${grammi(item.pesoConfezione)}</p>` : ''}
+                <div class="border-t border-gray-100 mt-4 pt-4">
+                    <p class="text-[12px] font-bold text-gray-400 mb-2">Per 100 g</p>
+                    ${valoriPer100(item)}
+                </div>
+            </div>
+            <button id="aggiungi-confezioni-btn" class="${BTN_PRINCIPALE}">Aggiungi confezioni</button>
+            <button id="correggi-grammi-btn" class="${BTN_SECONDARIO}">Correggi i grammi</button>
+            <div>
+                <h3 class="${ETICHETTA} px-1 mb-2">Ultimi utilizzi</h3>
+                ${righe.length ? `
+                    <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100 text-[13px]">
+                        ${righe.map(r => `
+                            <div class="riga-utilizzo py-2.5 flex justify-between items-center gap-2">
+                                <div class="min-w-0"><p class="font-bold text-gray-800 truncate">${esc(r.titolo)}</p><p class="text-[12px] font-semibold text-gray-400">${r.quando}</p></div>
+                                <p class="font-black text-gray-900 whitespace-nowrap">${r.grammi}</p>
+                            </div>`).join('')}
+                    </div>` : `<p class="text-[13px] font-semibold text-gray-400 px-1">Non l'hai ancora usato in un pasto.</p>`}
+            </div>
+            <button id="togli-btn" class="w-full text-red-600 font-bold text-sm py-2">Togli dalla dispensa</button>
+        </main>
+    `;
+    document.getElementById('back-detail-btn').addEventListener('click', onIndietro);
+    document.getElementById('aggiungi-confezioni-btn').addEventListener('click', onAggiungiConfezioni);
+    document.getElementById('correggi-grammi-btn').addEventListener('click', onCorreggi);
+    document.getElementById('togli-btn').addEventListener('click', onTogli);
+}
+
+// Foglio "Aggiungi confezioni": quante e (se non si sa) quanto pesa una; onConferma(confezioni, grammiLuna)
+export function apriFoglioConfezioni(item, onConferma) {
+    const { box, chiudi, intestazione, collegaChiudi } = apriFoglio({ id: 'foglio-confezioni' });
+    const peso = numero(item.pesoConfezione);
+    box.innerHTML = `
+        ${intestazione('Aggiungi confezioni', peso > 0 ? `Da ${grammi(peso)} l'una` : esc(item.nome))}
+        <div class="grid ${peso > 0 ? 'grid-cols-1' : 'grid-cols-2'} gap-2">
+            ${contatore('conf-qty', 1)}
+            ${peso > 0 ? '' : campoGrammi('conf-grammi', '', "Grammi l'una")}
+        </div>
+        <p class="diventano text-[13px] font-semibold text-gray-500 mt-3"></p>
+        <button id="conferma-foglio-btn" class="${BTN_PRINCIPALE} mt-4"></button>`;
+    collegaChiudi();
+    const leggi = () => [Math.max(1, Math.round(numero(box.querySelector('#conf-qty').value)) || 1), peso > 0 ? peso : numero(box.querySelector('#conf-grammi').value)];
+    const aggiorna = () => {
+        const [n, g] = leggi();
+        box.querySelector('.diventano').innerHTML = `In dispensa diventano <b class="text-gray-900">${grammi(rifornimento(item, n, g).grammiRimasti)}</b>`;
+        box.querySelector('#conferma-foglio-btn').textContent = `Aggiungi ${grammi(n * g)}`;
+    };
+    collegaContatori(box, aggiorna);
+    box.querySelector('#conf-grammi')?.addEventListener('input', aggiorna);
+    aggiorna();
+    box.querySelector('#conferma-foglio-btn').addEventListener('click', () => {
+        const [n, g] = leggi();
+        if (!(g > 0)) return box.querySelector('#conf-grammi')?.focus();
+        chiudi();
+        onConferma(n, g);
+    });
+}
+
+// Foglio "Correggi i grammi": quanti ne restano davvero; onConferma(grammi)
+export function apriFoglioCorreggi(item, onConferma) {
+    const { box, chiudi, intestazione, collegaChiudi } = apriFoglio({ id: 'foglio-correggi' });
+    box.innerHTML = `
+        ${intestazione('Correggi i grammi', `Quanti grammi di ${esc(item.nome)} ne restano?`)}
+        ${campoGrammi('correggi-input', intero(Math.max(0, numero(item.grammiRimasti))), 'Grammi rimasti')}
+        <button id="conferma-foglio-btn" class="${BTN_PRINCIPALE} mt-4">Salva</button>`;
+    collegaChiudi();
+    box.querySelector('#conferma-foglio-btn').addEventListener('click', () => {
+        const valore = box.querySelector('#correggi-input').value;
+        chiudi();
+        onConferma(valore);
+    });
 }

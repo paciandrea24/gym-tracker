@@ -6,6 +6,7 @@ import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.
 import * as modal from '../components/modal.js?v=31';
 import { searchFoodTable } from '../data/foodTable.js?v=31';
 import * as pantryUi from './pantryUi.js?v=31';
+import { rifornimento, correzioneGrammi } from '../services/pantryLogic.js?v=31';
 
 const CATEGORIE = ['Proteina', 'Carboidrato', 'Latticino', 'Verdura', 'Frutta', 'Condimento/Grassi', 'Altro'];
 
@@ -37,7 +38,7 @@ export class PantryView {
             return;
         }
         pantryUi.renderDispensa(this.container, this.items, {
-            onApri: (id) => this.showItemDetail(id),
+            onApri: (id) => this.showProdotto(id),
             onDaComprare: () => this.showShoppingList(),
             onScansiona: () => this.apriScanner(),
             onAMano: () => this.handleVoiceAdd(),
@@ -67,167 +68,35 @@ export class PantryView {
         return this.fetchAndAddProduct(codice, 1);
     }
 
-    // ─── DETTAGLIO ARTICOLO ─────────────────────────────────────────────────────
-    async showItemDetail(itemId) {
+    // ─── PRODOTTO ───────────────────────────────────────────────────────────────
+    async showProdotto(itemId) {
         const item = this.items.find(i => String(i._id) === String(itemId));
-        if (!item) return;
-
-        this.container.innerHTML = `
-            <div class="flex justify-center items-center min-h-screen">
-                <p class="animate-pulse font-bold text-gray-500">Caricamento dettagli...</p>
-            </div>`;
-
-        const usage = await pantryService.getPantryItemUsage(itemId);
-        const style = CATEGORIA_STYLE[item.categoria] || CATEGORIA_STYLE['Altro'];
-        const perc = item.grammiTotali > 0 ? (item.grammiRimasti / item.grammiTotali) * 100 : 0;
-        let barColor = perc > 20 ? 'bg-green-500' : (perc > 0 ? 'bg-orange-400' : 'bg-red-500');
-
-        const usageHtml = usage.length === 0
-            ? `<div class="text-center py-6 text-gray-400 font-medium">Nessun utilizzo registrato.</div>`
-            : usage.map(u => `
-                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
-                    <div class="flex-1 pr-2">
-                        <h4 class="text-sm font-bold text-gray-800 break-words">${u.nomePasto}</h4>
-                        <p class="text-[10px] font-bold text-gray-500 mt-1">
-                            ${new Date(u.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })} • 
-                            ${new Date(u.data).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                    </div>
-                    <div class="flex-shrink-0">
-                        <span class="font-bold text-gray-900 text-sm bg-white px-2 py-1 rounded shadow-sm border border-gray-100">
-                            ${u.grammiScalati > 0 ? `-${u.grammiScalati}g` : `+${Math.abs(u.grammiScalati)}g`}
-                        </span>
-                    </div>
-                </div>
-            `).join('');
-
-        this.container.innerHTML = `
-            <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center justify-between">
-                <div class="flex items-center">
-                    <button id="back-detail-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                    </button>
-                    <h1 class="text-xl font-bold text-gray-900 truncate">Prodotto</h1>
-                </div>
-                <button id="delete-item-btn" data-id="${item._id}" class="p-2 rounded-full text-red-500 bg-red-50 active:scale-95 transition-all">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                </button>
-            </header>
-
-            <main class="p-4 space-y-5 pb-24 safe-pb bg-gray-50">
-                
-                <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                    <div class="flex items-center justify-between mb-4">
-                        <span class="text-[10px] font-bold ${style.bg} ${style.text} px-2.5 py-1 rounded-md uppercase tracking-wider border ${style.border}">${item.categoria}</span>
-                    </div>
-
-                    <div class="flex flex-col items-center mb-6">
-                        ${item.immagine
-                ? `<img src="${item.immagine}" class="w-24 h-24 object-cover rounded-[20px] border border-gray-100 shadow-sm mb-4">`
-                : `<div class="w-24 h-24 ${style.bg} rounded-[20px] flex items-center justify-center text-5xl border ${style.border} mb-4 shadow-inner">${style.icon}</div>`
+        if (!item) return this.render();
+        const utilizzi = await pantryService.getPantryItemUsage(itemId).catch(() => []);
+        pantryUi.renderProdotto(this.container, item, Array.isArray(utilizzi) ? utilizzi : [], {
+            onIndietro: () => this.render(),
+            onAggiungiConfezioni: () => pantryUi.apriFoglioConfezioni(item, (n, g) =>
+                this.salvaProdotto(item, rifornimento(item, n, g))),
+            onCorreggi: () => pantryUi.apriFoglioCorreggi(item, (grammi) =>
+                this.salvaProdotto(item, correzioneGrammi(item, grammi))),
+            onTogli: async () => {
+                const ok = await modal.showModal({ type: 'confirm', title: 'Togli dalla dispensa', message: `${item.nome} sparisce dall'elenco e la nutrizionista non lo considera più.`, confirmText: 'Togli', cancelText: 'Annulla', pericolo: true });
+                if (!ok) return;
+                await pantryService.deletePantryItem(item._id);
+                this.render();
             }
-                        <h2 class="text-2xl font-black text-gray-900 text-center leading-tight">${item.nome}</h2>
-                    </div>
-
-                    <div class="flex justify-between items-end mb-4 border-b border-gray-100 pb-4">
-                        <div>
-                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Disponibilità</p>
-                            <p class="text-3xl font-black text-gray-900 leading-none">${item.grammiRimasti}<span class="text-lg font-bold text-gray-400">g</span> <span class="text-sm font-medium text-gray-400">/ ${item.grammiTotali}g</span></p>
-                        </div>
-                    </div>
-                    
-                    <div class="w-full bg-gray-100 rounded-full h-2 mb-6 overflow-hidden">
-                        <div class="${barColor} h-2 rounded-full transition-all" style="width: ${Math.max(0, Math.min(100, perc))}%"></div>
-                    </div>
-
-                    <div class="grid grid-cols-4 gap-2 mb-6">
-                        <div class="bg-gray-50 p-3 rounded-2xl flex flex-col justify-center items-center border border-gray-100">
-                            <p class="text-[10px] font-bold text-gray-400 uppercase mb-1">Kcal</p>
-                            <p class="text-sm sm:text-base font-black text-gray-900">${item.calorie100}</p>
-                        </div>
-                        <div class="bg-blue-50 p-3 rounded-2xl flex flex-col justify-center items-center border border-blue-100">
-                            <p class="text-[10px] font-bold text-blue-500 uppercase mb-1">P</p>
-                            <p class="text-sm sm:text-base font-black text-blue-700">${item.proteine100}g</p>
-                        </div>
-                        <div class="bg-green-50 p-3 rounded-2xl flex flex-col justify-center items-center border border-green-100">
-                            <p class="text-[10px] font-bold text-green-500 uppercase mb-1">C</p>
-                            <p class="text-sm sm:text-base font-black text-green-700">${item.carbo100}g</p>
-                        </div>
-                        <div class="bg-yellow-50 p-3 rounded-2xl flex flex-col justify-center items-center border border-yellow-100">
-                            <p class="text-[10px] font-bold text-yellow-600 uppercase mb-1">G</p>
-                            <p class="text-sm sm:text-base font-black text-yellow-700">${item.grassi100}g</p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2">
-                        <button id="restock-btn" data-id="${item._id}" class="bg-gray-900 text-white font-bold text-sm py-4 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                            ➕ Rifornisci
-                        </button>
-                        <button id="edit-grams-btn" data-id="${item._id}" class="bg-white text-gray-900 border border-gray-200 font-bold text-sm py-4 rounded-2xl shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1">
-                            ✏️ Modifica
-                        </button>
-                    </div>
-                </div>
-
-                <div class="bg-white p-5 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 pt-5">
-                    <h3 class="text-xs font-bold text-gray-800 uppercase tracking-widest mb-3 px-1">Cronologia Utilizzi</h3>
-                    ${usageHtml}
-                </div>
-            </main>
-        `;
-
-        document.getElementById('back-detail-btn').addEventListener('click', () => this.render());
-
-        // I listener (restock-btn, edit-grams-btn, delete-item-btn) rimangono ESATTAMENTE gli stessi
-
-        document.getElementById('restock-btn').addEventListener('click', async () => {
-            const qtyStr = await modal.showModal({
-                type: 'prompt',
-                title: 'Rifornimento',
-                message: `Quante confezioni di "${item.nome}" hai acquistato?\n(Peso confezione: ${item.pesoConfezione}g)`,
-                inputValue: '1'
-            });
-            if (!qtyStr || qtyStr === false) return;
-            const qty = parseInt(qtyStr) || 1;
-
-            // FIX BUG CORRUZIONE DATI (NaN): Ci assicuriamo che i valori siano sempre numeri validi
-            const pesoConf = parseFloat(item.pesoConfezione) || 0;
-            const grammiDaAggiungere = qty * pesoConf;
-
-            await pantryService.updatePantryItem(item._id, {
-                quantitaConfezioni: (item.quantitaConfezioni || 0) + qty,
-                grammiTotali: (parseFloat(item.grammiTotali) || 0) + grammiDaAggiungere,
-                grammiRimasti: (parseFloat(item.grammiRimasti) || 0) + grammiDaAggiungere
-            });
-            this.render();
         });
+    }
 
-        document.getElementById('edit-grams-btn').addEventListener('click', async () => {
-            const newGrams = await modal.showModal({
-                type: 'prompt',
-                title: 'Modifica Grammi',
-                message: `Inserisci i grammi effettivamente rimasti in dispensa:`,
-                inputValue: String(item.grammiRimasti)
-            });
-            if (!newGrams || newGrams === false) return;
-            await pantryService.updatePantryItem(item._id, {
-                grammiRimasti: Math.max(0, parseFloat(newGrams) || 0)
-            });
-            this.render();
-        });
-
-        document.getElementById('delete-item-btn').addEventListener('click', async () => {
-            const ok = await modal.showModal({
-                type: 'confirm',
-                title: 'Rimuovi dalla dispensa',
-                message: `Vuoi rimuovere "${item.nome}" dalla dispensa?`,
-                confirmText: 'Sì',
-                cancelText: 'Annulla'
-            });
-            if (!ok) return;
-            await pantryService.deletePantryItem(item._id);
-            this.render();
-        });
+    // Salva le modifiche di un prodotto e ridisegna la sua pagina con i dati aggiornati
+    async salvaProdotto(item, modifiche) {
+        try {
+            await pantryService.updatePantryItem(item._id, modifiche);
+            this.items = await pantryService.getPantryItems();
+        } catch (e) {
+            await modal.showModal({ type: 'error', title: 'Non salvato', message: 'Controlla la connessione e riprova.' });
+        }
+        this.showProdotto(item._id);
     }
 
     // ─── NUOVO: PAGINA LISTA DELLA SPESA FULL-SCREEN PER IL SUPERMERCATO ───
