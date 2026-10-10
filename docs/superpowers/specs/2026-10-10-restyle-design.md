@@ -227,7 +227,9 @@ I pasti e i meal prep continuano a scalare la dispensa da soli; la nutrizionista
   suggerimenti CREA ("253 kcal · Proteine 18 g"), confezioni (+ e −), grammi di una confezione,
   tipo a pulsanti, valori per 100 g (Calorie, Proteine, Carboidrati, Grassi), "Salva in dispensa".
 - Dopo un'aggiunta un avviso breve in alto ("Skyr bianco: 450 g in dispensa") invece della
-  finestra "Fatto!".
+  finestra "Fatto!". Un avviso alla volta; "Cerco il codice…" sparisce appena la ricerca finisce.
+- Le confezioni scelte nel foglio "A mano" passano al foglio del prodotto trovato quando si cerca
+  un codice. Il peso da Open Food Facts capisce g, kg, l, ml e i multipack ("6 x 125 g").
 - **Quale prodotto** (registrando un pasto): titolo con il nome dell'ingrediente, "Da quale
   prodotto della dispensa lo tolgo?", righe nome + grammi, "Non toglierlo dalla dispensa"
   bianco, nota "La prossima volta che scrivi … uso la stessa scelta".

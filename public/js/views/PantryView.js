@@ -1,13 +1,13 @@
 // public/js/views/PantryView.js
 // Dispensa: dati, chiamate al server e flussi. Il disegno è in pantryUi.js, i calcoli in pantryLogic.js.
 
-import * as pantryService from '../services/pantryService.js?v=31';
-import * as scanner from '../components/scanner.js?v=31';
-import * as modal from '../components/modal.js?v=31';
-import { intero } from '../components/format.js?v=31';
-import * as pantryUi from './pantryUi.js?v=31';
-import { rifornimento, correzioneGrammi, trovaEsistente, pesoConfezioneOFF } from '../services/pantryLogic.js?v=31';
-import { showToast } from '../services/pantrySync.js?v=31';
+import * as pantryService from '../services/pantryService.js?v=32';
+import * as scanner from '../components/scanner.js?v=32';
+import * as modal from '../components/modal.js?v=32';
+import { intero } from '../components/format.js?v=32';
+import * as pantryUi from './pantryUi.js?v=32';
+import { rifornimento, correzioneGrammi, trovaEsistente, pesoConfezioneOFF } from '../services/pantryLogic.js?v=32';
+import { showToast } from '../services/pantrySync.js?v=32';
 
 const ERRORE_RETE = { type: 'error', title: 'Non salvato', message: 'Controlla la connessione e riprova.' };
 
