@@ -1,13 +1,13 @@
 // public/js/views/HomeView.js
 // Home: carica i dati della giornata e collega i riquadri alle sezioni. Il disegno è in homeUi.js.
 
-import * as userService from '../services/userService.js?v=32';
-import * as nutriService from '../services/nutriService.js?v=32';
-import * as gymService from '../services/gymService.js?v=32';
-import * as pantryService from '../services/pantryService.js?v=32';
-import { daComprare } from '../services/pantryLogic.js?v=32';
-import * as homeUi from './homeUi.js?v=32';
-import * as modal from '../components/modal.js?v=32';
+import * as userService from '../services/userService.js?v=33';
+import * as nutriService from '../services/nutriService.js?v=33';
+import * as gymService from '../services/gymService.js?v=33';
+import * as pantryService from '../services/pantryService.js?v=33';
+import { daComprare } from '../services/pantryLogic.js?v=33';
+import * as homeUi from './homeUi.js?v=33';
+import * as modal from '../components/modal.js?v=33';
 
 export class HomeView {
     // navigazione: { onNutrizione, onPalestra, onSpesa } (le passa app.js)
@@ -17,7 +17,13 @@ export class HomeView {
         this.dati = null;
     }
 
+    // Vero se nel frattempo è stata aperta un'altra sezione (vedi numeroVista in app.js)
+    superata(vista) {
+        return this.container.dataset.vista !== vista;
+    }
+
     async render() {
+        const vista = this.container.dataset.vista;
         this.container.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento...</p></div>`;
         try {
             const [acqua, pasti, pesate] = await Promise.all([userService.getWater(), nutriService.getTodayMeals(), userService.getWeightLogs()]);
@@ -36,9 +42,11 @@ export class HomeView {
                 daComprare: daComprare(Array.isArray(dispensa) ? dispensa : [])
             };
         } catch (e) {
+            if (this.superata(vista)) return;
             this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Non riesco a caricare la Home. Controlla la connessione.</div>`;
             return;
         }
+        if (this.superata(vista)) return;
         this.disegna();
     }
 
@@ -62,10 +70,11 @@ export class HomeView {
     }
 
     async updateWater(bicchieri) {
+        const vista = this.container.dataset.vista;
         try {
             await userService.updateWater(bicchieri);
             this.dati.bicchieri = bicchieri;
-            this.disegna();
+            if (!this.superata(vista)) this.disegna();
         } catch (e) { console.error("Errore salvataggio acqua", e); }
     }
 

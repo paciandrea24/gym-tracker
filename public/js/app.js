@@ -1,10 +1,13 @@
-import { HomeView } from './views/HomeView.js?v=32';
-import { GymView } from './views/GymView.js?v=32';
-import { NutritionView } from './views/NutritionView.js?v=32';
-import { PantryView } from './views/PantryView.js?v=32';
+import { HomeView } from './views/HomeView.js?v=33';
+import { GymView } from './views/GymView.js?v=33';
+import { NutritionView } from './views/NutritionView.js?v=33';
+import { PantryView } from './views/PantryView.js?v=33';
 
 const appContainer = document.getElementById('app');
 let currentAppModule = 'home';
+// Numero dell'ultima sezione aperta: una schermata che finisce di caricare dopo un cambio di
+// sezione lo confronta e non disegna sopra quella nuova
+let numeroVista = 0;
 
 function init() {
     setupNavigation();
@@ -45,6 +48,7 @@ function switchModule(module, opzioni = {}) {
 }
 
 async function loadCurrentModule(opzioni = {}) {
+    appContainer.dataset.vista = String(++numeroVista);
     if (currentAppModule === 'home') {
         const homeView = new HomeView(appContainer, {
             onNutrizione: () => switchModule('nutrition'),
