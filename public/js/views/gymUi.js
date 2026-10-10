@@ -3,11 +3,11 @@
 // allenamento in corso con superserie, esercizio con drop set, superserie a giri, progressi.
 // Solo disegno ed eventi: i dati e i salvataggi li gestisce GymView.
 
-import { icona } from '../components/icons.js?v=29';
-import { apriFoglio } from '../components/sheet.js?v=29';
-import * as modal from '../components/modal.js?v=29';
-import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=29';
-import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco, testoMigliore } from '../services/gymLogic.js?v=29';
+import { icona } from '../components/icons.js?v=30';
+import { apriFoglio } from '../components/sheet.js?v=30';
+import * as modal from '../components/modal.js?v=30';
+import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=30';
+import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco, testoMigliore } from '../services/gymLogic.js?v=30';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -352,14 +352,16 @@ export function renderModuloEsercizio(container, ex, { onSalva, onAnnulla, onEli
 
 // ─── ALLENAMENTO IN CORSO ──────────────────────────────────────────────────
 // elementi: da elementiDaFare(session) — esercizi singoli e blocchi superserie
+// Su iPhone il tocco lungo sulle card serve a trascinarle: niente selezione del testo né menu
+const NON_SELEZIONABILE = 'select-none [-webkit-touch-callout:none]';
 const riassuntoBreve = (ex) => riassuntoEsercizio(ex).replace(/ · recupero \d+:\d+$/, '').replace(' + bilanciere', '');
 
 export function renderAllenamento(container, session, routine, elementi, { onApri, onApriFatto, onUnisci, onSepara, onTermina }) {
     const trova = (id) => routine.exercises.find(e => String(e.id) === String(id));
     const cardEsercizio = (ex) => `
-        <div class="card-da-fare bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-1 p-2 transition" data-id="${esc(ex.id)}">
-            <span class="maniglia p-2 text-gray-300 cursor-grab select-none" style="touch-action: none" aria-label="Trascina per fare la superserie">${icona.maniglia()}</span>
-            <button class="apri-esercizio flex-1 min-w-0 flex items-center gap-2 text-left py-2 pr-2" data-id="${esc(ex.id)}">
+        <div class="card-da-fare ${NON_SELEZIONABILE} bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-1 p-2 transition" data-id="${esc(ex.id)}">
+            <span class="maniglia p-2 text-gray-300 cursor-grab" style="touch-action: none" aria-label="Trascina per fare la superserie">${icona.maniglia()}</span>
+            <button class="apri-esercizio ${NON_SELEZIONABILE} flex-1 min-w-0 flex items-center gap-2 text-left py-2 pr-2" data-id="${esc(ex.id)}">
                 <span class="flex-1 min-w-0">
                     <span class="block font-bold text-gray-900">${esc(ex.name)}</span>
                     <span class="block text-[12px] font-semibold text-gray-400">${riassuntoBreve(ex)}</span>
@@ -369,7 +371,7 @@ export function renderAllenamento(container, session, routine, elementi, { onApr
             </button>
         </div>`;
     const blocco = (ids) => `
-        <div class="blocco-superserie bg-white rounded-2xl border border-gray-100 shadow-sm p-4 transition" data-id="${esc(ids[0])}">
+        <div class="blocco-superserie ${NON_SELEZIONABILE} bg-white rounded-2xl border border-gray-100 shadow-sm p-4 transition" data-id="${esc(ids[0])}">
             <div class="flex justify-between items-center mb-2">
                 <span class="text-[11px] font-black bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg">Superserie</span>
                 <button class="separa-btn text-[13px] font-bold text-indigo-600" data-id="${esc(ids[0])}">Separa</button>
@@ -399,7 +401,7 @@ export function renderAllenamento(container, session, routine, elementi, { onApr
     container.innerHTML = `
         ${intestazione('Allenamento in corso', { sopra: esc(routine.name), sotto: elementi.length ? `${session.todo.length} da fare` : 'Tutto fatto' })}
         <main class="p-4 space-y-3 pb-24 safe-pb bg-gray-50">
-            ${elementi.length >= 2 ? `<p class="text-[12px] font-semibold text-gray-400 px-1 flex items-center gap-1.5">${icona.maniglia('w-4 h-4')} Trascina un esercizio sopra un altro per farli in superserie</p>` : ''}
+            ${elementi.length >= 2 ? `<p class="text-[12px] font-semibold text-gray-400 px-1 flex items-center gap-1.5">${icona.maniglia('w-4 h-4')} Tieni premuto un esercizio e trascinalo su un altro per farli in superserie</p>` : ''}
             ${elementi.length ? `
                 <h3 class="${ETICHETTA} px-1">Da fare</h3>
                 ${elementi.map(el => el.tipo === 'superserie' ? blocco(el.ids) : (trova(el.id) ? cardEsercizio(trova(el.id)) : '')).join('')}
@@ -425,8 +427,15 @@ export function renderAllenamento(container, session, routine, elementi, { onApr
     attivaTrascinamento(container, onUnisci);
 }
 
-// Trascinamento dalla maniglia (Pointer Events: dito e mouse). Un clone segue il dito; la card
-// o il blocco sotto si evidenzia; al rilascio sopra un altro elemento nasce la superserie.
+// Trascinamento per fare le superserie: un clone segue il dito, la card o il blocco sotto si
+// evidenzia, al rilascio sopra un altro elemento nasce la superserie.
+// - Dito (Touch Events, come su iPhone): tenendo premuta la card si stacca; dalla maniglia parte
+//   subito. Se il dito si muove prima del tocco lungo è uno scorrimento della pagina. Mentre si
+//   trascina touchmove blocca lo scorrimento e touchend il click (che aprirebbe l'esercizio).
+// - Mouse (Pointer Events): dalla maniglia.
+const TOCCO_LUNGO_MS = 400;
+const TOLLERANZA_DITO_PX = 10;
+
 function attivaTrascinamento(container, onUnisci) {
     const evidenzia = (el, attivo) => {
         el.classList.toggle('ring-2', attivo);
@@ -434,41 +443,91 @@ function attivaTrascinamento(container, onUnisci) {
         el.classList.toggle('bg-indigo-50', attivo);
         el.querySelector('.testo-rilascio')?.classList.toggle('hidden', !attivo);
     };
-    container.querySelectorAll('.card-da-fare .maniglia').forEach(maniglia => {
-        maniglia.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            const card = maniglia.closest('.card-da-fare');
-            const r = card.getBoundingClientRect();
-            const dx = e.clientX - r.left;
-            const dy = e.clientY - r.top;
-            const clone = card.cloneNode(true);
-            Object.assign(clone.style, {
-                position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, margin: '0',
-                zIndex: '9999', pointerEvents: 'none', transform: 'rotate(-2deg)', boxShadow: '0 20px 40px rgba(0,0,0,0.18)'
-            });
-            document.body.appendChild(clone);
-            card.style.opacity = '0.4';
-            try { maniglia.setPointerCapture(e.pointerId); } catch { }
-
-            let bersaglio = null;
-            const muovi = (ev) => {
-                clone.style.left = `${ev.clientX - dx}px`;
-                clone.style.top = `${ev.clientY - dy}px`;
-                const sotto = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.card-da-fare, .blocco-superserie');
+    // Stacca la card nel punto (x, y): restituisce muovi(x, y) e fine(annullato)
+    const stacca = (card, x, y) => {
+        const r = card.getBoundingClientRect();
+        const dx = x - r.left;
+        const dy = y - r.top;
+        const clone = card.cloneNode(true);
+        Object.assign(clone.style, {
+            position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, margin: '0',
+            zIndex: '9999', pointerEvents: 'none', transform: 'rotate(-2deg)', boxShadow: '0 20px 40px rgba(0,0,0,0.18)'
+        });
+        document.body.appendChild(clone);
+        card.style.opacity = '0.4';
+        let bersaglio = null;
+        return {
+            muovi(px, py) {
+                clone.style.left = `${px - dx}px`;
+                clone.style.top = `${py - dy}px`;
+                const sotto = document.elementFromPoint(px, py)?.closest('.card-da-fare, .blocco-superserie');
                 const nuovo = sotto && sotto !== card && container.contains(sotto) ? sotto : null;
                 if (nuovo === bersaglio) return;
                 if (bersaglio) evidenzia(bersaglio, false);
                 if (nuovo) evidenzia(nuovo, true);
                 bersaglio = nuovo;
-            };
-            const termina = (annullato) => {
-                maniglia.removeEventListener('pointermove', muovi);
-                maniglia.removeEventListener('pointerup', rilascia);
-                maniglia.removeEventListener('pointercancel', annulla);
+            },
+            fine(annullato) {
                 clone.remove();
                 card.style.opacity = '';
                 if (bersaglio) evidenzia(bersaglio, false);
                 if (!annullato && bersaglio) onUnisci(card.dataset.id, bersaglio.dataset.id);
+            }
+        };
+    };
+
+    container.querySelectorAll('.card-da-fare').forEach(card => {
+        const maniglia = card.querySelector('.maniglia');
+
+        // Dito
+        let attesa = null;
+        let partenza = null;
+        let presa = null;
+        const smettiDiAspettare = () => { clearTimeout(attesa); attesa = null; };
+        const lascia = (annullato) => { const p = presa; presa = null; p?.fine(annullato); };
+        card.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) { smettiDiAspettare(); return lascia(true); }
+            const t = e.touches[0];
+            partenza = { x: t.clientX, y: t.clientY };
+            if (maniglia.contains(e.target)) {
+                e.preventDefault();
+                presa = stacca(card, partenza.x, partenza.y);
+                return;
+            }
+            attesa = setTimeout(() => { attesa = null; presa = stacca(card, partenza.x, partenza.y); }, TOCCO_LUNGO_MS);
+        }, { passive: false });
+        card.addEventListener('touchmove', (e) => {
+            const t = e.touches[0];
+            if (presa) {
+                // Se la pagina ha già iniziato a scorrere il gesto non è più nostro
+                if (!e.cancelable) return lascia(true);
+                e.preventDefault();
+                presa.muovi(t.clientX, t.clientY);
+            } else if (attesa && Math.hypot(t.clientX - partenza.x, t.clientY - partenza.y) > TOLLERANZA_DITO_PX) {
+                smettiDiAspettare();
+            }
+        }, { passive: false });
+        card.addEventListener('touchend', (e) => {
+            smettiDiAspettare();
+            if (!presa) return;
+            e.preventDefault();
+            lascia(false);
+        }, { passive: false });
+        card.addEventListener('touchcancel', () => { smettiDiAspettare(); lascia(true); });
+        card.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Mouse
+        maniglia.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'touch') return;
+            e.preventDefault();
+            const p = stacca(card, e.clientX, e.clientY);
+            try { maniglia.setPointerCapture(e.pointerId); } catch { }
+            const muovi = (ev) => p.muovi(ev.clientX, ev.clientY);
+            const termina = (annullato) => {
+                maniglia.removeEventListener('pointermove', muovi);
+                maniglia.removeEventListener('pointerup', rilascia);
+                maniglia.removeEventListener('pointercancel', annulla);
+                p.fine(annullato);
             };
             const rilascia = () => termina(false);
             const annulla = () => termina(true);

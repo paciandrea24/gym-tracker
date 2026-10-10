@@ -117,9 +117,11 @@ funzioni nuove decise in palestra, senza modificare la scheda (niente varianti d
 
 ### Superserie (per allenamento)
 
-- Nell'allenamento in corso ogni card "Da fare" ha una maniglia: trascinando la card sopra un'altra
-  (o sopra un blocco) gli esercizi diventano un blocco "Superserie". "Separa" lo scioglie. Vale solo
-  per quell'allenamento: la scheda non cambia.
+- Nell'allenamento in corso ogni card "Da fare" si trascina: tenendola premuta (0,4 s, ovunque) o
+  subito dalla maniglia. Rilasciata sopra un'altra card (o sopra un blocco) gli esercizi diventano
+  un blocco "Superserie". "Separa" lo scioglie. Vale solo per quell'allenamento: la scheda non
+  cambia. Le card non selezionano il testo e non aprono il menu del tocco lungo di iPhone; uno
+  scorrimento veloce resta uno scorrimento della pagina.
 - Il blocco si esegue a **giri**: in un giro si fa una serie di ogni esercizio, "Salva giro" fa
   partire il recupero una volta sola (il più lungo fra gli esercizi). Giri = il massimo delle serie
   previste; l'ultimo giro contiene solo chi ne ha di più.
