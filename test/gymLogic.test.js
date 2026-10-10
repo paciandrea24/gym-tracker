@@ -166,3 +166,40 @@ test('recupero del blocco: il più lungo, il cardio non conta', () => {
     assert.equal(recuperoBlocco([{ type: 'sala-pesi' }, { type: 'cardio', restSeconds: 0 }]), 90);
     assert.equal(recuperoBlocco([{ type: 'cardio', restSeconds: 0 }]), 0);
 });
+
+import { progressiEsercizio, testoMigliore, righeCsv } from '../public/js/services/gymLogic.js';
+
+test('progressi: per allenamento massimale e peso più alto col peso reale, in ordine di data', () => {
+    const preacher = { id: 'p', name: 'Preacher curl', type: 'sala-pesi', weightMultiplier: 2 };
+    const storico = [
+        { endTime: 300, exercises: [{ exerciseId: 'p', sets: [{ kg: 7, reps: 6 }, { kg: 6.5, reps: 10, drop: [{ kg: 20, reps: 1 }] }] }] },
+        { endTime: 100, exercises: [{ exerciseId: 'p', sets: [{ kg: 5, reps: 10 }] }] },
+        { endTime: 200, exercises: [{ exerciseId: 'altro', sets: [{ kg: 100, reps: 1 }] }] }
+    ];
+    const p = progressiEsercizio(storico, preacher);
+    assert.equal(p.allenamenti, 2);
+    assert.deepEqual(p.punti.map(x => [x.endTime, x.massimale, x.pesoMax]), [[100, 13.3, 10], [300, 17.3, 14]]);
+    assert.deepEqual(p.punti[1].migliore, { kg: 6.5, reps: 10, drop: [{ kg: 20, reps: 1 }] });
+    assert.equal(p.massimale, 17.3);
+    assert.equal(p.pesoMax, 14);
+});
+
+test('serie migliore nel grafico: per lato e bilanciere spiegati', () => {
+    assert.equal(testoMigliore({ kg: 6.5, reps: 10 }, { weightMultiplier: 2 }), '6,5 kg per lato × 10 (13 kg in tutto)');
+    assert.equal(testoMigliore({ kg: 60, reps: 8 }, { barbellWeight: 20 }), '60 kg × 8 (80 kg in tutto)');
+    assert.equal(testoMigliore({ kg: 60, reps: 8 }, {}), '60 kg × 8');
+    assert.equal(testoMigliore(null, {}), '');
+});
+
+test('CSV: una riga per serie con la colonna Drop', () => {
+    const scheda = { name: 'Scheda A' };
+    const storico = [{ endTime: new Date(2026, 9, 7, 18).getTime(), exercises: [
+        { name: 'Panca piana', type: 'sala-pesi', sets: [{ kg: 65, reps: 8, drop: [{ kg: 50, reps: 5 }, { kg: 40, reps: 3 }] }, { kg: '', reps: 8 }] },
+        { name: 'Trazioni', type: 'corpo-libero', sets: [{ reps: 10 }] }
+    ] }];
+    assert.deepEqual(righeCsv(storico, scheda), [
+        { Data: '07/10/2026', Scheda: 'Scheda A', Esercizio: 'Panca piana', Tipo: 'Pesi', Serie: 1, Kg: 65, Reps_o_Minuti: 8, Drop: '50 × 5 → 40 × 3' },
+        { Data: '07/10/2026', Scheda: 'Scheda A', Esercizio: 'Panca piana', Tipo: 'Pesi', Serie: 2, Kg: 0, Reps_o_Minuti: 8, Drop: '' },
+        { Data: '07/10/2026', Scheda: 'Scheda A', Esercizio: 'Trazioni', Tipo: 'Corpo Libero', Serie: 1, Kg: 0, Reps_o_Minuti: 10, Drop: '' }
+    ]);
+});

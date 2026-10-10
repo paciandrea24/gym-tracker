@@ -73,6 +73,63 @@ export function stima1RM(set, esercizio = {}) {
     return reps === 1 ? kg : kg * (36 / (37 - reps));
 }
 
+// --- Progressi e CSV ---
+
+const unDecimale = (v) => Math.round(v * 10) / 10;
+const stessoEsercizio = (e, esercizio) => String(e.exerciseId) === String(esercizio.id);
+
+// Per ogni allenamento con l'esercizio (in ordine di data): massimale stimato e peso più alto,
+// col peso reale, e la serie migliore (quella del massimale). I drop non contano.
+export function progressiEsercizio(storico, esercizio) {
+    const punti = storico
+        .filter(s => (s.exercises || []).some(e => stessoEsercizio(e, esercizio)))
+        .sort((a, b) => a.endTime - b.endTime)
+        .map(s => {
+            let massimale = 0, pesoMax = 0, migliore = null;
+            for (const set of s.exercises.find(e => stessoEsercizio(e, esercizio)).sets || []) {
+                const m = stima1RM(set, esercizio);
+                if (m > massimale) { massimale = m; migliore = set; }
+                pesoMax = Math.max(pesoMax, pesoReale(set.kg, esercizio));
+            }
+            return { endTime: s.endTime, massimale: unDecimale(massimale), pesoMax: unDecimale(pesoMax), migliore };
+        });
+    return {
+        punti,
+        massimale: Math.max(0, ...punti.map(p => p.massimale)),
+        pesoMax: Math.max(0, ...punti.map(p => p.pesoMax)),
+        allenamenti: punti.length
+    };
+}
+
+// "6,5 kg per lato × 10 (13 kg in tutto)"; il totale solo se diverso dal peso segnato
+export function testoMigliore(set, esercizio = {}) {
+    if (!set) return '';
+    const perLato = Number(esercizio.weightMultiplier) === 2;
+    const reale = pesoReale(set.kg, esercizio);
+    const testo = `${dec(set.kg)} kg${perLato ? ' per lato' : ''} × ${dec(set.reps)}`;
+    return reale !== numero(set.kg) ? `${testo} (${dec(reale)} kg in tutto)` : testo;
+}
+
+const TIPI_CSV = { 'cardio': 'Cardio', 'corpo-libero': 'Corpo Libero' };
+
+// Righe del CSV della scheda: una per serie, i drop in una colonna ("50 × 5 → 40 × 3")
+export function righeCsv(storico, scheda) {
+    const righe = [];
+    for (const s of storico) {
+        // gg/mm/aaaa scritta a mano: toLocaleDateString cambia fra Safari e gli altri
+        const d = new Date(s.endTime);
+        const data = [d.getDate(), d.getMonth() + 1].map(n => String(n).padStart(2, '0')).join('/') + '/' + d.getFullYear();
+        for (const ex of s.exercises || []) {
+            (ex.sets || []).forEach((set, i) => righe.push({
+                Data: data, Scheda: scheda.name, Esercizio: ex.name, Tipo: TIPI_CSV[ex.type] || 'Pesi',
+                Serie: i + 1, Kg: numero(set.kg), Reps_o_Minuti: numero(set.reps),
+                Drop: (set.drop || []).map(d => testoSerie(d, 'sala-pesi')).join(' → ')
+            }));
+        }
+    }
+    return righe;
+}
+
 // --- Superserie nella sessione attiva ---
 // session: { todo: [id], completed: [...], superserie?: [[id, id, ...]] }. Le funzioni restituiscono
 // una copia: la sessione passata non cambia. Un blocco ha sempre almeno due esercizi.

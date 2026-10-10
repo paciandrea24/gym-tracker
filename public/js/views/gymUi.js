@@ -7,7 +7,7 @@ import { icona } from '../components/icons.js?v=27';
 import { apriFoglio } from '../components/sheet.js?v=27';
 import * as modal from '../components/modal.js?v=27';
 import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=27';
-import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco } from '../services/gymLogic.js?v=27';
+import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco, testoMigliore } from '../services/gymLogic.js?v=27';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -657,4 +657,74 @@ export function renderSuperserie(container, esercizi, setsPerId, ultimeVolte, { 
     container.querySelectorAll('.aggiungi-drop').forEach(b => b.addEventListener('click', () => onAggiungiDrop(b.dataset.id, indice(b.dataset.idx))));
     container.querySelectorAll('.togli-drop').forEach(b => b.addEventListener('click', () => onTogliDrop(b.dataset.id, indice(b.dataset.idx), indice(b.dataset.drop))));
     container.querySelectorAll('.modifica-giro').forEach(b => b.addEventListener('click', () => onModificaGiro(indice(b.dataset.giro))));
+}
+
+// ─── PROGRESSI (grafici di un esercizio) ───────────────────────────────────
+// progressi: da progressiEsercizio(storico, esercizio)
+function spiegaPesoReale(ex) {
+    const perLato = Number(ex.weightMultiplier) === 2;
+    const bilanciere = numero(ex.barbellWeight) > 0 ? `il bilanciere (${decimale(ex.barbellWeight)} kg)` : '';
+    if (!perLato && !bilanciere) return '';
+    const parti = [perLato ? 'il peso per lato conta il doppio' : '', bilanciere ? `${perLato ? 'più ' : 'comprende '}${bilanciere}` : ''].filter(Boolean);
+    return `Pesi reali: ${parti.join(', ')}.`;
+}
+
+export function renderProgressi(container, ex, progressi, { onIndietro }) {
+    const riquadro = (etichetta, valore) => `
+        <div class="bg-white border border-gray-100 rounded-2xl p-3 text-center shadow-sm flex flex-col justify-between gap-1">
+            <p class="text-[11px] font-bold text-gray-400 leading-tight">${etichetta}</p>
+            <p class="text-xl font-black text-gray-900">${valore}</p>
+        </div>`;
+    const kg = (v) => v ? `${decimale(v)} <span class="text-[12px] font-bold text-gray-400">kg</span>` : '–';
+    const grafico = (titolo, spiegazione, id) => `
+        <div class="bg-white p-5 rounded-[20px] border border-gray-100 shadow-sm">
+            <h3 class="text-[15px] font-black text-gray-900">${titolo}</h3>
+            <p class="text-[12px] font-medium text-gray-400 mb-4">${spiegazione}</p>
+            <div class="relative h-48 w-full"><canvas id="${id}"></canvas></div>
+        </div>`;
+    const nota = spiegaPesoReale(ex);
+
+    container.innerHTML = `
+        ${intestazione(esc(ex.name), { idIndietro: 'back-stats-btn', sopra: 'Progressi', sotto: riassuntoEsercizio(ex) })}
+        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
+            <div class="grid grid-cols-3 gap-2">
+                ${riquadro('Massimale stimato', kg(progressi.massimale))}
+                ${riquadro('Peso più alto', kg(progressi.pesoMax))}
+                ${riquadro('Allenamenti', progressi.allenamenti)}
+            </div>
+            ${nota ? `<p class="text-[12px] font-semibold text-gray-500 px-1">${nota}</p>` : ''}
+            ${grafico('Massimale stimato', 'Il peso che alzeresti una volta sola, stimato dalle tue serie (formula di Brzycki).', 'chart1RM')}
+            ${grafico('Peso più alto', 'Tocca una colonna per vedere la serie migliore di quel giorno.', 'chartWeight')}
+        </main>
+    `;
+    document.getElementById('back-stats-btn').addEventListener('click', onIndietro);
+    if (typeof Chart === 'undefined') return;
+
+    const etichette = progressi.punti.map(p => new Date(p.endTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+    // Linea: scala stretta per vedere la crescita; colonne: da zero, se no la più bassa sparisce
+    const assi = (daZero) => ({
+        y: { beginAtZero: daZero, border: { display: false }, grid: { color: '#f3f4f6' }, ticks: { callback: (v) => decimale(v) } },
+        x: { border: { display: false }, grid: { display: false } }
+    });
+    const tooltip = (testo) => ({ backgroundColor: '#111827', padding: 10, displayColors: false, callbacks: { label: testo } });
+
+    new Chart(document.getElementById('chart1RM'), {
+        type: 'line',
+        data: {
+            labels: etichette,
+            datasets: [{
+                data: progressi.punti.map(p => p.massimale), borderColor: '#4F46E5', backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                borderWidth: 3, pointBackgroundColor: '#4F46E5', pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: 4, fill: true, tension: 0.4
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: assi(false), plugins: { legend: { display: false }, tooltip: tooltip((c) => `Massimale stimato: ${decimale(c.parsed.y)} kg`) } }
+    });
+    new Chart(document.getElementById('chartWeight'), {
+        type: 'bar',
+        data: { labels: etichette, datasets: [{ data: progressi.punti.map(p => p.pesoMax), backgroundColor: '#111827', borderRadius: 4, barPercentage: 0.5 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false, scales: assi(true),
+            plugins: { legend: { display: false }, tooltip: tooltip((c) => testoMigliore(progressi.punti[c.dataIndex].migliore, ex) || `${decimale(c.parsed.y)} kg`) }
+        }
+    });
 }

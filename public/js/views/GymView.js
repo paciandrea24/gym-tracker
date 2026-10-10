@@ -3,9 +3,8 @@
 import * as gymService from '../services/gymService.js?v=27';
 import * as modal from '../components/modal.js?v=27';
 import * as userService from '../services/userService.js?v=27';
-import * as ui from '../ui.js?v=27';
 import * as gymUi from './gymUi.js?v=27';
-import { elementiDaFare, nuovoDrop, pulisciSerie, serieIniziali, salvaGiro, modificaGiro, recuperoBlocco } from '../services/gymLogic.js?v=27';
+import { elementiDaFare, nuovoDrop, pulisciSerie, serieIniziali, salvaGiro, modificaGiro, recuperoBlocco, progressiEsercizio, righeCsv } from '../services/gymLogic.js?v=27';
 import { exportToCSV } from '../utils.js?v=27';
 
 export class GymView {
@@ -81,35 +80,13 @@ export class GymView {
         const history = await gymService.getHistoryForRoutine(this.currentRoutineId);
 
         if (!history || history.length === 0) {
-            alert("Nessun dato da esportare per questa scheda.");
+            await modal.showModal({ type: 'alert', title: 'Niente da scaricare', message: 'Questa scheda non ha ancora allenamenti salvati.' });
             return;
         }
 
-        const rows = [];
-
-        // Estraiamo i dati per formattare righe pulite per Excel/CSV
-        history.forEach(session => {
-            const dataStr = new Date(session.endTime).toLocaleDateString('it-IT');
-
-            session.exercises.forEach(ex => {
-                ex.sets.forEach((set, idx) => {
-                    rows.push({
-                        Data: dataStr,
-                        Scheda: routine.name,
-                        Esercizio: ex.name,
-                        Tipo: ex.type === 'cardio' ? 'Cardio' : (ex.type === 'corpo-libero' ? 'Corpo Libero' : 'Pesi'),
-                        Serie: idx + 1,
-                        Kg: set.kg || 0,
-                        Reps_o_Minuti: set.reps || 0
-                    });
-                });
-            });
-        });
-
-        // Nome file dinamico basato sul nome della scheda
+        // Una riga per serie, con la colonna dei drop; il file prende il nome della scheda
         const nomeFile = `storico_palestra_${routine.name.replace(/\s+/g, '_').toLowerCase()}.csv`;
-
-        exportToCSV(nomeFile, rows);
+        exportToCSV(nomeFile, righeCsv(history, routine));
     }
 
     async showDashboard() {
@@ -126,7 +103,7 @@ export class GymView {
                 const ex = routine.exercises.find(e => String(e.id) === String(id));
                 if (!ex) return;
                 gymUi.apriFoglioEsercizio(ex, {
-                    onProgressi: () => this.handleShowExerciseStats(ex.id, ex.name),
+                    onProgressi: () => this.handleShowExerciseStats(ex.id),
                     onModifica: () => this.showModulo(ex)
                 });
             },
@@ -315,71 +292,16 @@ export class GymView {
         this.showActiveSession();
     }
 
-    async handleShowExerciseStats(exerciseId, exerciseName) {
+    async handleShowExerciseStats(exerciseId) {
         const routine = await gymService.getRoutine(this.currentRoutineId);
-        const exerciseDef = routine.exercises.find(ex => String(ex.id) === String(exerciseId)) || {};
-        const mult = exerciseDef.weightMultiplier || 1;
-        const barWeight = exerciseDef.barbellWeight || 0;
-
-        const history = await gymService.getHistoryForRoutine(this.currentRoutineId);
-        const sessionsWithEx = history
-            .filter(session => session.exercises.some(e => e.exerciseId === exerciseId))
-            .sort((a, b) => a.endTime - b.endTime);
-
-        if (sessionsWithEx.length === 0) {
-            await modal.showModal({ type: 'alert', title: 'Grafici', message: 'Dati insufficienti per il grafico.' });
+        const esercizio = routine?.exercises.find(ex => String(ex.id) === String(exerciseId));
+        if (!esercizio) return;
+        const progressi = progressiEsercizio(await gymService.getHistoryForRoutine(this.currentRoutineId), esercizio);
+        if (progressi.allenamenti === 0) {
+            await modal.showModal({ type: 'alert', title: 'Progressi', message: 'Ancora nessun allenamento salvato con questo esercizio.' });
             return;
         }
-
-        const labels = [];
-        const maxWeights = [];
-        const estimated1RMs = [];
-        const bestSets = [];
-
-        sessionsWithEx.forEach(session => {
-            const dateStr = new Date(session.endTime).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
-            const exData = session.exercises.find(e => e.exerciseId === exerciseId);
-
-            labels.push(dateStr);
-
-            let maxKg = 0;
-            let sessionMax1RM = 0;
-            let bestSetText = "";
-
-            exData.sets.forEach(set => {
-                const rawKg = parseFloat(set.kg) || 0;
-                const reps = parseInt(set.reps) || 0;
-
-                let realKg = 0;
-                if (rawKg > 0) realKg = (rawKg * mult) + barWeight;
-
-                let e1RM = 0;
-                if (realKg > 0 && reps > 0) {
-                    e1RM = reps === 1 ? realKg : realKg * (36 / (37 - reps));
-                }
-
-                if (e1RM > sessionMax1RM) {
-                    sessionMax1RM = e1RM;
-                    bestSetText = `Log: ${rawKg}kg ➡️ Reale: ${realKg}kg x ${reps}`;
-                }
-
-                if (realKg > maxKg) maxKg = realKg;
-            });
-
-            maxWeights.push(parseFloat(maxKg.toFixed(1)));
-            estimated1RMs.push(parseFloat(sessionMax1RM.toFixed(1)));
-            bestSets.push(bestSetText);
-        });
-
-        const allTimeMax1RM = estimated1RMs.length > 0 ? Math.max(...estimated1RMs) : 0;
-        const allTimeMaxWeight = maxWeights.length > 0 ? Math.max(...maxWeights) : 0;
-        const totalSessions = labels.length;
-
-        ui.renderExerciseStats(
-            this.container, exerciseName, labels, estimated1RMs, maxWeights, bestSets,
-            { allTimeMax1RM, allTimeMaxWeight, totalSessions },
-            () => this.showDashboard()
-        );
+        gymUi.renderProgressi(this.container, esercizio, progressi, { onIndietro: () => this.showDashboard() });
     }
 
     startRecoveryTimer(seconds) {
