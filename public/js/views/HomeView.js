@@ -1,14 +1,15 @@
 // public/js/views/HomeView.js
 // Home: carica i dati della giornata e collega i riquadri alle sezioni. Il disegno è in homeUi.js.
 
-import * as userService from '../services/userService.js?v=38';
-import * as nutriService from '../services/nutriService.js?v=38';
-import * as gymService from '../services/gymService.js?v=38';
-import * as pantryService from '../services/pantryService.js?v=38';
-import { daComprare } from '../services/pantryLogic.js?v=38';
-import * as homeUi from './homeUi.js?v=38';
-import * as modal from '../components/modal.js?v=38';
-import { chiaveGiorno } from '../components/format.js?v=38';
+import * as userService from '../services/userService.js?v=39';
+import * as nutriService from '../services/nutriService.js?v=39';
+import * as gymService from '../services/gymService.js?v=39';
+import * as pantryService from '../services/pantryService.js?v=39';
+import { daComprare } from '../services/pantryLogic.js?v=39';
+import * as homeUi from './homeUi.js?v=39';
+import * as modal from '../components/modal.js?v=39';
+import { chiaveGiorno } from '../components/format.js?v=39';
+import { showToast } from '../services/pantrySync.js?v=39';
 
 export class HomeView {
     // navigazione: { onNutrizione, onPalestra, onSpesa } (le passa app.js)
@@ -27,6 +28,8 @@ export class HomeView {
         const vista = this.container.dataset.vista;
         // Giorno preso prima di chiedere i dati: se la risposta arriva dopo la mezzanotte si ricarica
         const giorno = chiaveGiorno(new Date());
+        // I totali per giorno della pagina del Peso si richiedono di nuovo (nel frattempo ci sono pasti nuovi)
+        this.totaliGiorno = undefined;
         this.container.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento...</p></div>`;
         try {
             const [acqua, pasti, pesate] = await Promise.all([userService.getWater(), nutriService.getTodayMeals(), userService.getWeightLogs()]);
@@ -104,9 +107,24 @@ export class HomeView {
     }
 
     // ─── PESO ───────────────────────────────────────────────────────────────────
-    showPeso() {
+    // Totali dei pasti per giorno: si caricano una volta; se non rispondono la pagina si mostra senza
+    // "Per mettere massa" e "Settimana per settimana"
+    async showPeso() {
+        const vista = this.container.dataset.vista;
+        if (this.totaliGiorno === undefined) {
+            this.container.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento...</p></div>`;
+            this.totaliGiorno = await nutriService.getGiorni().catch(() => null);
+            if (this.superata(vista)) return;
+        }
         homeUi.renderPeso(this.container, this.dati.pesate, {
+            totaliGiorno: this.totaliGiorno,
+            obiettivo: nutriService.getNutritionGoals().calorie,
             onIndietro: () => this.render(),
+            onUsaObiettivo: (kcal) => {
+                nutriService.saveNutritionGoals({ ...nutriService.getNutritionGoals(), calorie: kcal });
+                showToast(`Obiettivo: ${kcal} kcal`);
+                this.showPeso();
+            },
             onSalva: async (kg) => {
                 try {
                     // Il server tiene una pesata al giorno: salvare di nuovo aggiorna quella di oggi

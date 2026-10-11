@@ -2,8 +2,8 @@
 // Calcoli puri di "Peso e calorie" (niente DOM né rete): mantenimento stimato dai pasti segnati e
 // dalle pesate, calorie per la massa, settimana per settimana. Testati con node:test.
 
-import { chiaveGiorno, lunediDi } from '../components/format.js?v=38';
-import { unaPerGiorno } from './pesoLogic.js?v=38';
+import { chiaveGiorno, lunediDi } from '../components/format.js?v=39';
+import { unaPerGiorno } from './pesoLogic.js?v=39';
 
 export const KCAL_KG = 7700;          // 1 kg di peso corporeo, circa
 export const KG_SETTIMANA = 0.25;     // ritmo scelto dall'utente per mettere massa

@@ -28,6 +28,13 @@ export async function getHistoryMeals() {
     return await res.json();
 }
 
+// Totali dei pasti per giorno (Peso e calorie): [{ giorno, calorie, proteine, carboidrati, grassi, pasti }]
+export async function getGiorni() {
+    const res = await fetch('/api/giorni');
+    if (!res.ok) throw new Error('Totali per giorno non disponibili');
+    return await leggiJSON(res);
+}
+
 export async function getFavorites() {
     const res = await fetch('/api/favorites');
     return await res.json();

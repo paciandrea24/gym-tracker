@@ -2,11 +2,12 @@
 // Schermate della Home (restyle 6/6): riassunto della giornata con riquadri che portano alle
 // sezioni (niente pulsante nero) e pagina del Peso. Solo disegno ed eventi: i dati li carica HomeView.
 
-import { icona } from '../components/icons.js?v=38';
-import { chiaveGiorno, nomeGiorno } from '../components/format.js?v=38';
-import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=38';
-import * as modal from '../components/modal.js?v=38';
-import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=38';
+import { icona } from '../components/icons.js?v=39';
+import { chiaveGiorno, nomeGiorno, nomeSettimana, intero } from '../components/format.js?v=39';
+import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=39';
+import * as modal from '../components/modal.js?v=39';
+import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=39';
+import { stimaMantenimento, settimane, KG_SETTIMANA } from '../services/massaLogic.js?v=39';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -130,8 +131,74 @@ export function aggiornaAcqua(container, bicchieri) {
 }
 
 // ─── PESO ──────────────────────────────────────────────────────────────────
+const dieci = (v) => Math.round(v / 10) * 10;
+const daChiave = (g) => { const [a, m, d] = g.split('-').map(Number); return new Date(a, m - 1, d, 12); };
+const giornoMese = (g) => daChiave(g).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+const meseDi = (g) => daChiave(g).toLocaleDateString('it-IT', { month: 'long' });
+const kgVirgola = (v) => String(v).replace('.', ',');
+// Ritmo del peso con due decimali ("+0,25"): sotto 0,02 kg a settimana è stabile
+const ritmo = (kg) => Math.abs(kg) < 0.02 ? 'peso stabile' : `peso ${kg < 0 ? '−' : '+'}${kgVirgola(Math.round(Math.abs(kg) * 100) / 100)} kg a settimana`;
+const CARTA = 'bg-white rounded-[20px] border border-gray-100 shadow-sm p-4';
+
+// "Per mettere massa": mantenimento e calorie per +0,25 kg a settimana (calcoli in massaLogic.js)
+function riquadroMassa(stima, obiettivo, oggiK) {
+    const nota = (t) => `<p class="text-[12px] font-semibold text-gray-400 mt-2">${t}</p>`;
+    const titolo = (destra) => `
+        <div class="flex justify-between items-baseline gap-2">
+            <h3 class="text-[15px] font-black text-gray-900">Per mettere massa</h3>
+            ${destra ? `<span class="text-[11px] font-bold text-gray-400">${destra}</span>` : ''}
+        </div>`;
+    if (stima.nessuna) {
+        return `<div id="riquadro-massa" class="${CARTA}">${titolo('')}${nota(`Servono 14 giorni di pasti e di pesate per stimare il tuo mantenimento: ne mancano circa ${stima.mancano}.`)}</div>`;
+    }
+    const massa = dieci(stima.perMassa);
+    const colonna = (etichetta, colore, kcal) => `
+        <div>
+            <p class="text-[11px] font-bold ${colore}">${etichetta}</p>
+            <p class="text-gray-900"><span class="text-[12px] font-bold text-gray-400">circa</span> <span class="text-2xl font-black">${kcal}</span> <span class="text-[12px] font-bold text-gray-400">kcal</span></p>
+        </div>`;
+    return `
+        <div id="riquadro-massa" class="${CARTA}">
+            ${titolo(stima.attuale ? 'ultime 4 settimane' : `stima di ${meseDi(stima.a)}`)}
+            <div class="grid grid-cols-2 gap-3 mt-3">
+                ${colonna('Mantenimento', 'text-gray-400', dieci(stima.mantenimento))}
+                ${colonna(`+${kgVirgola(KG_SETTIMANA)} kg a settimana`, 'text-indigo-600', massa)}
+            </div>
+            ${nota(`Dal ${giornoMese(stima.da)} al ${giornoMese(stima.a)}: ${intero(stima.calorie)} kcal al giorno, ${ritmo(stima.kgSettimana)}.`)}
+            ${massa !== obiettivo ? `
+                <button id="usa-obiettivo-btn" data-kcal="${massa}" class="mt-3 w-full bg-white border border-gray-200 text-gray-800 font-bold text-[14px] py-3 rounded-xl active:scale-95 transition-transform">Usa ${massa} kcal come obiettivo</button>
+                ${nota(`Il tuo obiettivo adesso è ${obiettivo} kcal.`)}` : nota('È il tuo obiettivo di calorie.')}
+            ${stima.attuale ? '' : nota(`Fra circa ${stima.mancano} giorni di pasti e pesate la stima si aggiorna con i dati di ${meseDi(oggiK)}.`)}
+        </div>`;
+}
+
+// "Settimana per settimana": calorie medie e peso medio, le prime 4 e "Mostra tutte"
+function sezioneSettimane(righe) {
+    if (!righe.length) return '';
+    const MOSTRATE = 4;
+    return `
+        <div>
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 mb-2">Settimana per settimana</h3>
+            <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">
+                ${righe.map((s, i) => `
+                    <div class="riga-settimana py-3 flex justify-between items-baseline gap-2 ${i >= MOSTRATE ? 'hidden' : ''}">
+                        <div class="min-w-0">
+                            <p class="font-bold text-gray-800">${nomeSettimana(s.lunedi)}</p>
+                            <p class="text-[12px] font-semibold text-gray-400">${[s.inCorso ? 'In corso' : '', s.calorie !== null ? `${intero(s.calorie)} kcal al giorno` : 'Nessun pasto segnato'].filter(Boolean).join(' · ')}</p>
+                        </div>
+                        ${s.peso !== null ? `<p class="whitespace-nowrap"><b class="font-black text-gray-900">${decimaleKg(s.peso)} kg</b>${s.differenza !== null && Math.abs(s.differenza) >= 0.05 ? ` <span class="text-[12px] font-bold text-gray-400 ml-1">${segno(s.differenza)}</span>` : ''}</p>` : ''}
+                    </div>`).join('')}
+                ${righe.length > MOSTRATE ? `<button id="mostra-settimane" class="w-full py-3 text-center text-[13px] font-bold text-indigo-600">Mostra tutte (${righe.length})</button>` : ''}
+            </div>
+        </div>`;
+}
+
 // Una riga per giorno (l'ultima pesata del giorno). onSalva(kg) con il numero già controllato.
-export function renderPeso(container, pesate, { onIndietro, onSalva }) {
+// totaliGiorno: totali dei pasti per giorno (null se il server non li ha dati: niente sezioni nuove);
+// obiettivo: calorie dell'obiettivo; onUsaObiettivo(kcal) dal pulsante di "Per mettere massa".
+export function renderPeso(container, pesate, { totaliGiorno, obiettivo, onIndietro, onSalva, onUsaObiettivo }) {
+    const oggiK = chiaveGiorno(new Date());
+    const stima = totaliGiorno ? stimaMantenimento(totaliGiorno, pesate) : null;
     const giorni = unaPerGiorno(pesate);
     const riassunto = riassuntoPeso(pesate);
     const righe = righePesate(pesate);
@@ -159,6 +226,7 @@ export function renderPeso(container, pesate, { onIndietro, onSalva }) {
                 </div>
                 ${riassunto?.pesatoOggi ? '<p class="text-[12px] font-semibold text-gray-400 mt-2">Ti sei già pesato oggi: salvando aggiorni il valore di oggi.</p>' : ''}
             </div>
+            ${stima ? riquadroMassa(stima, Number(obiettivo), oggiK) : ''}
             ${giorni.length ? `
                 <div class="grid grid-cols-3 gap-2">
                     ${riquadro('Più alto', decimaleKg(Math.max(...valori)))}
@@ -171,6 +239,7 @@ export function renderPeso(container, pesate, { onIndietro, onSalva }) {
                         <p class="text-[12px] font-medium text-gray-400 mb-4">Le tue pesate, dalla prima all'ultima.</p>
                         <div class="relative h-48 w-full"><canvas id="weightLineChart"></canvas></div>
                     </div>` : ''}
+                ${totaliGiorno ? sezioneSettimane(settimane(totaliGiorno, pesate)) : ''}
                 <div>
                     <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 mb-2">Tutte le pesate</h3>
                     <div class="bg-white px-4 rounded-[20px] border border-gray-100 divide-y divide-gray-100">
@@ -185,6 +254,11 @@ export function renderPeso(container, pesate, { onIndietro, onSalva }) {
     `;
 
     document.getElementById('back-weight-btn').addEventListener('click', onIndietro);
+    document.getElementById('usa-obiettivo-btn')?.addEventListener('click', (e) => onUsaObiettivo(Number(e.currentTarget.dataset.kcal)));
+    document.getElementById('mostra-settimane')?.addEventListener('click', (e) => {
+        container.querySelectorAll('.riga-settimana.hidden').forEach(r => r.classList.remove('hidden'));
+        e.currentTarget.remove();
+    });
     document.getElementById('mostra-tutte')?.addEventListener('click', (e) => {
         container.querySelectorAll('.riga-pesata.hidden').forEach(r => r.classList.remove('hidden'));
         e.currentTarget.remove();

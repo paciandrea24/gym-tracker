@@ -1100,6 +1100,22 @@ app.get('/api/history', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
+// --- API: TOTALI PER GIORNO (Peso e calorie) ---
+// Calorie e macro di ogni giorno italiano con almeno un pasto, dal più vecchio
+app.get('/api/giorni', async (req, res) => {
+    try {
+        const righe = await Meal.aggregate([
+            { $group: {
+                _id: { $dateToString: { format: '%Y-%m-%d', date: '$data', timezone: 'Europe/Rome' } },
+                calorie: { $sum: '$calorie' }, proteine: { $sum: '$proteine' },
+                carboidrati: { $sum: '$carboidrati' }, grassi: { $sum: '$grassi' }, pasti: { $sum: 1 }
+            } },
+            { $sort: { _id: 1 } }
+        ]);
+        res.json(righe.map(({ _id, ...totali }) => ({ giorno: _id, ...totali })));
+    } catch (e) { res.status(500).json([]); }
+});
+
 // --- API PALESTRA (Novità Cloud) ---
 app.get('/api/gym/routines', async (req, res) => {
     // QUI ERA L'ERRORE: Ora legge di nuovo correttamente tutte le schede con .find()

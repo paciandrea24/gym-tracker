@@ -1,17 +1,17 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=38';
-import * as scanner from '../components/scanner.js?v=38';
-import * as modal from '../components/modal.js?v=38';
-import * as voice from '../components/voice.js?v=38';
-import * as ui from '../ui.js?v=38';
-import { exportToCSV } from '../utils.js?v=38';
-import * as pantryService from '../services/pantryService.js?v=38';
-import * as pantrySync from '../services/pantrySync.js?v=38';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=38';
-import { renderChiusuraGiornata } from '../components/dayClosure.js?v=38';
-import { apriFoglio } from '../components/sheet.js?v=38';
-import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=38';
+import * as nutriService from '../services/nutriService.js?v=39';
+import * as scanner from '../components/scanner.js?v=39';
+import * as modal from '../components/modal.js?v=39';
+import * as voice from '../components/voice.js?v=39';
+import * as ui from '../ui.js?v=39';
+import { exportToCSV } from '../utils.js?v=39';
+import * as pantryService from '../services/pantryService.js?v=39';
+import * as pantrySync from '../services/pantrySync.js?v=39';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=39';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=39';
+import { apriFoglio } from '../components/sheet.js?v=39';
+import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=39';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 

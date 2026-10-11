@@ -3,8 +3,8 @@
 // Le porzioni di meal prep (ingredienti con prepId) non toccano mai la dispensa:
 // i loro ingredienti crudi sono già stati scalati quando è stata creata la preparazione.
 
-import * as pantryService from './pantryService.js?v=38';
-import * as modal from '../components/modal.js?v=38';
+import * as pantryService from './pantryService.js?v=39';
+import * as modal from '../components/modal.js?v=39';
 
 // Cache localStorage: nomeNormalizzato → pantryItemId (o null = "non scalare")
 const PANTRY_CACHE_KEY = 'pantryMatchCache';

@@ -1,9 +1,9 @@
-import { HomeView } from './views/HomeView.js?v=38';
-import { GymView } from './views/GymView.js?v=38';
-import { NutritionView } from './views/NutritionView.js?v=38';
-import { PantryView } from './views/PantryView.js?v=38';
-import { chiaveGiorno, msAllaMezzanotte } from './components/format.js?v=38';
-import * as voice from './components/voice.js?v=38';
+import { HomeView } from './views/HomeView.js?v=39';
+import { GymView } from './views/GymView.js?v=39';
+import { NutritionView } from './views/NutritionView.js?v=39';
+import { PantryView } from './views/PantryView.js?v=39';
+import { chiaveGiorno, msAllaMezzanotte } from './components/format.js?v=39';
+import * as voice from './components/voice.js?v=39';
 
 const appContainer = document.getElementById('app');
 let currentAppModule = 'home';
