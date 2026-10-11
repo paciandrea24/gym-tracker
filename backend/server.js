@@ -13,6 +13,7 @@ import {
 } from './mealPrep.js';
 import { tokenizza, classificaMatch } from './matching.js';
 import { componiConsigli } from './nutrizionista.js';
+import { valoriDaPer100 } from './voce.js';
 import { suggerisciChiusure } from './giornateSimili.js';
 
 dotenv.config();
@@ -536,7 +537,7 @@ async function analizzaTesto(text, prepsAttive = [], grammiSoliti = {}) {
     }).join('\n');
 
     const regolaPrep = prepsAttive.length === 0 ? '' : `
-        6. L'utente ha queste PREPARAZIONI già cucinate (meal prep), di cui mangia una parte:
+        9. L'utente ha queste PREPARAZIONI già cucinate (meal prep), di cui mangia una parte:
 ${righePrep}
            Se nomina chiaramente uno di questi piatti, NON stimarne i valori: inserisci l'ingrediente con
            "prepRef" (es. "P1") e "prepGrammi" SOLO se ha detto esplicitamente i grammi; altrimenti
@@ -548,6 +549,7 @@ ${righePrep}
         - Latte parzialmente scremato: 46 kcal, 3.4g pro, 4.8g carbo, 1.5g grassi
         - Pasta Barilla: 359 kcal, 14g pro, 70g carbo, 2g grassi
         - Yogurt Greco Fage 0%: 54 kcal, 10.3g pro, 3g carbo, 0g grassi
+        - Petto di pollo crudo: 100 kcal, 23.3g pro, 0g carbo, 0.8g grassi
         `;
 
     const prompt = `Sei un assistente nutrizionale per un'app. L'utente detterà un pasto. Testo: "${text}"
@@ -557,7 +559,19 @@ ${righePrep}
         2. Altrimenti usa il dizionario per i calcoli su 100g: ${dizionarioPersonale}
         3. Altrimenti stima tu.
         4. Nel campo "nome" di ogni ingrediente scrivi SOLO il nome dell'alimento, senza quantità o grammi.
-        5. Metti sempre i grammi consumati nel campo "grammi" (numero intero, es. 150). Se non specificati, stimali.${regolaPrep}
+        5. Metti sempre i grammi consumati nel campo "grammi" (numero intero, es. 150). Se non specificati, stimali.
+        6. PESI DA CRUDO: l'utente pesa tutto crudo. Per carne, pesce, pasta, riso, cereali, legumi secchi e patate
+           usa SEMPRE i valori del crudo (es. pollo crudo circa 100-110 kcal, non 165 del cotto; riso crudo circa 350,
+           non 130 del cotto), a meno che l'utente dica esplicitamente "cotto" o "cotta". Legumi in scatola o già
+           lessati: i valori di quelli.
+        7. FRUTTA CON BUCCIA: i grammi detti sono della parte mangiata. Se l'utente dice "con la buccia", "intera"
+           o "col torsolo", togli lo scarto e nel campo "grammi" metti solo la parte mangiata: banana circa il 35%
+           in meno, arancia e mandarino circa 25%, kiwi 15%, mela e pera 10%, melone e anguria 45%.
+           Un frutto senza grammi: la parte mangiata di un frutto medio (es. banana media sbucciata circa 120 g).
+        8. VALORI OGNI 100 G: per ogni ingrediente scrivi anche "kcal100", "proteine100", "carboidrati100" e
+           "grassi100" (della parte mangiata, cruda salvo regola 6): i totali li ricalcola l'app sui grammi.
+           Se l'utente detta i valori totali di un alimento (es. "un panino da 450 calorie"), metti null nei
+           quattro campi ogni 100 g e scrivi i totali.${regolaPrep}
 
         Restituisci SOLO un JSON con questa esatta struttura:
         {
@@ -571,6 +585,10 @@ ${righePrep}
             {
               "nome": "Solo nome ingrediente (es. Pollo)",
               "grammi": 0,
+              "kcal100": 0,
+              "proteine100": 0,
+              "carboidrati100": 0,
+              "grassi100": 0,
               "calorie": 0,
               "proteine": 0,
               "grassi": 0,
@@ -580,7 +598,7 @@ ${righePrep}
         }`;
 
     const data = estraiJSON(await generaJSON(prompt), '{', '}');
-    let ingredienti = risolviRiferimentiPrep(Array.isArray(data.ingredienti) ? data.ingredienti : [], refMap, grammiSoliti);
+    let ingredienti = valoriDaPer100(risolviRiferimentiPrep(Array.isArray(data.ingredienti) ? data.ingredienti : [], refMap, grammiSoliti));
 
     if (ingredienti.length === 0) {
         ingredienti = [{
@@ -965,7 +983,7 @@ REGOLE FONDAMENTALI — rispettale tutte:
 1. Usa SOLO i prodotti della DISPENSA e i PIATTI GIÀ CUCINATI elencati. Non inventare ingredienti (niente sale, olio o altro se non è in elenco).
 2. Per un prodotto della dispensa scrivi "nome" ESATTAMENTE come in elenco e i "grammi". Per un piatto già cucinato scrivi "prepRef" (es. "P1") e i "prepGrammi" da mangiare.
 3. NON scrivere calorie o macro: li calcola l'app con precisione. Usa i valori per 100g solo per scegliere le quantità giuste.
-4. Non superare i grammi disponibili.
+4. Non superare i grammi disponibili. I grammi dei prodotti sono sempre da crudi, come in dispensa (pasta, riso e carne si pesano crudi); quelli dei piatti già cucinati sono del cotto.
 5. STRATEGIA MACRO: avvicinati il più possibile alle quote di PROTEINE e CARBOIDRATI rimanenti. I GRASSI sono una soglia massima da non superare, non un obiettivo: meno grassi = meglio.
 6. Genera 3 opzioni ben distinte, ognuna con 1 variante (cambia 1-2 ingredienti restando negli elenchi).
 7. Se ci sono piatti già cucinati, usali in almeno un'opzione: vanno consumati prima che scadano.
