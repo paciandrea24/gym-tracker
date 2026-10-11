@@ -1,17 +1,18 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=39';
-import * as scanner from '../components/scanner.js?v=39';
-import * as modal from '../components/modal.js?v=39';
-import * as voice from '../components/voice.js?v=39';
-import * as ui from '../ui.js?v=39';
-import { exportToCSV } from '../utils.js?v=39';
-import * as pantryService from '../services/pantryService.js?v=39';
-import * as pantrySync from '../services/pantrySync.js?v=39';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=39';
-import { renderChiusuraGiornata } from '../components/dayClosure.js?v=39';
-import { apriFoglio } from '../components/sheet.js?v=39';
-import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=39';
+import * as nutriService from '../services/nutriService.js?v=40';
+import * as scanner from '../components/scanner.js?v=40';
+import * as modal from '../components/modal.js?v=40';
+import * as voice from '../components/voice.js?v=40';
+import * as ui from '../ui.js?v=40';
+import { exportToCSV } from '../utils.js?v=40';
+import * as pantryService from '../services/pantryService.js?v=40';
+import * as pantrySync from '../services/pantrySync.js?v=40';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=40';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=40';
+import { apriFoglio } from '../components/sheet.js?v=40';
+import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=40';
+import { contaUso } from '../services/preferitiLogic.js?v=40';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -272,6 +273,7 @@ export class NutritionView {
 
         try {
             const saved = await nutriService.saveMeal(newMealData);
+            contaUso(favMeal);
             this.render();
             pantrySync.scalaDispensa(saved.meal);
         } catch (e) { await modal.showModal({ type: 'error', title: 'Errore', message: "Errore di connessione" }); }
@@ -654,6 +656,7 @@ export class NutritionView {
 
             try {
                 const response = await nutriService.updateMeal(targetMealId, targetMeal);
+                contaUso(favMeal);
                 this.sostituisciPasto(response.meal);
 
                 // FIX MANCATO SCALO: Scaliamo i nuovi ingredienti estratti dal preferito

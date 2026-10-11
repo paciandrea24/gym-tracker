@@ -3,11 +3,11 @@
 // allenamento in corso con superserie, esercizio con drop set, superserie a giri, progressi.
 // Solo disegno ed eventi: i dati e i salvataggi li gestisce GymView.
 
-import { icona } from '../components/icons.js?v=39';
-import { apriFoglio } from '../components/sheet.js?v=39';
-import * as modal from '../components/modal.js?v=39';
-import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=39';
-import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco, testoMigliore } from '../services/gymLogic.js?v=39';
+import { icona } from '../components/icons.js?v=40';
+import { apriFoglio } from '../components/sheet.js?v=40';
+import * as modal from '../components/modal.js?v=40';
+import { decimale, intero, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana } from '../components/format.js?v=40';
+import { testoSerie, volumeSerie, passoPeso, giriDelBlocco, recuperoBlocco, testoMigliore } from '../services/gymLogic.js?v=40';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);

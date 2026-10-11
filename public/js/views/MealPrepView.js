@@ -4,17 +4,18 @@
 // pesa il cotto, si considera pesante quanto il crudo (stima). "Pesa il cotto": quello che resta più
 // quello già segnato; concludendo un lotto finito, il cotto è quello che si è mangiato.
 
-import * as prepService from '../services/mealPrepService.js?v=39';
-import * as nutriService from '../services/nutriService.js?v=39';
-import * as pantryService from '../services/pantryService.js?v=39';
-import * as pantrySync from '../services/pantrySync.js?v=39';
-import * as scanner from '../components/scanner.js?v=39';
-import * as voice from '../components/voice.js?v=39';
-import * as modal from '../components/modal.js?v=39';
-import * as ui from '../ui.js?v=39';
-import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=39';
-import { apriFoglio } from '../components/sheet.js?v=39';
-import { icona } from '../components/icons.js?v=39';
+import * as prepService from '../services/mealPrepService.js?v=40';
+import * as nutriService from '../services/nutriService.js?v=40';
+import * as pantryService from '../services/pantryService.js?v=40';
+import * as pantrySync from '../services/pantrySync.js?v=40';
+import * as scanner from '../components/scanner.js?v=40';
+import * as voice from '../components/voice.js?v=40';
+import * as modal from '../components/modal.js?v=40';
+import * as ui from '../ui.js?v=40';
+import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=40';
+import { apriFoglio } from '../components/sheet.js?v=40';
+import { icona } from '../components/icons.js?v=40';
+import { contaUso } from '../services/preferitiLogic.js?v=40';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const leggiNumero = (v) => parseFloat(String(v).replace(',', '.')) || 0;
@@ -438,6 +439,7 @@ export class MealPrepView {
             const ingredienti = fav.ingredienti && fav.ingredienti.length > 0
                 ? fav.ingredienti.map(({ _id, ...ing }) => ing)
                 : [{ nome: fav.alimenti, calorie: fav.calorie, proteine: fav.proteine, carboidrati: fav.carboidrati, grassi: fav.grassi }];
+            contaUso(fav);
             this.aggiungiIngredienti(ingredienti);
         });
     }

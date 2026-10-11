@@ -95,7 +95,10 @@ Approvata con l'anteprima https://claude.ai/artifact/QrvGkG3QGF5hQSGu8dcNUN (pi�
   pulsanti, una riga ciascuno; il tocco apre un foglio (grammi, "Togli dal pasto"); anche le
   porzioni di meal prep si correggono lì, in grammi; "Elimina pasto" in fondo.
 - **Preferiti**: elenco semplice; foglio con kcal, macro, ingredienti con i grammi,
-  "+ Aggiungi a oggi" e "Togli dai preferiti".
+  "+ Aggiungi a oggi" e "Togli dai preferiti". Dall'11 ottobre i più usati sono in cima: un
+  contatore nascosto, solo sul telefono (localStorage `usoPreferiti`, per nome; niente sul server),
+  conta pasto nuovo, aggiunta a un pasto e ingrediente del meal prep; a parità, il più nuovo prima
+  (`services/preferitiLogic.js`).
 - **Chiedi all'IA**: titolo "Idee per la cena"; ogni opzione: cos'è, kcal e macro, ingredienti,
   "Con questo arrivi a" (barre, rosse se si supera), "+ Aggiungi a oggi"; "Vedi variante" bianco.
 - **Aggiungi a mano**: pasto con quattro pulsanti (preimpostato in base all'ora, nascosto se si

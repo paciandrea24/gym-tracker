@@ -1,11 +1,12 @@
-import { formatDate, getWeekLabel } from './utils.js?v=39';
-import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=39';
-import { cercaProdottoOFF } from './services/pantryService.js?v=39';
-import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=39';
-import * as modal from './components/modal.js?v=39';
-import { icona } from './components/icons.js?v=39';
-import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=39';
-import { apriFoglio } from './components/sheet.js?v=39';
+import { formatDate, getWeekLabel } from './utils.js?v=40';
+import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=40';
+import { cercaProdottoOFF } from './services/pantryService.js?v=40';
+import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=40';
+import * as modal from './components/modal.js?v=40';
+import { icona } from './components/icons.js?v=40';
+import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=40';
+import { apriFoglio } from './components/sheet.js?v=40';
+import { ordinaPerUso, leggiUsi } from './services/preferitiLogic.js?v=40';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const BTN_PRINCIPALE = 'w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform';
@@ -561,7 +562,9 @@ export function renderFavoritePreviewModal(favMeal, onConfirm, onUnfavorite) {
     });
 }
 
+// I più usati in cima (contatore nascosto in preferitiLogic.js)
 export function renderFavoritesPage(container, favorites, onBack, onFavoriteClick) {
+    favorites = ordinaPerUso(favorites, leggiUsi());
     container.innerHTML = `
         <header class="bg-white shadow-sm pt-14 pb-4 px-4 sticky top-0 z-10 flex items-center">
             <button id="back-fav-btn" class="mr-3 text-gray-500 hover:text-gray-900 p-2 -ml-2" aria-label="Indietro">${icona.indietro()}</button>

@@ -2,7 +2,7 @@
 // Finestre dell'app al posto di alert/confirm/prompt del sistema, e la scelta del prodotto da
 // scalare dalla dispensa. Niente emoji: icone SVG in un cerchio; conferma nera, rossa se elimina.
 
-import { icona } from './icons.js?v=39';
+import { icona } from './icons.js?v=40';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const BTN_ANNULLA = 'flex-1 bg-white border border-gray-200 text-gray-800 font-bold py-3.5 rounded-2xl active:scale-95 transition-transform';
