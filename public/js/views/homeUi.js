@@ -14,11 +14,13 @@ const decimaleKg = (v) => String(Math.round(v * 10) / 10).replace('.', ',');
 const chevron = () => icona.avanti('w-4 h-4 text-gray-300 flex-shrink-0');
 const RIQUADRO = 'w-full bg-white rounded-[20px] border border-gray-100 shadow-sm p-4 text-left active:scale-[0.98] transition-transform';
 const GOCCIA = '<path d="M12 2c-5.33 5.58-8 9.24-8 12.83A8.04 8.04 0 0012 22a8.04 8.04 0 008-7.17C20 11.24 17.33 7.58 12 2z"/>';
+const TASTO_ACQUA = 'w-12 h-10 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform disabled:opacity-40 disabled:active:scale-100';
 const BICCHIERI = 8;
 const ML_BICCHIERE = 250;
 
 // ─── HOME ──────────────────────────────────────────────────────────────────
-// dati: { pasti, goals, bicchieri, pesate, allenamento: { inCorso, daFare, ultimo, scheda }, daComprare }
+// dati: { giorno, pasti, goals, bicchieri, pesate, allenamento: { inCorso, daFare, ultimo, scheda }, daComprare }
+// giorno ('YYYY-MM-DD' dei dati) va in data-oggi: dopo la mezzanotte app.js ricarica la Home
 export function renderHome(container, dati, { onNutrizione, onPalestra, onPeso, onAcqua, onSpesa }) {
     const oggi = nomeGiorno(chiaveGiorno(new Date()));
     const data = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -46,7 +48,7 @@ export function renderHome(container, dati, { onNutrizione, onPalestra, onPeso, 
             <h1 class="text-[28px] font-black text-gray-900 tracking-tight">Ciao Andrea</h1>
             <p class="text-sm font-medium text-gray-400 mt-0.5">${data.charAt(0).toUpperCase() + data.slice(1)}</p>
         </header>
-        <main class="p-4 space-y-3 pb-24 safe-pb bg-gray-50">
+        <main data-oggi="${dati.giorno}" class="p-4 space-y-3 pb-24 safe-pb bg-gray-50">
             <button id="home-calorie-card" class="w-full text-left active:scale-[0.98] transition-transform" aria-label="Apri la Nutrizione di ${minuscola(oggi)}">
                 ${riquadroRiepilogo(totaliPasti(dati.pasti), dati.goals, { titolo: 'Mangiato oggi', testoSotto: (x) => `Mancano ${x} kcal` })}
             </button>
@@ -66,7 +68,11 @@ export function renderHome(container, dati, { onNutrizione, onPalestra, onPeso, 
                     <p class="text-[13px] font-bold text-gray-400"><b class="text-gray-900">${ml} ml</b> di 2 l</p>
                 </div>
                 <div class="flex justify-between mt-3">${gocce}</div>
-                <p class="text-[12px] font-semibold text-gray-400 mt-2">Tocca una goccia per segnare i bicchieri (250 ml l'uno)</p>
+                <div class="flex items-center justify-between gap-3 mt-3">
+                    <button type="button" id="water-minus-btn" class="${TASTO_ACQUA}" aria-label="Un bicchiere in meno" ${dati.bicchieri ? '' : 'disabled'}>${icona.meno()}</button>
+                    <p class="text-[12px] font-semibold text-gray-400 text-center">250 ml a bicchiere</p>
+                    <button type="button" id="water-plus-btn" class="${TASTO_ACQUA}" aria-label="Un bicchiere in più">${icona.piu()}</button>
+                </div>
             </div>
 
             <button id="home-weight-card" class="${RIQUADRO} flex items-center gap-3">
@@ -100,11 +106,14 @@ export function renderHome(container, dati, { onNutrizione, onPalestra, onPeso, 
     document.getElementById('home-workout-card').addEventListener('click', onPalestra);
     document.getElementById('home-weight-card').addEventListener('click', onPeso);
     document.getElementById('home-spesa-card').addEventListener('click', onSpesa);
-    // Goccia toccata: tanti bicchieri quanti fino a lei; l'ultima piena si toglie
+    // Goccia toccata: tanti bicchieri quanti fino a lei; l'ultima piena si toglie.
+    // + e − uno alla volta; col + si può andare oltre i 2 l (le gocce restano tutte piene)
     container.querySelectorAll('.water-drop-btn').forEach(b => b.addEventListener('click', () => {
         const n = Number(b.dataset.index);
         onAcqua(n === dati.bicchieri ? n - 1 : n);
     }));
+    document.getElementById('water-minus-btn').addEventListener('click', () => onAcqua(Math.max(0, dati.bicchieri - 1)));
+    document.getElementById('water-plus-btn').addEventListener('click', () => onAcqua(dati.bicchieri + 1));
 }
 
 // ─── PESO ──────────────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ export const icona = {
     stellaPiena: (classi = 'w-6 h-6') => svg(STELLA, classi).replace('fill="none"', 'fill="currentColor"'),
     mic: crea('<path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>'),
     piu: crea('<path d="M12 5v14M5 12h14"/>'),
+    meno: crea('<path d="M5 12h14"/>'),
     fotocamera: crea('<path d="M3 9a2 2 0 012-2h.93a2 2 0 001.66-.89l.82-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.66.89l.82 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/>'),
     stella: crea(STELLA),
     pentola: crea('<path d="M3 11h18"/><path d="M5 11v5a4 4 0 004 4h6a4 4 0 004-4v-5"/><path d="M9 7h6"/><path d="M12 7V5"/><path d="M2 14h3M19 14h3"/>'),

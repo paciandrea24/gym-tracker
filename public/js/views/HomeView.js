@@ -8,6 +8,7 @@ import * as pantryService from '../services/pantryService.js?v=33';
 import { daComprare } from '../services/pantryLogic.js?v=33';
 import * as homeUi from './homeUi.js?v=33';
 import * as modal from '../components/modal.js?v=33';
+import { chiaveGiorno } from '../components/format.js?v=33';
 
 export class HomeView {
     // navigazione: { onNutrizione, onPalestra, onSpesa } (le passa app.js)
@@ -24,6 +25,8 @@ export class HomeView {
 
     async render() {
         const vista = this.container.dataset.vista;
+        // Giorno preso prima di chiedere i dati: se la risposta arriva dopo la mezzanotte si ricarica
+        const giorno = chiaveGiorno(new Date());
         this.container.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento...</p></div>`;
         try {
             const [acqua, pasti, pesate] = await Promise.all([userService.getWater(), nutriService.getTodayMeals(), userService.getWeightLogs()]);
@@ -34,6 +37,7 @@ export class HomeView {
                 pantryService.getPantryItems().catch(() => [])
             ]);
             this.dati = {
+                giorno,
                 pasti: Array.isArray(pasti) ? pasti : [],
                 goals: nutriService.getNutritionGoals(),
                 bicchieri: Number(acqua?.glasses) || 0,
@@ -43,7 +47,8 @@ export class HomeView {
             };
         } catch (e) {
             if (this.superata(vista)) return;
-            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Non riesco a caricare la Home. Controlla la connessione.</div>`;
+            // data-oggi vuoto: quando l'app torna davanti app.js riprova da solo
+            this.container.innerHTML = `<div data-oggi="" class="p-10 text-center mt-20 font-bold text-red-500">Non riesco a caricare la Home. Controlla la connessione.</div>`;
             return;
         }
         if (this.superata(vista)) return;
@@ -65,17 +70,37 @@ export class HomeView {
             onPalestra: () => this.navigazione.onPalestra(),
             onSpesa: () => this.navigazione.onSpesa(),
             onPeso: () => this.showPeso(),
-            onAcqua: (bicchieri) => this.updateWater(bicchieri)
+            onAcqua: (bicchieri) => this.cambiaAcqua(bicchieri)
         });
     }
 
-    async updateWater(bicchieri) {
+    // Si disegna subito e si salva dopo. Con i dati di ieri (app rimasta aperta oltre la mezzanotte)
+    // non si salva niente: si ricarica la Home e l'acqua riparte da quella di oggi.
+    cambiaAcqua(bicchieri) {
+        if (this.dati.giorno !== chiaveGiorno(new Date())) return this.render();
+        this.dati.bicchieri = bicchieri;
+        this.disegna();
+        this.salvaAcqua();
+    }
+
+    // Un salvataggio alla volta: finito uno, se nel frattempo è cambiato si manda l'ultimo valore
+    // (tocchi veloci su + non si perdono). Se non si salva, la Home si ricarica col valore del server.
+    async salvaAcqua() {
+        if (this.salvandoAcqua) return;
+        this.salvandoAcqua = true;
         const vista = this.container.dataset.vista;
         try {
-            await userService.updateWater(bicchieri);
-            this.dati.bicchieri = bicchieri;
-            if (!this.superata(vista)) this.disegna();
-        } catch (e) { console.error("Errore salvataggio acqua", e); }
+            let inviati;
+            do {
+                inviati = this.dati.bicchieri;
+                await userService.updateWater(inviati);
+            } while (inviati !== this.dati.bicchieri);
+        } catch (e) {
+            console.error("Errore salvataggio acqua", e);
+            if (!this.superata(vista)) this.render();
+        } finally {
+            this.salvandoAcqua = false;
+        }
     }
 
     // ─── PESO ───────────────────────────────────────────────────────────────────

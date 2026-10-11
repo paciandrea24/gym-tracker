@@ -11,6 +11,7 @@ export async function updateWater(glasses) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ glasses })
     });
+    if (!res.ok) throw new Error(`Acqua non salvata (${res.status})`);
     return await res.json();
 }
 
