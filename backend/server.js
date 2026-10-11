@@ -1,6 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import path from 'path';
@@ -18,6 +19,8 @@ dotenv.config();
 console.log("Prime lettere della chiave API:", process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.substring(0, 8) : "CHIAVE NON TROVATA");
 
 const app = express();
+// Risposte compresse (gzip): circa 5 volte meno banda, Render gratuito ne include 5 GB al mese
+app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -28,6 +31,9 @@ app.use(express.static(path.join(__dirname, '../public')));
 // Le risposte delle API non si tengono in cache (Safari su iPhone): acqua e pasti di oggi devono
 // essere sempre quelli del giorno, anche se l'app è rimasta aperta da ieri
 app.use('/api', (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+// Per cron-job.org: una chiamata ogni 10 minuti tiene sveglio il server (Render gratuito dorme dopo
+// 15 minuti senza richieste). Non tocca il database.
+app.get('/api/ping', (req, res) => res.json({ ok: true }));
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
