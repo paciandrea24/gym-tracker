@@ -248,6 +248,17 @@ Codice: le schermate escono da `PantryView.js` e vanno in `views/pantryUi.js`; i
 (tipi, gruppi, da comprare, rifornimento, correzione, riga utilizzo, prodotto già presente) in
 `services/pantryLogic.js` con i test.
 
+## Piatto intero (11 ottobre)
+
+Nel modulo "Aggiungi a mano" due schede, "Ogni 100 g" (grammi e valori ogni 100 g, come prima) e
+"Piatto intero": calorie e macro di quello che si è mangiato, senza grammi. Serve per i totali di
+cui non si sa il peso (una stima di Gemini, il panino del bar, il ristorante): prima l'utente
+scriveva 100 g finti e il totale nei valori ogni 100 g ("Polpettone 1000 kcal ogni 100 g").
+L'ingrediente si salva con `grammi: 0` e `piattoIntero: true`; il dettaglio mostra "Piatto intero ·"
+e il foglio dell'ingrediente non chiede i grammi. Nel modulo degli ingredienti del meal prep la
+scelta non c'è (gli ingredienti crudi servono coi grammi). Un prodotto trovato col codice a barre
+riporta la scheda su "Ogni 100 g".
+
 ## Sezione 6 — Home
 
 Approvata con l'anteprima https://claude.ai/artifact/SJHMXzGUD7PMFFKreZRDhL e le risposte

@@ -50,7 +50,9 @@ const IngredientSchema = new mongoose.Schema({
     prepId: { type: mongoose.Schema.Types.ObjectId, ref: 'MealPrep' },
     prepGrammi: Number,
     prepPorzioni: Number,
-    prepDaCompletare: Boolean
+    prepDaCompletare: Boolean,
+    // Piatto intero: valori totali senza grammi (es. una stima, il panino del bar)
+    piattoIntero: Boolean
 });
 
 const MealSchema = new mongoose.Schema({

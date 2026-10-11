@@ -2,13 +2,13 @@
 // Schermate della dispensa (restyle 5/6): elenco per tipo con "Da comprare", prodotto, lista
 // della spesa, fogli per aggiungere. Solo disegno ed eventi: dati e salvataggi li gestisce PantryView.
 
-import { icona } from '../components/icons.js?v=37';
-import { intero, decimale } from '../components/format.js?v=37';
-import { apriFoglio } from '../components/sheet.js?v=37';
-import * as modal from '../components/modal.js?v=37';
-import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.js?v=37';
-import { searchFoodTable } from '../data/foodTable.js?v=37';
-import { TIPI, gruppiDispensa, daComprare, statoProdotto, percentuale, parolaFinito, nomeTipo, rigaUtilizzo, rifornimento } from '../services/pantryLogic.js?v=37';
+import { icona } from '../components/icons.js?v=38';
+import { intero, decimale } from '../components/format.js?v=38';
+import { apriFoglio } from '../components/sheet.js?v=38';
+import * as modal from '../components/modal.js?v=38';
+import { campoCodiceHtml, collegaCampoCodice } from '../components/barcodeField.js?v=38';
+import { searchFoodTable } from '../data/foodTable.js?v=38';
+import { TIPI, gruppiDispensa, daComprare, statoProdotto, percentuale, parolaFinito, nomeTipo, rigaUtilizzo, rifornimento } from '../services/pantryLogic.js?v=38';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const numero = (v) => parseFloat(String(v ?? '').replace(',', '.')) || 0;

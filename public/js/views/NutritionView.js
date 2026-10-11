@@ -1,17 +1,17 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=37';
-import * as scanner from '../components/scanner.js?v=37';
-import * as modal from '../components/modal.js?v=37';
-import * as voice from '../components/voice.js?v=37';
-import * as ui from '../ui.js?v=37';
-import { exportToCSV } from '../utils.js?v=37';
-import * as pantryService from '../services/pantryService.js?v=37';
-import * as pantrySync from '../services/pantrySync.js?v=37';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=37';
-import { renderChiusuraGiornata } from '../components/dayClosure.js?v=37';
-import { apriFoglio } from '../components/sheet.js?v=37';
-import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=37';
+import * as nutriService from '../services/nutriService.js?v=38';
+import * as scanner from '../components/scanner.js?v=38';
+import * as modal from '../components/modal.js?v=38';
+import * as voice from '../components/voice.js?v=38';
+import * as ui from '../ui.js?v=38';
+import { exportToCSV } from '../utils.js?v=38';
+import * as pantryService from '../services/pantryService.js?v=38';
+import * as pantrySync from '../services/pantrySync.js?v=38';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=38';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=38';
+import { apriFoglio } from '../components/sheet.js?v=38';
+import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=38';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -286,7 +286,8 @@ export class NutritionView {
             mealData.ingredienti = [{
                 nome: mealData.alimenti, calorie: mealData.calorie,
                 proteine: mealData.proteine, carboidrati: mealData.carboidrati, grassi: mealData.grassi,
-                grammi: mealData.grammi || 0
+                grammi: mealData.grammi || 0,
+                ...(mealData.grammi > 0 ? {} : { piattoIntero: true })
             }];
 
             try {
@@ -526,20 +527,23 @@ export class NutritionView {
         if (!ing) return;
 
         const grammi = ing.prepId ? (ing.prepGrammi > 0 ? ing.prepGrammi : ing.grammi) : ing.grammi;
+        // Senza grammi (piatto intero o voce vecchia) i valori sono il totale: non c'è un peso da cambiare
+        const senzaGrammi = !ing.prepId && !(Number(ing.grammi) > 0);
         const sottotitolo = ing.prepId && ing.prepDaCompletare
             ? 'Meal prep: scrivi i grammi per calcolare i valori'
-            : `${ing.prepId ? 'Meal prep · ' : ''}${intero(ing.calorie)} kcal · ${macroTesto(ing, { breve: true })}`;
+            : `${ing.prepId ? 'Meal prep · ' : ing.piattoIntero ? 'Piatto intero · ' : ''}${intero(ing.calorie)} kcal · ${macroTesto(ing, { breve: true })}`;
         const { box, chiudi, intestazione, collegaChiudi } = apriFoglio({ id: 'pasto-ing-sheet' });
         box.innerHTML = `
             ${intestazione(esc(ing.nome), sottotitolo)}
-            <label for="ing-pasto-grammi" class="block text-xs font-semibold text-gray-400 uppercase mb-2">Grammi</label>
-            <input id="ing-pasto-grammi" type="number" inputmode="decimal" step="any" value="${grammi > 0 ? Math.round(grammi) : ''}" placeholder="es. 150"
-                class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-2xl font-black text-center outline-none focus:ring-2 focus:ring-gray-900 mb-4">
-            <button id="ing-pasto-salva" class="w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform">Salva</button>
+            ${senzaGrammi ? '' : `
+                <label for="ing-pasto-grammi" class="block text-xs font-semibold text-gray-400 uppercase mb-2">Grammi</label>
+                <input id="ing-pasto-grammi" type="number" inputmode="decimal" step="any" value="${grammi > 0 ? Math.round(grammi) : ''}" placeholder="es. 150"
+                    class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-2xl font-black text-center outline-none focus:ring-2 focus:ring-gray-900 mb-4">
+                <button id="ing-pasto-salva" class="w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform">Salva</button>`}
             <button id="ing-pasto-togli" class="w-full text-red-600 font-bold text-sm py-3 mt-2">Togli dal pasto</button>`;
         collegaChiudi();
 
-        box.querySelector('#ing-pasto-salva').addEventListener('click', () => {
+        box.querySelector('#ing-pasto-salva')?.addEventListener('click', () => {
             const nuovi = parseFloat(String(box.querySelector('#ing-pasto-grammi').value).replace(',', '.'));
             if (!(nuovi > 0)) return modal.showModal({ type: 'error', title: 'Grammi', message: 'Scrivi quanti grammi hai mangiato.' });
             chiudi();

@@ -4,17 +4,17 @@
 // pesa il cotto, si considera pesante quanto il crudo (stima). "Pesa il cotto": quello che resta più
 // quello già segnato; concludendo un lotto finito, il cotto è quello che si è mangiato.
 
-import * as prepService from '../services/mealPrepService.js?v=37';
-import * as nutriService from '../services/nutriService.js?v=37';
-import * as pantryService from '../services/pantryService.js?v=37';
-import * as pantrySync from '../services/pantrySync.js?v=37';
-import * as scanner from '../components/scanner.js?v=37';
-import * as voice from '../components/voice.js?v=37';
-import * as modal from '../components/modal.js?v=37';
-import * as ui from '../ui.js?v=37';
-import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=37';
-import { apriFoglio } from '../components/sheet.js?v=37';
-import { icona } from '../components/icons.js?v=37';
+import * as prepService from '../services/mealPrepService.js?v=38';
+import * as nutriService from '../services/nutriService.js?v=38';
+import * as pantryService from '../services/pantryService.js?v=38';
+import * as pantrySync from '../services/pantrySync.js?v=38';
+import * as scanner from '../components/scanner.js?v=38';
+import * as voice from '../components/voice.js?v=38';
+import * as modal from '../components/modal.js?v=38';
+import * as ui from '../ui.js?v=38';
+import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=38';
+import { apriFoglio } from '../components/sheet.js?v=38';
+import { icona } from '../components/icons.js?v=38';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const leggiNumero = (v) => parseFloat(String(v).replace(',', '.')) || 0;
@@ -385,7 +385,7 @@ export class MealPrepView {
                 nome: dati.alimenti, grammi: dati.grammi,
                 calorie: dati.calorie, proteine: dati.proteine, carboidrati: dati.carboidrati, grassi: dati.grassi
             }]);
-        }, () => this.drawDetail());
+        }, () => this.drawDetail(), { piattoIntero: false });
 
         // Il form dei pasti, adattato: niente "tipo di pasto" per un ingrediente
         document.getElementById('m-pasto')?.closest('div')?.classList.add('hidden');

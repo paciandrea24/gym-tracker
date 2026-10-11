@@ -2,7 +2,7 @@
 // Calcoli puri della dispensa (niente DOM né rete): tipi, gruppi, da comprare, rifornimento,
 // correzione dei grammi, riga di un utilizzo e prodotto già presente. Testati con node:test.
 
-import { chiaveGiorno, nomeGiorno } from '../components/format.js?v=37';
+import { chiaveGiorno, nomeGiorno } from '../components/format.js?v=38';
 
 const numero = (v) => parseFloat(String(v ?? '').replace(',', '.')) || 0;
 

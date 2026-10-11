@@ -1,11 +1,11 @@
-import { formatDate, getWeekLabel } from './utils.js?v=37';
-import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=37';
-import { cercaProdottoOFF } from './services/pantryService.js?v=37';
-import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=37';
-import * as modal from './components/modal.js?v=37';
-import { icona } from './components/icons.js?v=37';
-import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=37';
-import { apriFoglio } from './components/sheet.js?v=37';
+import { formatDate, getWeekLabel } from './utils.js?v=38';
+import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=38';
+import { cercaProdottoOFF } from './services/pantryService.js?v=38';
+import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=38';
+import * as modal from './components/modal.js?v=38';
+import { icona } from './components/icons.js?v=38';
+import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=38';
+import { apriFoglio } from './components/sheet.js?v=38';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const BTN_PRINCIPALE = 'w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform';
@@ -98,13 +98,15 @@ function elencoPasti(pasti) {
         </div>`;
 }
 
-// "250 g · " per un ingrediente o una porzione di meal prep; vuoto se i grammi non si sanno
+// "250 g · " per un ingrediente o una porzione di meal prep, "Piatto intero · " per un totale senza
+// grammi; vuoto se i grammi non si sanno
 function quantitaIngrediente(ing) {
     if (ing.prepId) {
         if (ing.prepGrammi > 0) return `${intero(ing.prepGrammi)} g · `;
         if (ing.grammi > 0) return `${intero(ing.grammi)} g · `;
         return ing.prepPorzioni > 0 ? `${etichettaPorzione(ing)} · ` : '';
     }
+    if (ing.piattoIntero) return 'Piatto intero · ';
     return ing.grammi > 0 ? `${intero(ing.grammi)} g · ` : '';
 }
 
@@ -340,12 +342,18 @@ export function riempiFormPasto(prodotto) {
     document.getElementById('m-pro-100').value = prodotto.proteine100;
     document.getElementById('m-carbo-100').value = prodotto.carbo100;
     document.getElementById('m-fat-100').value = prodotto.grassi100;
+    document.querySelector('.m-modo-btn[data-modo="per100"]')?.click(); // un prodotto ha i valori ogni 100 g
     document.getElementById('m-peso').focus();
     al.dispatchEvent(new Event('input', { bubbles: true })); // aggiorna l'anteprima dei valori
 }
 
-export function renderManualMealForm(container, onSave, onCancel) {
+// piattoIntero: si può scegliere "Piatto intero" (calorie e macro di quello che si è mangiato, senza
+// grammi), per i piatti di cui si sa solo il totale: una stima, il panino del bar, il ristorante.
+// Nel meal prep no: gli ingredienti crudi servono coi grammi.
+export function renderManualMealForm(container, onSave, onCancel, { piattoIntero = true } = {}) {
     const iniziale = pastoPerOra(new Date().getHours());
+    let modo = 'per100';
+    const classiModo = (attivo) => `m-modo-btn flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${attivo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`;
     const classiChip = (attivo) => `m-pasto-btn py-2.5 rounded-xl text-[12px] font-bold border transition-colors ${attivo ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-600 border-gray-200'}`;
     const valore100 = (id, etichetta, colore) => `
         <div class="min-w-0">
@@ -372,12 +380,17 @@ export function renderManualMealForm(container, onSave, onCancel) {
                     <label for="m-alimenti" class="block text-xs font-semibold text-gray-400 uppercase mb-2">Alimento</label>
                     <input type="text" id="m-alimenti" placeholder="es. Pollo e riso" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                 </div>
-                <div>
+                ${piattoIntero ? `
+                    <div class="flex bg-gray-100 p-1 rounded-xl">
+                        <button type="button" data-modo="per100" class="${classiModo(true)}">Ogni 100 g</button>
+                        <button type="button" data-modo="intero" class="${classiModo(false)}">Piatto intero</button>
+                    </div>` : ''}
+                <div id="m-peso-box">
                     <label for="m-peso" class="block text-xs font-semibold text-gray-400 uppercase mb-2">Grammi mangiati</label>
                     <input type="number" inputmode="decimal" step="any" id="m-peso" placeholder="es. 150" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                 </div>
                 <div class="pt-2 border-t border-gray-100">
-                    <p class="text-xs font-semibold text-gray-400 uppercase mb-2">Valori ogni 100 g</p>
+                    <p id="m-valori-titolo" class="text-xs font-semibold text-gray-400 uppercase mb-2">Valori ogni 100 g</p>
                     <div class="grid grid-cols-2 gap-2">
                         ${valore100('m-cal-100', 'Calorie', 'text-gray-500')}
                         ${valore100('m-pro-100', 'Proteine', 'text-blue-500')}
@@ -394,6 +407,9 @@ export function renderManualMealForm(container, onSave, onCancel) {
     const $ = (id) => document.getElementById(id);
     const leggi = (id) => parseFloat(String($(id).value).replace(',', '.')) || 0;
     const valori = () => {
+        if (modo === 'intero') {
+            return { peso: 0, cal100: 0, calorie: leggi('m-cal-100'), proteine: leggi('m-pro-100'), carboidrati: leggi('m-carbo-100'), grassi: leggi('m-fat-100') };
+        }
         const peso = leggi('m-peso');
         const f = peso / 100;
         return {
@@ -407,6 +423,14 @@ export function renderManualMealForm(container, onSave, onCancel) {
     // Quanto vale la porzione, prima di salvare
     const anteprima = () => {
         const v = valori();
+        if (modo === 'intero') {
+            $('m-anteprima').innerHTML = v.calorie > 0
+                ? `<p class="text-[12px] font-bold text-gray-500">Piatto intero</p>
+                   <p class="text-gray-900"><span class="text-xl font-black">${intero(v.calorie)}</span> <span class="text-sm font-bold text-gray-400">kcal</span></p>
+                   <p class="text-[12px] font-bold text-gray-600">${macroTesto(v, { breve: true })}</p>`
+                : `<p class="text-[13px] font-semibold text-gray-400 py-1">Scrivi le calorie e i macro di quello che hai mangiato</p>`;
+            return;
+        }
         $('m-anteprima').innerHTML = v.peso > 0 && v.cal100 > 0
             ? `<p class="text-[12px] font-bold text-gray-500">Con ${intero(v.peso)} g</p>
                <p class="text-gray-900"><span class="text-xl font-black">${intero(v.calorie)}</span> <span class="text-sm font-bold text-gray-400">kcal</span></p>
@@ -415,6 +439,13 @@ export function renderManualMealForm(container, onSave, onCancel) {
     };
     container.querySelector('main').addEventListener('input', anteprima);
     anteprima();
+    container.querySelectorAll('.m-modo-btn').forEach(btn => btn.addEventListener('click', () => {
+        modo = btn.dataset.modo;
+        container.querySelectorAll('.m-modo-btn').forEach(b => { b.className = classiModo(b === btn); });
+        $('m-peso-box').classList.toggle('hidden', modo === 'intero');
+        $('m-valori-titolo').textContent = modo === 'intero' ? 'Valori del piatto' : 'Valori ogni 100 g';
+        anteprima();
+    }));
 
     container.querySelectorAll('.m-pasto-btn').forEach(btn => btn.addEventListener('click', () => {
         $('m-pasto').value = btn.dataset.pasto;
@@ -438,7 +469,10 @@ export function renderManualMealForm(container, onSave, onCancel) {
         const pasto = $('m-pasto').value || iniziale;
         const alimenti = $('m-alimenti').value.trim();
         const v = valori();
-        if (!alimenti || v.peso <= 0 || v.cal100 <= 0) {
+        if (modo === 'intero' && (!alimenti || v.calorie <= 0)) {
+            return modal.showModal({ type: 'error', title: 'Manca qualcosa', message: 'Scrivi il nome del piatto e le sue calorie.' });
+        }
+        if (modo !== 'intero' && (!alimenti || v.peso <= 0 || v.cal100 <= 0)) {
             return modal.showModal({ type: 'error', title: 'Manca qualcosa', message: 'Scrivi alimento, grammi mangiati e calorie ogni 100 g.' });
         }
         onSave({ pasto, alimenti, calorie: v.calorie, proteine: v.proteine, carboidrati: v.carboidrati, grassi: v.grassi, grammi: v.peso });
