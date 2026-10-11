@@ -1,14 +1,14 @@
 // public/js/views/HomeView.js
 // Home: carica i dati della giornata e collega i riquadri alle sezioni. Il disegno è in homeUi.js.
 
-import * as userService from '../services/userService.js?v=33';
-import * as nutriService from '../services/nutriService.js?v=33';
-import * as gymService from '../services/gymService.js?v=33';
-import * as pantryService from '../services/pantryService.js?v=33';
-import { daComprare } from '../services/pantryLogic.js?v=33';
-import * as homeUi from './homeUi.js?v=33';
-import * as modal from '../components/modal.js?v=33';
-import { chiaveGiorno } from '../components/format.js?v=33';
+import * as userService from '../services/userService.js?v=34';
+import * as nutriService from '../services/nutriService.js?v=34';
+import * as gymService from '../services/gymService.js?v=34';
+import * as pantryService from '../services/pantryService.js?v=34';
+import { daComprare } from '../services/pantryLogic.js?v=34';
+import * as homeUi from './homeUi.js?v=34';
+import * as modal from '../components/modal.js?v=34';
+import { chiaveGiorno } from '../components/format.js?v=34';
 
 export class HomeView {
     // navigazione: { onNutrizione, onPalestra, onSpesa } (le passa app.js)

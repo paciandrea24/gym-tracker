@@ -257,7 +257,17 @@ della barra in basso.
   "Riprendi", altrimenti "Ultima volta mercoledì 7 ottobre · Scheda A" (o "Non ti sei ancora
   allenato") e "Inizia". Il tocco apre la Palestra.
 - **Acqua**: "750 ml di 2 l" e 8 gocce da 250 ml; si tocca la goccia (l'ultima piena la toglie).
-  Spariscono i pulsanti − e +.
+  Sotto le gocce i pulsanti − e + grigi (un bicchiere alla volta, "250 ml a bicchiere" in mezzo),
+  rimessi l'11 ottobre su richiesta dell'utente: col + si va anche oltre i 2 l (le gocce restano
+  tutte piene), il − è spento a 0. Si disegna subito e si salva in fila, così i tocchi veloci non
+  si perdono.
+- **Mezzanotte**: Home e Nutrizione (Oggi e Storico) segnano il giorno dei dati (`data-oggi`); a
+  mezzanotte, o quando l'app torna davanti dopo la mezzanotte, `app.js` le ricarica: acqua,
+  calorie, pasti e data in alto ripartono dal giorno nuovo. Non si ridisegna con un foglio o una
+  finestra aperti, con la voce o la fotocamera attive, né nelle schermate interne (tornando
+  indietro si ricaricano comunque). Un tocco sull'acqua con i dati di ieri non si salva: la Home si
+  ricarica. Le API rispondono con `Cache-Control: no-store`. Se la Home o la Nutrizione non si
+  caricano, riprovano da sole quando l'app torna davanti.
 - **Peso**: ultimo peso con la virgola, "−1,6 kg dal 5 settembre · pesato oggi", linea
   dell'andamento delle ultime pesate. Senza pesate: "Tocca per pesarti". Il tocco apre il Peso.
 - **Da comprare**: la riga della Dispensa ("Da comprare · 3" e i nomi, o "Non manca niente"); il
