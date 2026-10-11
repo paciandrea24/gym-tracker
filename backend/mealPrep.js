@@ -72,6 +72,19 @@ export function pesoCrudo(ingredienti) {
     return Math.round((ingredienti || []).reduce((s, ing) => s + (Number(ing.grammi) || 0), 0));
 }
 
+// Peso del cotto pesato dall'utente: quello che resta adesso (senza contenitore) più quello già
+// segnato nei pasti; a lotto finito (rimasti 0) è la somma di quello mangiato. Le porzioni vecchie
+// "a porzioni" contano col peso di prima, quelle da completare no.
+export function pesoCottoDa(prep, porzioni, rimasti) {
+    const peso = Number(prep.pesoTotaleCotto) || 0;
+    let segnati = 0;
+    for (const ing of porzioni || []) {
+        const grammi = Number(ing.prepGrammi) || 0;
+        segnati += grammi > 0 ? grammi : (calcolaQuota(ing, prep) ?? 0) * peso;
+    }
+    return Math.round((Number(rimasti) || 0) + segnati);
+}
+
 // porzioni: ingredienti-porzione registrati nei pasti per questa preparazione, dal più recente
 export function riepilogoConsumo(prep, porzioni) {
     let quota = 0;

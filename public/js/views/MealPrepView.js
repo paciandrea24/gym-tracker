@@ -1,19 +1,20 @@
 // public/js/views/MealPrepView.js
 // Meal prep: un lotto cucinato una volta (es. ragù) e mangiato in più giorni.
-// Si pesano gli ingredienti crudi e, ogni giorno, i grammi che si mangiano. Il cotto si considera
-// pesante quanto il crudo (stima scelta dall'utente): niente pentola da pesare, niente porzioni.
+// Si pesano gli ingredienti crudi e, ogni giorno, i grammi di cotto che si mangiano. Finché non si
+// pesa il cotto, si considera pesante quanto il crudo (stima). "Pesa il cotto": quello che resta più
+// quello già segnato; concludendo un lotto finito, il cotto è quello che si è mangiato.
 
-import * as prepService from '../services/mealPrepService.js?v=36';
-import * as nutriService from '../services/nutriService.js?v=36';
-import * as pantryService from '../services/pantryService.js?v=36';
-import * as pantrySync from '../services/pantrySync.js?v=36';
-import * as scanner from '../components/scanner.js?v=36';
-import * as voice from '../components/voice.js?v=36';
-import * as modal from '../components/modal.js?v=36';
-import * as ui from '../ui.js?v=36';
-import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=36';
-import { apriFoglio } from '../components/sheet.js?v=36';
-import { icona } from '../components/icons.js?v=36';
+import * as prepService from '../services/mealPrepService.js?v=37';
+import * as nutriService from '../services/nutriService.js?v=37';
+import * as pantryService from '../services/pantryService.js?v=37';
+import * as pantrySync from '../services/pantrySync.js?v=37';
+import * as scanner from '../components/scanner.js?v=37';
+import * as voice from '../components/voice.js?v=37';
+import * as modal from '../components/modal.js?v=37';
+import * as ui from '../ui.js?v=37';
+import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=37';
+import { apriFoglio } from '../components/sheet.js?v=37';
+import { icona } from '../components/icons.js?v=37';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const leggiNumero = (v) => parseFloat(String(v).replace(',', '.')) || 0;
@@ -56,11 +57,15 @@ function rimasti(p) {
 }
 
 function notaPeso(p) {
+    if (p.cottoPesato) return `Tutto il lotto: ${intero(p.calorie)} kcal, su ${intero(p.pesoTotaleCotto)} g di cotto pesato.`;
     const crudo = pesoIngredienti(p);
     return p.pesoTotaleCotto === crudo
-        ? `Tutto il lotto: ${intero(p.calorie)} kcal. Stima: il cotto conta come gli ingredienti crudi (${crudo} g).`
+        ? `Tutto il lotto: ${intero(p.calorie)} kcal. Stima: il cotto conta come gli ingredienti crudi (${crudo} g). Pesalo per valori esatti.`
         : `Tutto il lotto: ${intero(p.calorie)} kcal, su ${p.pesoTotaleCotto} g di cotto.`;
 }
+
+// Già segnato nei pasti (g di cotto): serve per il peso del cotto
+const grammiSegnati = (p) => Number(p.riepilogo?.grammiUsati) || 0;
 
 function quantitaPorzione(por) {
     if (por.prepGrammi > 0) return `${intero(por.prepGrammi)} g`;
@@ -284,6 +289,7 @@ export class MealPrepView {
                 <div class="border-t border-gray-100 mt-4 pt-3 space-y-3">
                     ${rimasti(p)}
                     <p class="text-[12px] font-semibold text-gray-400 leading-snug">${notaPeso(p)}</p>
+                    ${p.attiva ? `<button id="pesa-cotto-btn" class="text-[13px] font-bold text-indigo-600">${p.cottoPesato ? 'Pesa di nuovo il cotto' : 'Pesa il cotto'}</button>` : ''}
                 </div>
             </div>
 
@@ -328,6 +334,7 @@ export class MealPrepView {
         $('prep-close-scanner').addEventListener('click', () => this.closeScanner());
         $('prep-fav-btn').addEventListener('click', () => this.handleFavorites());
         $('toggle-prep-active')?.addEventListener('click', () => this.handleToggleActive());
+        $('pesa-cotto-btn')?.addEventListener('click', () => this.apriPesoCotto());
         $('delete-prep-btn')?.addEventListener('click', () => this.handleDelete());
 
         this.container.querySelectorAll('.riga-ing').forEach(btn =>
@@ -493,9 +500,54 @@ export class MealPrepView {
         if (r && r.success) pantrySync.ripristinaDispensa(comePasto(prep, []), [ing], 'Meal prep: ingrediente rimosso');
     }
 
+    // Peso del cotto: si pesa quello che resta e si aggiunge quello già segnato nei pasti
+    apriPesoCotto() {
+        const p = this.prep;
+        const segnati = grammiSegnati(p);
+        const { box, chiudi, intestazione, collegaChiudi } = apriFoglio({ id: 'prep-cotto-sheet' });
+        box.innerHTML = `
+            ${intestazione('Peso del cotto', 'Cuocendo il peso cambia: il ragù si restringe, riso e pasta si gonfiano.')}
+            <p class="text-[13px] font-semibold text-gray-500 mb-4">Pesa quello che resta, senza contenitore.${segnati ? ' Se una porzione già segnata è ancora in frigo, non pesarla.' : ''}</p>
+            <label for="cotto-rimasti" class="block text-xs font-semibold text-gray-400 uppercase mb-2">Quanto ne resta</label>
+            <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 mb-3 focus-within:ring-2 focus-within:ring-gray-900">
+                <input id="cotto-rimasti" type="text" inputmode="decimal" placeholder="es. 450" class="flex-1 min-w-0 bg-transparent py-3 text-center text-2xl font-black text-gray-900 outline-none">
+                <span class="text-[13px] font-bold text-gray-400">g</span>
+            </div>
+            <div id="cotto-anteprima" class="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center mb-4"></div>
+            <button id="cotto-salva" class="${BTN_PRINCIPALE}">Salva</button>`;
+        collegaChiudi();
+
+        const campo = box.querySelector('#cotto-rimasti');
+        const anteprima = () => {
+            const rimasti = leggiNumero(campo.value);
+            const cotto = Math.round(rimasti + segnati);
+            box.querySelector('#cotto-anteprima').innerHTML = rimasti > 0 || segnati > 0
+                ? `<p class="text-[12px] font-bold text-gray-500">${segnati ? `${intero(rimasti)} g + ${intero(segnati)} g già segnati` : 'Peso del cotto'}</p>
+                   <p class="text-gray-900"><span class="text-xl font-black">${intero(cotto)} g</span>${cotto > 0 ? ` <span class="text-sm font-bold text-gray-400">· ${intero(p.calorie / cotto * 100)} kcal ogni 100 g</span>` : ''}</p>`
+                : `<p class="text-[13px] font-semibold text-gray-400 py-1">Scrivi i grammi per vedere i valori</p>`;
+        };
+        campo.addEventListener('input', anteprima);
+        anteprima();
+        box.querySelector('#cotto-salva').addEventListener('click', () => {
+            const rimasti = leggiNumero(campo.value);
+            if (!(rimasti + segnati > 0)) return modal.showModal({ type: 'error', title: 'Grammi', message: 'Scrivi quanti grammi ne restano.' });
+            chiudi();
+            this.salva({ rimasti }, 'Ricalcolo...');
+        });
+    }
+
     async handleToggleActive() {
         const conclusa = this.prep.attiva;
-        const r = await this.salva({ attiva: !this.prep.attiva });
+        // Concludendo senza aver pesato il cotto: se è finita, il cotto è quello che si è mangiato
+        let finita = false;
+        if (conclusa && !this.prep.cottoPesato && grammiSegnati(this.prep) > 0) {
+            finita = await modal.showModal({
+                type: 'confirm', title: "L'hai finita tutta?",
+                message: `Se sì, il peso del cotto diventa quello che hai segnato (${intero(grammiSegnati(this.prep))} g) e le porzioni si ricalcolano con i valori giusti.`,
+                confirmText: 'Sì, finita', cancelText: 'No'
+            });
+        }
+        const r = await this.salva(finita ? { attiva: false, finita: true } : { attiva: !this.prep.attiva });
         if (r && r.success && conclusa) {
             pantrySync.showToast(`${this.prep.nome} conclusa`, 'bg-gray-900');
             this.renderList();

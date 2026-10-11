@@ -52,6 +52,13 @@ non divide in porzioni. Scelta esplicita dell'utente ("solo stima"): il peso di 
   i pasti collegati (le porzioni "da completare" si riempiono).
 - Le preparazioni vecchie con un peso del cotto inserito a mano lo tengono finché non se ne
   modificano gli ingredienti: le porzioni già registrate non cambiano valore.
+- **Peso del cotto (11 ottobre)**: lo studio sui dati ha mostrato che la stima sbaglia molto (il
+  ragù dell'utente: 1026 g crudi, cotto molto meno, porzioni contate circa il 30% in meno; riso e
+  pasta al contrario). "Pesa il cotto" nel dettaglio: l'utente pesa quello che resta, senza
+  contenitore, e il cotto è quello più i grammi già segnati (`pesoCottoDa`); `cottoPesato` = true
+  e il peso resta anche se cambiano gli ingredienti. Concludendo un lotto mai pesato con porzioni
+  segnate, "L'hai finita tutta?": sì → il cotto è la somma di quello mangiato. In entrambi i casi le
+  porzioni già registrate si ricalcolano.
 - `porzioniPreviste` e `prepPorzioni` restano solo per leggere i dati vecchi: non si creano più
   porzioni "a porzioni". Una porzione nuova richiede sempre i grammi.
 - Riepilogo: grammi mangiati, **grammi rimasti** (stima) e **grammi dell'ultima volta**.

@@ -152,3 +152,20 @@ test('voce: senza grammi e senza ultima volta la porzione resta da completare', 
     assert.equal(ing.prepPorzioni, 0);
     assert.equal(valoriPorzione(ing, ragu()).prepDaCompletare, true);
 });
+
+import { pesoCottoDa } from './mealPrep.js';
+
+test('peso del cotto: quello che resta sulla bilancia più quello già segnato', () => {
+    // Ragù dell'utente: 182, 186 e 186 g già segnati, ne restano 300 g
+    const porzioni = [{ prepGrammi: 186 }, { prepGrammi: 186 }, { prepGrammi: 182 }];
+    assert.equal(pesoCottoDa(ragu({ pesoTotaleCotto: 1026 }), porzioni, 300), 854);
+    // Finita: il cotto è quello che si è mangiato
+    assert.equal(pesoCottoDa(ragu({ pesoTotaleCotto: 1026 }), porzioni, 0), 554);
+    assert.equal(pesoCottoDa(ragu(), [], 900), 900);
+});
+
+test('peso del cotto: le porzioni vecchie contano col peso di prima, quelle da completare no', () => {
+    // 1 porzione di 4 su 1200 g = 300 g; la porzione senza grammi né porzioni non conta
+    assert.equal(pesoCottoDa(ragu({ porzioniPreviste: 4 }), [{ prepPorzioni: 1 }, { prepGrammi: 0, prepPorzioni: 0 }, { prepGrammi: 200 }], 100.4), 600);
+    assert.equal(pesoCottoDa(ragu(), [{ prepGrammi: 200 }], undefined), 200);
+});

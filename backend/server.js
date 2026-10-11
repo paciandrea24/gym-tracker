@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import webpush from 'web-push';
 import {
     ricalcolaPasto, totaliDaIngredienti, riepilogoConsumo, senzaCollegamentiPrep, risolviRiferimentiPrep, valoriPorzione,
-    pesoCrudo
+    pesoCrudo, pesoCottoDa
 } from './mealPrep.js';
 import { tokenizza, classificaMatch } from './matching.js';
 import { componiConsigli } from './nutrizionista.js';
@@ -69,7 +69,8 @@ const MealPrepSchema = new mongoose.Schema({
     proteine: { type: Number, default: 0 },
     carboidrati: { type: Number, default: 0 },
     grassi: { type: Number, default: 0 },
-    pesoTotaleCotto: { type: Number, default: 0 },    // 0 = non ancora pesato
+    pesoTotaleCotto: { type: Number, default: 0 },    // peso di riferimento: il crudo, o il cotto se pesato
+    cottoPesato: { type: Boolean, default: false },   // true = pesoTotaleCotto viene dalla bilancia
     porzioniPreviste: { type: Number, default: 0 },   // 0 = non impostato
     attiva: { type: Boolean, default: true },
     dataCreazione: { type: Date, default: Date.now }
@@ -781,17 +782,27 @@ app.post('/api/preps', async (req, res) => {
 });
 
 // Modifica nome, ingredienti o stato: ricalcola i pasti collegati.
-// Il peso del lotto non arriva dal client: quando cambiano gli ingredienti diventa il loro peso crudo.
+// Il peso del lotto: quando cambiano gli ingredienti diventa il loro peso crudo, finché l'utente non
+// pesa il cotto. rimasti (g sulla bilancia) → cotto = rimasti + già segnato; finita → cotto = già segnato.
 app.put('/api/preps/:id', async (req, res) => {
     try {
         const prep = await MealPrep.findById(req.params.id);
         if (!prep) return res.status(404).json({ success: false, error: 'Preparazione non trovata' });
 
-        const { nome, ingredienti, attiva } = req.body;
+        const { nome, ingredienti, attiva, rimasti, finita } = req.body;
         if (typeof nome === 'string' && nome.trim()) prep.nome = nome.trim();
         if (Array.isArray(ingredienti)) {
             prep.ingredienti = senzaCollegamentiPrep(ingredienti);
-            prep.pesoTotaleCotto = pesoCrudo(prep.ingredienti);
+            if (!prep.cottoPesato) prep.pesoTotaleCotto = pesoCrudo(prep.ingredienti);
+        }
+        const sullaBilancia = finita === true ? 0 : (typeof rimasti === 'number' && rimasti >= 0 ? rimasti : null);
+        if (sullaBilancia !== null) {
+            const porzioni = (await porzioniPerPrep([prep._id])).get(String(prep._id));
+            const cotto = pesoCottoDa(prep, porzioni, sullaBilancia);
+            if (cotto > 0) {
+                prep.pesoTotaleCotto = cotto;
+                prep.cottoPesato = true;
+            }
         }
         if (typeof attiva === 'boolean') prep.attiva = attiva;
         aggiornaTotaliLotto(prep);
