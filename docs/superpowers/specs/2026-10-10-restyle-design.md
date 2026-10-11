@@ -304,6 +304,8 @@ della barra in basso.
   differenza dalla pesata prima; le prime 4, le altre con "Mostra tutte (N)".
 - **Una pesata al giorno**: il server aggiorna la pesata di oggi (giorno italiano) invece di
   aggiungerne un'altra; le doppie già salvate si mostrano una per giorno (l'ultima).
+- **Peso e calorie (11 ottobre)**: riquadro "Per mettere massa" sotto "Peso di oggi" e "Settimana
+  per settimana" sotto il grafico; design in `2026-10-11-peso-calorie-design.md`.
 
 Codice: le schermate escono da `HomeView.js` e vanno in `views/homeUi.js`; i calcoli del peso
 (una per giorno, riassunto, righe con la differenza, punti della linea) in `services/pesoLogic.js`
