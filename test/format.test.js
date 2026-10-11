@@ -65,3 +65,13 @@ test('da dove vengono le calorie: percentuali dai grammi (4, 4, 9 kcal) che somm
 test('macro in una riga con i grammi interi', () => {
     assert.equal(macroTesto({ proteine: 104.6, carboidrati: 161.2, grassi: 10.8 }, { breve: true, interi: true }), 'Proteine 105 g · Carbo 161 g · Grassi 11 g');
 });
+
+import { msAllaMezzanotte } from '../public/js/components/format.js';
+
+test('quanto manca alla prossima mezzanotte (ora locale, anche col cambio dell\'ora)', () => {
+    assert.equal(msAllaMezzanotte(new Date(2026, 9, 11, 23, 59, 58)), 2000);
+    assert.equal(msAllaMezzanotte(new Date(2026, 9, 11, 0, 0, 0)), 24 * 60 * 60 * 1000);
+    assert.equal(msAllaMezzanotte(new Date(2026, 9, 31, 12, 0, 0)), 12 * 60 * 60 * 1000);
+    // 25 ottobre: in Italia si torna all'ora solare, il giorno può durare 25 ore
+    assert.equal(msAllaMezzanotte(new Date(2026, 9, 25, 0, 0, 0)), new Date(2026, 9, 26) - new Date(2026, 9, 25));
+});

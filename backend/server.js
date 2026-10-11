@@ -25,6 +25,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '../public')));
+// Le risposte delle API non si tengono in cache (Safari su iPhone): acqua e pasti di oggi devono
+// essere sempre quelli del giorno, anche se l'app è rimasta aperta da ieri
+app.use('/api', (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {

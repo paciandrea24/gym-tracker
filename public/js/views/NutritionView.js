@@ -31,6 +31,8 @@ export class NutritionView {
 
     async render(openAddMeal = false) {
         this.indietroPasto = null;
+        // Giorno preso prima di chiedere i pasti: dopo la mezzanotte app.js ricarica la schermata
+        const giorno = chiaveGiorno(new Date());
         this.container.innerHTML = `<div class="flex items-center justify-center min-h-screen"><p class="text-gray-500 font-bold animate-pulse">Caricamento dati dal server...</p></div>`;
         try {
             const [mealsData, favsData] = await Promise.all([
@@ -43,7 +45,7 @@ export class NutritionView {
             const goals = nutriService.getNutritionGoals();
 
             ui.renderNutritionDashboard(this.container, {
-                mealsData: this.currentMealsData, goals, currentTab: this.currentTab,
+                giorno, mealsData: this.currentMealsData, goals, currentTab: this.currentTab,
                 onTabSwitch: (tab) => { this.currentTab = tab; this.render(); },
                 onMicClick: () => this.handleMicRecord(),
                 onManualClick: () => this.handleManualMealClick(),
@@ -62,7 +64,8 @@ export class NutritionView {
             if (this.currentTab === 'oggi' && mealsData.length > 0) this.caricaChiusure(goals);
             if (openAddMeal) this.handleManualMealClick();
         } catch (error) {
-            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Errore di connessione al database.</div>`;
+            // data-oggi vuoto: quando l'app torna davanti app.js riprova da solo
+            this.container.innerHTML = `<div data-oggi="" class="p-10 text-center mt-20 font-bold text-red-500">Errore di connessione al database.</div>`;
         }
     }
 

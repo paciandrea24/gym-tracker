@@ -24,6 +24,11 @@ let sessione = null;
 // Aspetto originale di ogni pulsante, così un messaggio temporaneo non diventa il nuovo "originale"
 const originali = new WeakMap();
 
+// Vero mentre si registra o si analizza il testo: la schermata sotto non va ridisegnata
+export function inUso() {
+    return !!sessione;
+}
+
 export function isSupported() {
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 }

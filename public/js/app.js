@@ -2,17 +2,50 @@ import { HomeView } from './views/HomeView.js?v=33';
 import { GymView } from './views/GymView.js?v=33';
 import { NutritionView } from './views/NutritionView.js?v=33';
 import { PantryView } from './views/PantryView.js?v=33';
+import { chiaveGiorno, msAllaMezzanotte } from './components/format.js?v=33';
+import * as voice from './components/voice.js?v=33';
 
 const appContainer = document.getElementById('app');
 let currentAppModule = 'home';
 // Numero dell'ultima sezione aperta: una schermata che finisce di caricare dopo un cambio di
 // sezione lo confronta e non disegna sopra quella nuova
 let numeroVista = 0;
+// La sezione aperta (per ricaricarla quando cambia il giorno)
+let vistaCorrente = null;
 
 function init() {
     setupNavigation();
     loadCurrentModule();
+    aspettaMezzanotte();
 }
+
+// ─── NUOVO GIORNO ──────────────────────────────────────────────────────────
+// Le schermate con i dati di oggi (Home, Nutrizione) hanno data-oggi col giorno dei dati. A
+// mezzanotte, o quando l'app torna davanti dopo la mezzanotte (su iPhone resta aperta in
+// sottofondo), si ricaricano: acqua, calorie e pasti ripartono da quelli del giorno nuovo.
+// Non si ridisegna mentre si sta facendo qualcosa (foglio o finestra aperti, voce, fotocamera);
+// le schermate interne non hanno data-oggi e tornando indietro si ricaricano comunque.
+function qualcosaAperto() {
+    const sopra = [...document.body.children].some(el => el.classList.contains('fixed') && el.classList.contains('inset-0'));
+    const fotocamera = document.getElementById('scanner-container');
+    return sopra || voice.inUso() || (!!fotocamera && !fotocamera.classList.contains('hidden'));
+}
+
+function controllaGiorno() {
+    if (document.visibilityState === 'hidden') return;
+    const schermata = appContainer.querySelector('[data-oggi]');
+    if (!schermata || schermata.dataset.oggi === chiaveGiorno(new Date()) || qualcosaAperto()) return;
+    vistaCorrente?.render();
+}
+
+// Qualche secondo dopo la mezzanotte, così anche il server è già nel giorno nuovo
+function aspettaMezzanotte() {
+    setTimeout(() => { controllaGiorno(); aspettaMezzanotte(); }, msAllaMezzanotte() + 3000);
+}
+
+document.addEventListener('visibilitychange', controllaGiorno);
+window.addEventListener('pageshow', controllaGiorno);
+window.addEventListener('focus', controllaGiorno);
 
 function setupNavigation() {
     const navHome = document.getElementById('nav-home');
@@ -55,15 +88,19 @@ async function loadCurrentModule(opzioni = {}) {
             onPalestra: () => switchModule('gym'),
             onSpesa: () => switchModule('pantry', { spesa: true })
         });
+        vistaCorrente = homeView;
         homeView.render();
     } else if (currentAppModule === 'gym') {
         const gymView = new GymView(appContainer);
+        vistaCorrente = gymView;
         gymView.render();
     } else if (currentAppModule === 'nutrition') {
         const nutritionView = new NutritionView(appContainer);
+        vistaCorrente = nutritionView;
         nutritionView.render();
     } else if (currentAppModule === 'pantry') {
         const pantryView = new PantryView(appContainer);
+        vistaCorrente = pantryView;
         await pantryView.render();
         if (opzioni.spesa) pantryView.showShoppingList();
     }

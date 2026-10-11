@@ -65,6 +65,12 @@ export function chiaveGiorno(data) {
     return `${d.getFullYear()}-${due(d.getMonth() + 1)}-${due(d.getDate())}`;
 }
 
+// Millisecondi alla prossima mezzanotte (anche nei giorni di 23 o 25 ore del cambio dell'ora)
+export function msAllaMezzanotte(ora = new Date()) {
+    const mezzanotte = new Date(ora.getFullYear(), ora.getMonth(), ora.getDate() + 1);
+    return mezzanotte - ora;
+}
+
 // Lunedì della settimana del giorno
 export function lunediDi(chiave) {
     const d = daChiave(chiave);

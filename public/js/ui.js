@@ -109,7 +109,8 @@ function quantitaIngrediente(ing) {
 }
 
 // --- RENDER NUTRIZIONE (LIVE SCANNER E CAROSELLO) ---
-export function renderNutritionDashboard(container, { mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAskAI, onDailyHistoryClick, onExportCSV }) {
+// giorno ('YYYY-MM-DD' dei dati) va in data-oggi: dopo la mezzanotte app.js ricarica la schermata
+export function renderNutritionDashboard(container, { giorno, mealsData, goals, currentTab, onTabSwitch, onMicClick, onManualClick, onEditGoals, onMealClick, onScanClick, onCloseScanner, onAskAI, onDailyHistoryClick, onExportCSV }) {
     let contentHtml = '';
 
     if (currentTab === 'oggi') {
@@ -223,7 +224,7 @@ export function renderNutritionDashboard(container, { mealsData, goals, currentT
             </div>
         </header>
         
-        <main class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
+        <main data-oggi="${giorno}" class="p-4 space-y-4 pb-24 safe-pb bg-gray-50">
             ${contentHtml}
         </main>
     `;
