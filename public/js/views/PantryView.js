@@ -1,23 +1,31 @@
 // public/js/views/PantryView.js
 // Dispensa: dati, chiamate al server e flussi. Il disegno è in pantryUi.js, i calcoli in pantryLogic.js.
 
-import * as pantryService from '../services/pantryService.js?v=35';
-import * as scanner from '../components/scanner.js?v=35';
-import * as modal from '../components/modal.js?v=35';
-import { intero } from '../components/format.js?v=35';
-import * as pantryUi from './pantryUi.js?v=35';
-import { rifornimento, correzioneGrammi, trovaEsistente, pesoConfezioneOFF } from '../services/pantryLogic.js?v=35';
-import { showToast } from '../services/pantrySync.js?v=35';
+import * as pantryService from '../services/pantryService.js?v=36';
+import * as scanner from '../components/scanner.js?v=36';
+import * as modal from '../components/modal.js?v=36';
+import { intero } from '../components/format.js?v=36';
+import * as pantryUi from './pantryUi.js?v=36';
+import { rifornimento, correzioneGrammi, trovaEsistente, pesoConfezioneOFF } from '../services/pantryLogic.js?v=36';
+import { showToast } from '../services/pantrySync.js?v=36';
 
 const ERRORE_RETE = { type: 'error', title: 'Non salvato', message: 'Controlla la connessione e riprova.' };
 
 export class PantryView {
     constructor(container) {
         this.container = container;
+        this.vista = container.dataset.vista;
         this.items = [];
     }
 
+    // Vero se nel frattempo è stata aperta un'altra sezione (vedi numeroVista in app.js): una risposta
+    // arrivata tardi dal server non deve disegnare sopra la sezione nuova. I salvataggi si fanno lo stesso.
+    get superata() {
+        return this.container.dataset.vista !== this.vista;
+    }
+
     async render() {
+        if (this.superata) return;
         this.container.innerHTML = `
             <div class="flex justify-center items-center min-h-screen">
                 <p class="animate-pulse font-bold text-gray-500">Caricamento...</p>
@@ -25,9 +33,11 @@ export class PantryView {
         try {
             this.items = await pantryService.getPantryItems();
         } catch (e) {
+            if (this.superata) return;
             this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Non riesco a caricare la dispensa. Controlla la connessione.</div>`;
             return;
         }
+        if (this.superata) return;
         pantryUi.renderDispensa(this.container, this.items, {
             onApri: (id) => this.showProdotto(id),
             onDaComprare: () => this.showShoppingList(),
@@ -59,6 +69,7 @@ export class PantryView {
         const item = this.items.find(i => String(i._id) === String(itemId));
         if (!item) return this.render();
         const utilizzi = await pantryService.getPantryItemUsage(itemId).catch(() => []);
+        if (this.superata) return;
         pantryUi.renderProdotto(this.container, item, Array.isArray(utilizzi) ? utilizzi : [], {
             onIndietro: () => this.render(),
             onAggiungiConfezioni: () => pantryUi.apriFoglioConfezioni(item, (n, g) =>
@@ -87,6 +98,7 @@ export class PantryView {
 
     // ─── DA COMPRARE ────────────────────────────────────────────────────────────
     showShoppingList() {
+        if (this.superata) return;
         pantryUi.renderDaComprare(this.container, this.items, {
             onIndietro: () => this.render(),
             onMetti: async (scelte) => {
@@ -117,6 +129,7 @@ export class PantryView {
             return modal.showModal({ type: 'error', title: 'Codice non cercato', message: 'Non riesco a cercare il codice. Controlla la connessione.' });
         }
         chiudiAvviso();
+        if (this.superata) return;
         if (data?.status !== 1) {
             const ok = await modal.showModal({ type: 'confirm', title: 'Codice non trovato', message: `Il codice ${codice} non è su Open Food Facts. Scrivi tu i dati: lo aggiungo alla dispensa e anche lì.`, confirmText: 'Scrivo i dati', cancelText: 'Annulla' });
             if (ok) this.apriAMano({ codiceOFF: codice, confezioni });

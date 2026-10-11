@@ -2,11 +2,11 @@
 // Schermate della Home (restyle 6/6): riassunto della giornata con riquadri che portano alle
 // sezioni (niente pulsante nero) e pagina del Peso. Solo disegno ed eventi: i dati li carica HomeView.
 
-import { icona } from '../components/icons.js?v=35';
-import { chiaveGiorno, nomeGiorno } from '../components/format.js?v=35';
-import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=35';
-import * as modal from '../components/modal.js?v=35';
-import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=35';
+import { icona } from '../components/icons.js?v=36';
+import { chiaveGiorno, nomeGiorno } from '../components/format.js?v=36';
+import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=36';
+import * as modal from '../components/modal.js?v=36';
+import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=36';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);

@@ -2,7 +2,7 @@
 // Calcoli puri del peso (niente DOM né rete): una pesata per giorno, riassunto per la Home,
 // righe dello storico con la differenza, punti della linea dell'andamento. Testati con node:test.
 
-import { chiaveGiorno, nomeGiorno, decimale } from '../components/format.js?v=35';
+import { chiaveGiorno, nomeGiorno, decimale } from '../components/format.js?v=36';
 
 const numero = (v) => parseFloat(String(v ?? '').replace(',', '.')) || 0;
 const unDecimale = (v) => Math.round(v * 10) / 10;

@@ -1,15 +1,16 @@
 // public/js/views/GymView.js
 
-import * as gymService from '../services/gymService.js?v=35';
-import * as modal from '../components/modal.js?v=35';
-import * as userService from '../services/userService.js?v=35';
-import * as gymUi from './gymUi.js?v=35';
-import { elementiDaFare, nuovoDrop, pulisciSerie, serieIniziali, salvaGiro, modificaGiro, recuperoBlocco, progressiEsercizio, righeCsv } from '../services/gymLogic.js?v=35';
-import { exportToCSV } from '../utils.js?v=35';
+import * as gymService from '../services/gymService.js?v=36';
+import * as modal from '../components/modal.js?v=36';
+import * as userService from '../services/userService.js?v=36';
+import * as gymUi from './gymUi.js?v=36';
+import { elementiDaFare, nuovoDrop, pulisciSerie, serieIniziali, salvaGiro, modificaGiro, recuperoBlocco, progressiEsercizio, righeCsv } from '../services/gymLogic.js?v=36';
+import { exportToCSV } from '../utils.js?v=36';
 
 export class GymView {
     constructor(container) {
         this.container = container;
+        this.vista = container.dataset.vista;
         this.currentRoutineId = null;
         this.currentTab = 'scheda';
         this.currentExercise = null;
@@ -17,6 +18,12 @@ export class GymView {
         this.currentLastSession = null;
         this.recoveryInterval = null;
         this.recoveryRemaining = 0;
+    }
+
+    // Vero se nel frattempo è stata aperta un'altra sezione (vedi numeroVista in app.js): una risposta
+    // arrivata tardi dal server non deve disegnare sopra la sezione nuova
+    get superata() {
+        return this.container.dataset.vista !== this.vista;
     }
 
     async render() {
@@ -30,8 +37,10 @@ export class GymView {
     }
 
     async showRoutinesList() {
+        if (this.superata) return;
         this.container.innerHTML = `<div class="flex justify-center items-center min-h-screen"><p class="animate-pulse">Caricamento...</p></div>`;
         const [routines, storico] = await Promise.all([gymService.getRoutines(), gymService.getAllHistory()]);
+        if (this.superata) return;
         const ultimi = {};
         for (const h of Array.isArray(storico) ? storico : []) {
             if (!ultimi[h.routineId] || h.endTime > ultimi[h.routineId]) ultimi[h.routineId] = h.endTime;
@@ -90,11 +99,13 @@ export class GymView {
     }
 
     async showDashboard() {
+        if (this.superata) return;
         this.container.innerHTML = `<div class="flex justify-center items-center min-h-screen"><p class="animate-pulse">Caricamento...</p></div>`;
         const routine = await gymService.getRoutine(this.currentRoutineId);
         if (!routine) return this.showRoutinesList();
 
         const history = await gymService.getHistoryForRoutine(this.currentRoutineId);
+        if (this.superata) return;
         gymUi.renderScheda(this.container, routine, history, this.currentTab, {
             onTab: (tab) => { this.currentTab = tab; this.showDashboard(); },
             onInizia: () => this.handleStartSession(),
@@ -143,6 +154,7 @@ export class GymView {
     async showActiveSession() {
         const session = gymService.getActiveSession();
         const routine = await gymService.getRoutine(this.currentRoutineId);
+        if (this.superata) return;
         if (!session || !routine) return this.showRoutinesList();
         gymUi.renderAllenamento(this.container, session, routine, elementiDaFare(session), {
             onApri: (el) => el.tipo === 'superserie' ? this.handleOpenSuperserie(el.ids) : this.handleOpenExercise(el.id),
@@ -166,6 +178,7 @@ export class GymView {
             ultimeVolte[ex.id] = await gymService.getLastSession(this.currentRoutineId, ex.id);
             setsPerId[ex.id] = serieIniziali(ex, ultimeVolte[ex.id], bozza[ex.id]);
         }
+        if (this.superata) return;
         this.superserie = { chiave, esercizi, setsPerId, ultimeVolte };
         this.renderSuperserieUI();
     }
@@ -226,6 +239,7 @@ export class GymView {
         const session = gymService.getActiveSession();
         const draft = gymService.getDraft(exerciseId);
         this.currentLastSession = await gymService.getLastSession(this.currentRoutineId, exerciseId);
+        if (this.superata) return;
 
         const completedEx = session.completed.find(e => String(e.exerciseId) === String(exerciseId));
         this.currentSessionData = completedEx
@@ -297,6 +311,7 @@ export class GymView {
         const esercizio = routine?.exercises.find(ex => String(ex.id) === String(exerciseId));
         if (!esercizio) return;
         const progressi = progressiEsercizio(await gymService.getHistoryForRoutine(this.currentRoutineId), esercizio);
+        if (this.superata) return;
         if (progressi.allenamenti === 0) {
             await modal.showModal({ type: 'alert', title: 'Progressi', message: 'Ancora nessun allenamento salvato con questo esercizio.' });
             return;

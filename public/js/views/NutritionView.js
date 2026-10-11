@@ -1,17 +1,17 @@
 // public/js/views/NutritionView.js
 
-import * as nutriService from '../services/nutriService.js?v=35';
-import * as scanner from '../components/scanner.js?v=35';
-import * as modal from '../components/modal.js?v=35';
-import * as voice from '../components/voice.js?v=35';
-import * as ui from '../ui.js?v=35';
-import { exportToCSV } from '../utils.js?v=35';
-import * as pantryService from '../services/pantryService.js?v=35';
-import * as pantrySync from '../services/pantrySync.js?v=35';
-import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=35';
-import { renderChiusuraGiornata } from '../components/dayClosure.js?v=35';
-import { apriFoglio } from '../components/sheet.js?v=35';
-import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=35';
+import * as nutriService from '../services/nutriService.js?v=36';
+import * as scanner from '../components/scanner.js?v=36';
+import * as modal from '../components/modal.js?v=36';
+import * as voice from '../components/voice.js?v=36';
+import * as ui from '../ui.js?v=36';
+import { exportToCSV } from '../utils.js?v=36';
+import * as pantryService from '../services/pantryService.js?v=36';
+import * as pantrySync from '../services/pantrySync.js?v=36';
+import { MealPrepView, openPortionSheet } from './MealPrepView.js?v=36';
+import { renderChiusuraGiornata } from '../components/dayClosure.js?v=36';
+import { apriFoglio } from '../components/sheet.js?v=36';
+import { intero, macroTesto, chiaveGiorno } from '../components/format.js?v=36';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -22,6 +22,7 @@ let vistaAttiva = null;
 export class NutritionView {
     constructor(container) {
         this.container = container;
+        this.vista = container.dataset.vista;
         this.currentTab = 'oggi';
         this.currentMealsData = [];
         this.currentFavorites = [];
@@ -29,7 +30,14 @@ export class NutritionView {
         vistaAttiva = this;
     }
 
+    // Vero se nel frattempo è stata aperta un'altra sezione (vedi numeroVista in app.js): una risposta
+    // arrivata tardi dal server non deve disegnare sopra la sezione nuova. I salvataggi si fanno lo stesso.
+    get superata() {
+        return this.container.dataset.vista !== this.vista;
+    }
+
     async render(openAddMeal = false) {
+        if (this.superata) return;
         this.indietroPasto = null;
         // Giorno preso prima di chiedere i pasti: dopo la mezzanotte app.js ricarica la schermata
         const giorno = chiaveGiorno(new Date());
@@ -39,6 +47,7 @@ export class NutritionView {
                 this.currentTab === 'oggi' ? nutriService.getTodayMeals() : nutriService.getHistoryMeals(),
                 nutriService.getFavorites()
             ]);
+            if (this.superata) return;
 
             this.currentMealsData = mealsData;
             this.currentFavorites = favsData;
@@ -64,6 +73,7 @@ export class NutritionView {
             if (this.currentTab === 'oggi' && mealsData.length > 0) this.caricaChiusure(goals);
             if (openAddMeal) this.handleManualMealClick();
         } catch (error) {
+            if (this.superata) return;
             // data-oggi vuoto: quando l'app torna davanti app.js riprova da solo
             this.container.innerHTML = `<div data-oggi="" class="p-10 text-center mt-20 font-bold text-red-500">Errore di connessione al database.</div>`;
         }
@@ -154,6 +164,7 @@ export class NutritionView {
 
     // indietro: dove torna la freccia (es. il giorno dello storico); resta valido mentre si modifica il pasto
     handleMealClick(mealId, indietro) {
+        if (this.superata) return;
         if (indietro) this.indietroPasto = indietro;
         const meal = this.currentMealsData.find(m => String(m._id) === String(mealId));
         if (meal) {
@@ -208,7 +219,7 @@ export class NutritionView {
         meal.alimenti = meal.ingredienti.map(i => i.nome).join(', ') || "Pasto Vuoto";
 
         try {
-            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Aggiornamento in corso...</div>`;
+            if (!this.superata) this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Aggiornamento in corso...</div>`;
             const response = await nutriService.updateMeal(mealId, meal);
             this.sostituisciPasto(response.meal);
             this.handleMealClick(mealId);
@@ -581,7 +592,7 @@ export class NutritionView {
         ing.grassi = newFat;
 
         try {
-            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Ricalcolo valori...</div>`;
+            if (!this.superata) this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse">Ricalcolo valori...</div>`;
             const response = await nutriService.updateMeal(mealId, meal);
             this.sostituisciPasto(response.meal);
             this.handleMealClick(mealId);

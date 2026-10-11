@@ -3,17 +3,17 @@
 // Si pesano gli ingredienti crudi e, ogni giorno, i grammi che si mangiano. Il cotto si considera
 // pesante quanto il crudo (stima scelta dall'utente): niente pentola da pesare, niente porzioni.
 
-import * as prepService from '../services/mealPrepService.js?v=35';
-import * as nutriService from '../services/nutriService.js?v=35';
-import * as pantryService from '../services/pantryService.js?v=35';
-import * as pantrySync from '../services/pantrySync.js?v=35';
-import * as scanner from '../components/scanner.js?v=35';
-import * as voice from '../components/voice.js?v=35';
-import * as modal from '../components/modal.js?v=35';
-import * as ui from '../ui.js?v=35';
-import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=35';
-import { apriFoglio } from '../components/sheet.js?v=35';
-import { icona } from '../components/icons.js?v=35';
+import * as prepService from '../services/mealPrepService.js?v=36';
+import * as nutriService from '../services/nutriService.js?v=36';
+import * as pantryService from '../services/pantryService.js?v=36';
+import * as pantrySync from '../services/pantrySync.js?v=36';
+import * as scanner from '../components/scanner.js?v=36';
+import * as voice from '../components/voice.js?v=36';
+import * as modal from '../components/modal.js?v=36';
+import * as ui from '../ui.js?v=36';
+import { intero, macroColonne, macroTesto, perCento } from '../components/format.js?v=36';
+import { apriFoglio } from '../components/sheet.js?v=36';
+import { icona } from '../components/icons.js?v=36';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const leggiNumero = (v) => parseFloat(String(v).replace(',', '.')) || 0;
@@ -94,11 +94,19 @@ const comePasto = (prep, ingredienti) => ({ _id: null, pasto: 'Meal prep', alime
 export class MealPrepView {
     constructor(container, onBack) {
         this.container = container;
+        this.vista = container.dataset.vista;
         this.onBack = onBack;
         this.prep = null;
     }
 
+    // Vero se nel frattempo è stata aperta un'altra sezione (vedi numeroVista in app.js): una risposta
+    // arrivata tardi dal server non deve disegnare sopra la sezione nuova. I salvataggi si fanno lo stesso.
+    get superata() {
+        return this.container.dataset.vista !== this.vista;
+    }
+
     loading(testo) {
+        if (this.superata) return;
         this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold animate-pulse text-gray-500">${testo}</div>`;
     }
 
@@ -121,9 +129,10 @@ export class MealPrepView {
             preps = await prepService.listPreps('tutte');
             if (!Array.isArray(preps)) throw new Error();
         } catch (e) {
-            this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Errore di connessione al server.</div>`;
+            if (!this.superata) this.container.innerHTML = `<div class="p-10 text-center mt-20 font-bold text-red-500">Errore di connessione al server.</div>`;
             return;
         }
+        if (this.superata) return;
         const attive = preps.filter(p => p.attiva);
         const concluse = preps.filter(p => !p.attiva);
 
@@ -216,6 +225,7 @@ export class MealPrepView {
     }
 
     drawDetail() {
+        if (this.superata) return;
         const p = this.prep;
         const vuota = p.ingredienti.length === 0;
         this.container.innerHTML = `
@@ -412,6 +422,7 @@ export class MealPrepView {
     async handleFavorites() {
         this.loading('Caricamento preferiti...');
         const preferiti = await nutriService.getFavorites();
+        if (this.superata) return;
         ui.renderFavoritesPage(this.container, preferiti, () => this.drawDetail(), async (favId) => {
             const fav = preferiti.find(f => String(f._id) === String(favId));
             if (!fav) return;
