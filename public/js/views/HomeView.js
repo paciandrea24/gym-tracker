@@ -1,14 +1,14 @@
 // public/js/views/HomeView.js
 // Home: carica i dati della giornata e collega i riquadri alle sezioni. Il disegno è in homeUi.js.
 
-import * as userService from '../services/userService.js?v=34';
-import * as nutriService from '../services/nutriService.js?v=34';
-import * as gymService from '../services/gymService.js?v=34';
-import * as pantryService from '../services/pantryService.js?v=34';
-import { daComprare } from '../services/pantryLogic.js?v=34';
-import * as homeUi from './homeUi.js?v=34';
-import * as modal from '../components/modal.js?v=34';
-import { chiaveGiorno } from '../components/format.js?v=34';
+import * as userService from '../services/userService.js?v=35';
+import * as nutriService from '../services/nutriService.js?v=35';
+import * as gymService from '../services/gymService.js?v=35';
+import * as pantryService from '../services/pantryService.js?v=35';
+import { daComprare } from '../services/pantryLogic.js?v=35';
+import * as homeUi from './homeUi.js?v=35';
+import * as modal from '../components/modal.js?v=35';
+import { chiaveGiorno } from '../components/format.js?v=35';
 
 export class HomeView {
     // navigazione: { onNutrizione, onPalestra, onSpesa } (le passa app.js)
@@ -74,12 +74,12 @@ export class HomeView {
         });
     }
 
-    // Si disegna subito e si salva dopo. Con i dati di ieri (app rimasta aperta oltre la mezzanotte)
+    // Si aggiorna subito la card e si salva dopo. Con i dati di ieri (app rimasta aperta oltre la mezzanotte)
     // non si salva niente: si ricarica la Home e l'acqua riparte da quella di oggi.
     cambiaAcqua(bicchieri) {
         if (this.dati.giorno !== chiaveGiorno(new Date())) return this.render();
         this.dati.bicchieri = bicchieri;
-        this.disegna();
+        homeUi.aggiornaAcqua(this.container, bicchieri);
         this.salvaAcqua();
     }
 

@@ -12,8 +12,8 @@
 //   prima si chiudeva dopo 1,5 s scartando tutto in silenzio. Ora senza testo si aspetta di più e,
 //   se non arriva niente, il pulsante lo dice.
 
-import * as modal from './modal.js?v=34';
-import { icona } from './icons.js?v=34';
+import * as modal from './modal.js?v=35';
+import { icona } from './icons.js?v=35';
 
 const MAX_DURATA_MS = 60000;
 const ATTESA_FINE_MS = 1500;      // testo già arrivato: quanto aspettare "onend" prima di chiudere noi

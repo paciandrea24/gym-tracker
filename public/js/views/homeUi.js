@@ -2,11 +2,11 @@
 // Schermate della Home (restyle 6/6): riassunto della giornata con riquadri che portano alle
 // sezioni (niente pulsante nero) e pagina del Peso. Solo disegno ed eventi: i dati li carica HomeView.
 
-import { icona } from '../components/icons.js?v=34';
-import { chiaveGiorno, nomeGiorno } from '../components/format.js?v=34';
-import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=34';
-import * as modal from '../components/modal.js?v=34';
-import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=34';
+import { icona } from '../components/icons.js?v=35';
+import { chiaveGiorno, nomeGiorno } from '../components/format.js?v=35';
+import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=35';
+import * as modal from '../components/modal.js?v=35';
+import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=35';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -65,7 +65,7 @@ export function renderHome(container, dati, { onNutrizione, onPalestra, onPeso, 
             <div id="home-water-card" class="bg-white rounded-[20px] border border-gray-100 shadow-sm p-4">
                 <div class="flex justify-between items-baseline">
                     <p class="text-[15px] font-black text-gray-900">Acqua</p>
-                    <p class="text-[13px] font-bold text-gray-400"><b class="text-gray-900">${ml} ml</b> di 2 l</p>
+                    <p class="text-[13px] font-bold text-gray-400"><b class="acqua-ml text-gray-900">${ml} ml</b> di 2 l</p>
                 </div>
                 <div class="flex justify-between mt-3">${gocce}</div>
                 <div class="flex items-center justify-between gap-3 mt-3">
@@ -114,6 +114,19 @@ export function renderHome(container, dati, { onNutrizione, onPalestra, onPeso, 
     }));
     document.getElementById('water-minus-btn').addEventListener('click', () => onAcqua(Math.max(0, dati.bicchieri - 1)));
     document.getElementById('water-plus-btn').addEventListener('click', () => onAcqua(dati.bicchieri + 1));
+}
+
+// Dopo + / − / goccia cambiano solo i ml, le gocce e il −, senza ridisegnare la Home:
+// il pulsante sotto il dito resta lo stesso (come i + e − di Palestra e Dispensa)
+export function aggiornaAcqua(container, bicchieri) {
+    const card = container.querySelector('#home-water-card');
+    if (!card) return;
+    card.querySelector('.acqua-ml').textContent = `${bicchieri * ML_BICCHIERE} ml`;
+    card.querySelectorAll('.water-drop-btn').forEach((b, i) => {
+        b.classList.toggle('text-blue-400', i < bicchieri);
+        b.classList.toggle('text-gray-200', i >= bicchieri);
+    });
+    card.querySelector('#water-minus-btn').disabled = !bicchieri;
 }
 
 // ─── PESO ──────────────────────────────────────────────────────────────────

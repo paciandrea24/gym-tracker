@@ -1,6 +1,6 @@
 // public/js/services/gymService.js
 
-import { unisciSuperserie as unisci, separaSuperserie as separa, completaSuperserie as completa, completaEsercizio } from './gymLogic.js?v=34';
+import { unisciSuperserie as unisci, separaSuperserie as separa, completaSuperserie as completa, completaEsercizio } from './gymLogic.js?v=35';
 
 export async function getRoutines() {
     try { const res = await fetch('/api/gym/routines'); return await res.json(); } catch (e) { return []; }

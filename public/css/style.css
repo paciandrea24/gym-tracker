@@ -36,6 +36,13 @@ img {
     -webkit-user-drag: none;
 }
 
+/* Niente "doppio tocco per ingrandire" di iPhone: toccando due volte di fila un pulsante (+ e −)
+   Safari provava a ingrandire e, con lo zoom bloccato, spostava la pagina. Restano lo
+   scorrimento e lo zoom con due dita. */
+html, button, a, input, label, select, textarea {
+    touch-action: manipulation;
+}
+
 /* SCROLL NATIVO IOS: Nessun blocco "fixed" o "overflow: hidden" */
 body {
     background-color: #f9fafb;
