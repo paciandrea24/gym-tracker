@@ -32,6 +32,11 @@ pesate (`unaPerGiorno`: l'ultima del giorno) e `oggi`.
   vuoto. Con il ripiego si dice anche quanti giorni mancano perché il periodo attuale sia pronto:
   il massimo tra i giorni con pasti e quelli con pesata che mancano a 14.
 - Nessun periodo pronto: si dice quanti giorni mancano.
+- **Dopo una pausa** (aggiunto l'11 ottobre): la prima settimana dopo almeno 14 giorni senza
+  pesate non conta, né i pasti né le pesate. Il peso che risale subito è acqua e glicogeno: ai
+  primi di ottobre +1,2 kg in 6 giorni, che con 14 giorni di dati la stima leggeva come circa 500
+  kcal al giorno in più (mantenimento ~1600–1900 invece che ~2100–2400). Finché quella settimana è
+  nelle ultime 4, il riquadro lo dice. "Dal" è il primo giorno con dati, non l'inizio del periodo.
 
 **Settimana per settimana** (dal lunedì): per ogni settimana con pasti o pesate, la media delle
 calorie dei giorni con pasti (oggi escluso), il peso medio delle pesate (oggi compreso), la

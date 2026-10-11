@@ -17,6 +17,7 @@ test('stima: 2500 kcal al giorno e +0,25 kg a settimana → mantenimento 2225, p
     assert.equal(Math.round(s.kgSettimana * 100) / 100, 0.25);
     assert.equal(Math.round(s.mantenimento), 2225);
     assert.equal(Math.round(s.perMassa), 2500);
+    assert.equal(s.dopoPausa, false);
 });
 
 test('stima: pesate che oscillano di mezzo chilo non spostano il mantenimento di molto', () => {
@@ -31,18 +32,44 @@ test('stima: i pasti di oggi non contano (anche segnati in anticipo)', () => {
 });
 
 test('stima: pochi giorni e nessun periodo pronto → quanti giorni mancano', () => {
-    assert.deepEqual(stimaMantenimento(pasti(6, 1, 2400), pesate(5, 1, () => 62), oggi), { nessuna: true, mancano: 9 });
+    assert.deepEqual(stimaMantenimento(pasti(6, 1, 2400), pesate(5, 1, () => 62), oggi), { nessuna: true, mancano: 9, dopoPausa: false });
 });
 
 test('stima: dopo una pausa si usa l\'ultimo periodo pronto, che finisce in un giorno con pasti', () => {
     // Pasti da 110 a 83 giorni fa (28 giorni), pesate fino a 80 giorni fa; poi pausa; ultimi 6 giorni
+    // (la prima settimana dopo la pausa non conta: mancano tutti i 14 giorni)
     const g = [...pasti(110, 83, 2300), ...pasti(6, 1, 2400)];
     const p = [...pesate(110, 80, () => 63), ...pesate(5, 1, () => 61.5)];
     const s = stimaMantenimento(g, p, oggi);
     assert.equal(s.attuale, false);
     assert.equal(s.a, k(giornoFa(83)));
-    assert.equal(s.mancano, 9);
+    assert.equal(s.mancano, 14);
+    assert.equal(s.dopoPausa, true);
     assert.equal(Math.round(s.mantenimento), 2300);
+});
+
+test('stima: la prima settimana dopo una pausa non conta (il peso risale per acqua e glicogeno)', () => {
+    // Pesate a luglio, poi 2 mesi di pausa; si riparte 27 giorni fa: +1,2 kg nei primi 6 giorni,
+    // poi +0,25 kg a settimana mangiando 2400 kcal
+    const g = [...pasti(110, 83, 2300), ...pasti(27, 1, 2400)];
+    const p = [...pesate(110, 80, () => 63),
+        ...pesate(27, 21, (n) => 60.7 + (27 - n) * 0.2),
+        ...pesate(20, 1, (n) => 61.9 + (20 - n) * 0.25 / 7)];
+    const s = stimaMantenimento(g, p, oggi);
+    assert.equal(s.attuale, true);
+    assert.equal(s.dopoPausa, true);
+    assert.equal(s.da, k(giornoFa(20)));           // il primo giorno che conta, non l'inizio delle 4 settimane
+    assert.equal(Math.round(s.kgSettimana * 100) / 100, 0.25);
+    assert.equal(Math.round(s.mantenimento), 2125);
+    assert.equal(Math.round(s.perMassa), 2400);
+});
+
+test('stima: qualche giorno senza pesate non è una pausa', () => {
+    const p = [...pesate(28, 15, (n) => 60 + (28 - n) * 0.25 / 7), ...pesate(5, 1, (n) => 60 + (28 - n) * 0.25 / 7)];
+    const s = stimaMantenimento(pasti(28, 1, 2500), p, oggi);
+    assert.equal(s.dopoPausa, false);
+    assert.equal(s.da, '2026-09-13');
+    assert.equal(Math.round(s.perMassa), 2500);
 });
 
 test('settimane: media senza oggi, peso con oggi, in corso, differenza solo con la settimana subito prima', () => {

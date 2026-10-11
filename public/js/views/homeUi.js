@@ -2,12 +2,12 @@
 // Schermate della Home (restyle 6/6): riassunto della giornata con riquadri che portano alle
 // sezioni (niente pulsante nero) e pagina del Peso. Solo disegno ed eventi: i dati li carica HomeView.
 
-import { icona } from '../components/icons.js?v=39';
-import { chiaveGiorno, nomeGiorno, nomeSettimana, intero } from '../components/format.js?v=39';
-import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=39';
-import * as modal from '../components/modal.js?v=39';
-import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=39';
-import { stimaMantenimento, settimane, KG_SETTIMANA } from '../services/massaLogic.js?v=39';
+import { icona } from '../components/icons.js?v=40';
+import { chiaveGiorno, nomeGiorno, nomeSettimana, intero } from '../components/format.js?v=40';
+import { riquadroRiepilogo, totaliPasti } from '../ui.js?v=40';
+import * as modal from '../components/modal.js?v=40';
+import { unaPerGiorno, riassuntoPeso, righePesate, puntiLinea, segno, pesoScritto } from '../services/pesoLogic.js?v=40';
+import { stimaMantenimento, settimane, KG_SETTIMANA } from '../services/massaLogic.js?v=40';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const minuscola = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -148,8 +148,9 @@ function riquadroMassa(stima, obiettivo, oggiK) {
             <h3 class="text-[15px] font-black text-gray-900">Per mettere massa</h3>
             ${destra ? `<span class="text-[11px] font-bold text-gray-400">${destra}</span>` : ''}
         </div>`;
+    const pausa = stima.dopoPausa ? nota('La prima settimana dopo una pausa non conta: il peso che risale subito è acqua e glicogeno, non massa.') : '';
     if (stima.nessuna) {
-        return `<div id="riquadro-massa" class="${CARTA}">${titolo('')}${nota(`Servono 14 giorni di pasti e di pesate per stimare il tuo mantenimento: ne mancano circa ${stima.mancano}.`)}</div>`;
+        return `<div id="riquadro-massa" class="${CARTA}">${titolo('')}${nota(`Servono 14 giorni di pasti e di pesate per stimare il tuo mantenimento: ne mancano circa ${stima.mancano}.`)}${pausa}</div>`;
     }
     const massa = dieci(stima.perMassa);
     const colonna = (etichetta, colore, kcal) => `
@@ -169,6 +170,7 @@ function riquadroMassa(stima, obiettivo, oggiK) {
                 <button id="usa-obiettivo-btn" data-kcal="${massa}" class="mt-3 w-full bg-white border border-gray-200 text-gray-800 font-bold text-[14px] py-3 rounded-xl active:scale-95 transition-transform">Usa ${massa} kcal come obiettivo</button>
                 ${nota(`Il tuo obiettivo adesso è ${obiettivo} kcal.`)}` : nota('È il tuo obiettivo di calorie.')}
             ${stima.attuale ? '' : nota(`Fra circa ${stima.mancano} giorni di pasti e pesate la stima si aggiorna con i dati di ${meseDi(oggiK)}.`)}
+            ${pausa}
         </div>`;
 }
 
