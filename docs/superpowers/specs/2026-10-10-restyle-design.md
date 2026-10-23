@@ -99,6 +99,11 @@ Approvata con l'anteprima https://claude.ai/artifact/QrvGkG3QGF5hQSGu8dcNUN (pi�
   contatore nascosto, solo sul telefono (localStorage `usoPreferiti`, per nome; niente sul server),
   conta pasto nuovo, aggiunta a un pasto e ingrediente del meal prep; a parità, il più nuovo prima
   (`services/preferitiLogic.js`).
+- **Voce (23 ottobre)**: niente più dettatura di Safari (su iPhone andava solo la prima volta): il
+  telefono registra l'audio (MediaRecorder, iPhone audio/mp4), spegne il microfono e lo manda al
+  server; Gemini lo ascolta, lo trascrive e calcola il pasto in una sola richiesta. Stesso pulsante
+  e stessi messaggi; un tocco e subito stop dice "Non ho sentito nulla, riprova". Se Gemini non capisce
+  nessun alimento: "Non ho capito cosa hai mangiato: riprova."
 - **Come ieri (23 ottobre)**: si propone il giorno simile più recente i cui pasti portano oggi
   all'obiettivo di calorie (fino a 50 kcal sotto; sopra va bene, l'utente mette massa); se nessuno
   ci arriva, quello che ci va più vicino. "Chiuderesti a X" non è più rosso sopra l'obiettivo.

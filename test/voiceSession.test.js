@@ -1,27 +1,31 @@
 import { test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-// Riconoscitore finto che imita Safari su iPhone: comportamento configurabile per test
-class FintoRiconoscitore {
+// Registratore e microfono finti, come su iPhone: audio/mp4, il registratore consegna l'audio dopo lo stop
+class FintoRegistratore {
     static istanze = [];
-    static comportamento = {};
-    constructor() { FintoRiconoscitore.istanze.push(this); }
-    start() { }
-    stop() {
-        const { testoDopoStopMs, testo } = FintoRiconoscitore.comportamento;
-        if (testoDopoStopMs != null) {
-            setTimeout(() => {
-                this.onresult?.(evento([testo]));
-                this.onend?.();
-            }, testoDopoStopMs);
-        }
+    static formati = ['audio/mp4', 'audio/webm'];
+    static isTypeSupported(f) { return FintoRegistratore.formati.includes(f); }
+    constructor(stream, opzioni = {}) {
+        this.stream = stream;
+        this.mimeType = opzioni.mimeType || 'audio/webm';
+        FintoRegistratore.istanze.push(this);
     }
-    abort() { setTimeout(() => { this.onerror?.({ error: 'aborted' }); this.onend?.(); }, 10); }
-    parla(testo) { this.onresult?.(evento([testo])); }
+    start() { this.avviato = true; }
+    stop() {
+        const n = FintoRegistratore.istanze.indexOf(this) + 1;
+        setTimeout(() => {
+            this.ondataavailable?.({ data: new Blob([`audio-${n}`], { type: this.mimeType }) });
+            this.onstop?.();
+        }, 50);
+    }
 }
 
-function evento(trascrizioni) {
-    return { results: trascrizioni.map(t => [{ transcript: t }]) };
+let microfoni;
+function getUserMedia() {
+    const traccia = { spenta: false, stop() { this.spenta = true; } };
+    microfoni.push(traccia);
+    return Promise.resolve({ getTracks: () => [traccia] });
 }
 
 function pulsante() {
@@ -29,15 +33,27 @@ function pulsante() {
 }
 
 async function svuotaCoda() {
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    for (let i = 0; i < 20; i++) await Promise.resolve();
 }
+
+// Tocca, parla per `ms` e tocca di nuovo
+async function registra(voice, btn, onAudio, ms = 2000) {
+    voice.toggleVoice(btn, onAudio);
+    await svuotaCoda();
+    mock.timers.tick(ms);
+    voice.toggleVoice(btn, onAudio);
+    mock.timers.tick(100);
+    await svuotaCoda();
+}
+
+const testo = (audio) => Buffer.from(audio.data, 'base64').toString();
 
 let voice;
 beforeEach(async () => {
-    globalThis.window = { SpeechRecognition: FintoRiconoscitore };
-    FintoRiconoscitore.istanze = [];
-    FintoRiconoscitore.comportamento = {};
-    mock.timers.enable({ apis: ['setTimeout'] });
+    microfoni = [];
+    FintoRegistratore.istanze = [];
+    globalThis.window = { MediaRecorder: FintoRegistratore, navigator: { mediaDevices: { getUserMedia } } };
+    mock.timers.enable({ apis: ['setTimeout', 'Date'] });
     voice ??= await import('../public/js/components/voice.js');
 });
 
@@ -47,80 +63,90 @@ afterEach(async () => {
     mock.timers.reset();
 });
 
-test('il testo che iOS consegna solo dopo lo stop non va perso', async () => {
-    FintoRiconoscitore.comportamento = { testoDopoStopMs: 2500, testo: 'e un caffè' };
+test('registra, spegne il microfono e passa l\'audio in base64 col suo formato', async () => {
     const ricevuti = [];
-    const btn = pulsante();
+    await registra(voice, pulsante(), async (a) => { ricevuti.push(a); });
 
-    voice.toggleVoice(btn, async (t) => { ricevuti.push(t); });
-    voice.toggleVoice(btn, async () => { }); // secondo tocco: termina
-    mock.timers.tick(3000);
-    await svuotaCoda();
-
-    assert.deepEqual(ricevuti, ['e un caffè']);
+    assert.equal(ricevuti.length, 1);
+    assert.equal(testo(ricevuti[0]), 'audio-1');
+    assert.equal(ricevuti[0].mimeType, 'audio/mp4');
+    assert.equal(microfoni[0].spenta, true);
 });
 
-test('con il testo già arrivato non si aspetta il tempo lungo', async () => {
+test('due vocali di fila: arrivano entrambi, ognuno con il suo microfono spento dopo', async () => {
     const ricevuti = [];
-    const btn = pulsante();
+    const onAudio = async (a) => { ricevuti.push(testo(a)); };
 
-    voice.toggleVoice(btn, async (t) => { ricevuti.push(t); });
-    FintoRiconoscitore.istanze[0].parla('pasta 80 grammi');
-    voice.toggleVoice(btn, async () => { });
-    mock.timers.tick(1600);
-    await svuotaCoda();
+    await registra(voice, pulsante(), onAudio);
+    await registra(voice, pulsante(), onAudio);
 
-    assert.deepEqual(ricevuti, ['pasta 80 grammi']);
+    assert.deepEqual(ricevuti, ['audio-1', 'audio-2']);
+    assert.deepEqual(microfoni.map(m => m.spenta), [true, true]);
 });
 
-test('due vocali di fila: il secondo viene preso', async () => {
-    const ricevuti = [];
-    const onText = async (t) => { ricevuti.push(t); };
-
-    const primo = pulsante();
-    voice.toggleVoice(primo, onText);
-    FintoRiconoscitore.istanze[0].parla('colazione latte e cereali');
-    voice.toggleVoice(primo, onText);
-    mock.timers.tick(1600);
-    await svuotaCoda();
-
-    FintoRiconoscitore.comportamento = { testoDopoStopMs: 2000, testo: 'e un caffè' };
-    const secondo = pulsante();
-    voice.toggleVoice(secondo, onText);
-    voice.toggleVoice(secondo, onText);
-    mock.timers.tick(2500);
-    await svuotaCoda();
-
-    assert.deepEqual(ricevuti, ['colazione latte e cereali', 'e un caffè']);
-});
-
-test('se non arriva niente il pulsante lo dice invece di tornare muto', async () => {
+test('un tocco e subito stop non manda niente e il pulsante lo dice', async () => {
     const btn = pulsante();
     let chiamato = false;
-
-    voice.toggleVoice(btn, async () => { chiamato = true; });
-    voice.toggleVoice(btn, async () => { });
-    mock.timers.tick(10000);
-    await svuotaCoda();
+    await registra(voice, btn, async () => { chiamato = true; }, 200);
 
     assert.equal(chiamato, false);
     assert.match(btn.innerHTML, /sentito/i);
+    assert.equal(microfoni[0].spenta, true);
 });
 
-test('dopo il messaggio un nuovo tocco riparte e poi ripristina il testo originale', async () => {
+test('dopo il messaggio il pulsante torna com\'era e un nuovo tocco registra', async () => {
     const btn = pulsante();
-    voice.toggleVoice(btn, async () => { });
-    voice.toggleVoice(btn, async () => { });
-    mock.timers.tick(10000);
-    await svuotaCoda();
+    await registra(voice, btn, async () => { }, 200);
+    mock.timers.tick(3000);
+    assert.equal(btn.innerHTML, 'VOCE');
 
     const ricevuti = [];
-    voice.toggleVoice(btn, async (t) => { ricevuti.push(t); });
-    FintoRiconoscitore.istanze.at(-1).parla('mela');
-    voice.toggleVoice(btn, async () => { });
-    mock.timers.tick(1600);
+    await registra(voice, btn, async (a) => { ricevuti.push(testo(a)); });
+    assert.deepEqual(ricevuti, ['audio-2']);
+    assert.equal(btn.innerHTML, 'VOCE');
+});
+
+test('mentre il microfono si accende o l\'analisi è in corso i tocchi sono ignorati', async () => {
+    const btn = pulsante();
+    let finisci;
+    const ricevuti = [];
+    const onAudio = (a) => { ricevuti.push(testo(a)); return new Promise(ok => { finisci = ok; }); };
+
+    voice.toggleVoice(btn, onAudio);
+    voice.toggleVoice(btn, onAudio); // microfono ancora in accensione
+    await svuotaCoda();
+    assert.equal(microfoni.length, 1);
+
+    mock.timers.tick(2000);
+    voice.toggleVoice(btn, onAudio);
+    mock.timers.tick(100);
+    await svuotaCoda();
+    assert.equal(voice.inUso(), true);
+
+    voice.toggleVoice(btn, onAudio); // analisi in corso
+    await svuotaCoda();
+    assert.equal(microfoni.length, 1);
+
+    finisci();
+    await svuotaCoda();
+    assert.equal(voice.inUso(), false);
+    assert.equal(btn.innerHTML, 'VOCE');
+    assert.deepEqual(ricevuti, ['audio-1']);
+});
+
+test('dopo un minuto la registrazione si ferma da sola', async () => {
+    const ricevuti = [];
+    voice.toggleVoice(pulsante(), async (a) => { ricevuti.push(testo(a)); });
+    await svuotaCoda();
+    mock.timers.tick(60000);
+    mock.timers.tick(100);
     await svuotaCoda();
 
-    assert.deepEqual(ricevuti, ['mela']);
-    assert.equal(btn.innerHTML, 'VOCE');
+    assert.deepEqual(ricevuti, ['audio-1']);
+});
+
+test('formato: quello di iPhone se c\'è, altrimenti webm', () => {
+    assert.equal(voice.scegliFormato(f => f === 'audio/mp4' || f === 'audio/webm'), 'audio/mp4');
+    assert.equal(voice.scegliFormato(f => f.startsWith('audio/webm')), 'audio/webm;codecs=opus');
+    assert.equal(voice.scegliFormato(() => false), '');
 });

@@ -74,10 +74,11 @@ export async function deleteMeal(id) {
     return await res.json();
 }
 
-export async function analyzeVoice(text, mealId = null) {
+// audio: { data (base64), mimeType } registrato da components/voice.js; Gemini lo ascolta sul server
+export async function analyzeVoice(audio, mealId = null) {
     const res = await fetch(`/api/analyze-meal`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, mealId })
+        body: JSON.stringify({ audio, mealId })
     });
     return await leggiJSON(res);
 }

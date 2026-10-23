@@ -536,9 +536,25 @@ function estraiJSON(testo, apertura, chiusura) {
     return JSON.parse(testo.substring(start, end + 1));
 }
 
-// Trasforma un testo dettato in { pasto, alimenti, ingredienti[] }.
+// Formati che arrivano dal registratore del telefono (iPhone: audio/mp4) e che Gemini accetta
+const AUDIO_AMMESSI = ['audio/mp4', 'audio/webm', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/aac'];
+
+// Dal body della richiesta: { testo } oppure { audio: { data (base64), mimeType } }, o null se manca
+function dettatoDa(body) {
+    const audio = body?.audio;
+    if (audio && typeof audio.data === 'string' && audio.data.length > 0) {
+        const mimeType = String(audio.mimeType || '').split(';')[0].trim().toLowerCase();
+        if (!AUDIO_AMMESSI.includes(mimeType)) return null;
+        return { audio: { data: audio.data, mimeType } };
+    }
+    const testo = String(body?.text || '').trim();
+    return testo ? { testo } : null;
+}
+
+// Trasforma un pasto dettato (testo, o audio che Gemini ascolta e trascrive da sé) in
+// { pasto, alimenti, ingredienti[], trascrizione }.
 // prepsAttive: preparazioni che l'AI deve riconoscere invece di stimarne i valori.
-async function analizzaTesto(text, prepsAttive = [], grammiSoliti = {}) {
+async function analizzaDettato(dettato, prepsAttive = [], grammiSoliti = {}) {
     const refMap = {};
     const righePrep = prepsAttive.map((p, i) => {
         const ref = `P${i + 1}`;
@@ -562,7 +578,13 @@ ${righePrep}
         - Petto di pollo crudo: 100 kcal, 23.3g pro, 0g carbo, 0.8g grassi
         `;
 
-    const prompt = `Sei un assistente nutrizionale per un'app. L'utente detterà un pasto. Testo: "${text}"
+    const apertura = dettato.audio
+        ? `Sei un assistente nutrizionale per un'app. L'utente ha dettato un pasto: è nell'audio allegato, in italiano.
+        Ascoltalo e scrivi nel campo "trascrizione" quello che dice. Se non si sente o non si capisce nessun
+        alimento, restituisci "ingredienti": [] e non inventare niente.`
+        : `Sei un assistente nutrizionale per un'app. L'utente detterà un pasto. Testo: "${dettato.testo}"`;
+
+    const prompt = `${apertura}
 
         REGOLE:
         1. Se l'utente detta valori espliciti, usali.
@@ -585,6 +607,7 @@ ${righePrep}
 
         Restituisci SOLO un JSON con questa esatta struttura:
         {
+          "trascrizione": "${dettato.audio ? 'Quello che dice la persona' : ''}",
           "pasto": "Colazione/Pranzo/Cena/Spuntino",
           "alimenti": "Nome generale (es. Pollo e Riso)",
           "calorie": 0,
@@ -607,9 +630,16 @@ ${righePrep}
           ]
         }`;
 
-    const data = estraiJSON(await generaJSON(prompt), '{', '}');
+    const contenuto = dettato.audio ? [{ inlineData: dettato.audio }, { text: prompt }] : prompt;
+    const data = estraiJSON(await generaJSON(contenuto), '{', '}');
+    if (dettato.audio) console.log("🗣️ Trascrizione di Gemini:", data.trascrizione);
     let ingredienti = valoriDaPer100(risolviRiferimentiPrep(Array.isArray(data.ingredienti) ? data.ingredienti : [], refMap, grammiSoliti));
 
+    if (ingredienti.length === 0 && !(Number(data.calorie) > 0)) {
+        const err = new Error("Non ho capito cosa hai mangiato: riprova.");
+        err.status = 422;
+        throw err;
+    }
     if (ingredienti.length === 0) {
         ingredienti = [{
             nome: data.alimenti, calorie: data.calorie, proteine: data.proteine,
@@ -621,7 +651,7 @@ ${righePrep}
     const preps = new Map(prepsAttive.map(p => [String(p._id), p]));
     ricalcolaPasto({ ingredienti }, preps);
 
-    return { pasto: data.pasto || 'Pasto', alimenti: data.alimenti || 'Pasto', ingredienti };
+    return { pasto: data.pasto || 'Pasto', alimenti: data.alimenti || 'Pasto', ingredienti, trascrizione: data.trascrizione || '' };
 }
 
 // Carica le preparazioni citate dagli ingredienti dei pasti, indicizzate per id stringa
@@ -641,13 +671,15 @@ async function normalizzaPorzioni(meal) {
 
 app.post('/api/analyze-meal', async (req, res) => {
     try {
-        const { text, mealId } = req.body;
-        console.log("🗣️ Testo ricevuto dall'app:", text);
+        const { mealId } = req.body;
+        const dettato = dettatoDa(req.body);
+        if (!dettato) return res.status(400).json({ success: false, error: "Non è arrivato niente da analizzare: riprova." });
+        console.log("🗣️ Ricevuto dall'app:", dettato.testo ?? `audio ${dettato.audio.mimeType}, ${Math.round(dettato.audio.data.length * 0.75 / 1024)} KB`);
 
         const prepsAttive = await MealPrep.find({ attiva: true }).select('nome calorie proteine carboidrati grassi pesoTotaleCotto porzioniPreviste').lean();
         const gruppi = await porzioniPerPrep(prepsAttive.map(p => p._id));
         const grammiSoliti = Object.fromEntries(prepsAttive.map(p => [String(p._id), riepilogoConsumo(p, gruppi.get(String(p._id))).ultimiGrammi]));
-        const mealData = await analizzaTesto(text, prepsAttive, grammiSoliti);
+        const { trascrizione, ...mealData } = await analizzaDettato(dettato, prepsAttive, grammiSoliti);
         const totaliNuovi = totaliDaIngredienti(mealData.ingredienti);
 
         // SE C'È UN MEAL ID -> AGGIUNGO AL PASTO ESISTENTE
@@ -662,15 +694,15 @@ app.post('/api/analyze-meal', async (req, res) => {
             existingMeal.alimenti += ", " + mealData.alimenti;
 
             await existingMeal.save();
-            return res.json({ success: true, meal: existingMeal });
+            return res.json({ success: true, meal: existingMeal, trascrizione });
         }
 
         const newMeal = new Meal({ ...mealData, ...totaliNuovi });
         await newMeal.save();
-        res.json({ success: true, meal: newMeal });
+        res.json({ success: true, meal: newMeal, trascrizione });
     } catch (error) {
         console.error("❌ ERRORE ANALISI VOCALE:", error.dettaglio || error.message);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(error.status === 422 ? 422 : 500).json({ success: false, error: error.message });
     }
 });
 
@@ -845,7 +877,9 @@ app.post('/api/preps/:id/analyze', async (req, res) => {
         const prep = await MealPrep.findById(req.params.id);
         if (!prep) return res.status(404).json({ success: false, error: 'Preparazione non trovata' });
 
-        const { ingredienti } = await analizzaTesto(req.body.text);
+        const dettato = dettatoDa(req.body);
+        if (!dettato) return res.status(400).json({ success: false, error: "Non è arrivato niente da analizzare: riprova." });
+        const { ingredienti } = await analizzaDettato(dettato);
         prep.ingredienti.push(...ingredienti);
         aggiornaTotaliLotto(prep);
         await prep.save();
@@ -855,7 +889,7 @@ app.post('/api/preps/:id/analyze', async (req, res) => {
         res.json({ success: true, nuoviIngredienti: ingredienti, prep: await prepConRiepilogo(prep, gruppi.get(String(prep._id))) });
     } catch (e) {
         console.error("❌ ERRORE ANALISI VOCALE PREP:", e.dettaglio || e.message);
-        res.status(500).json({ success: false, error: e.message });
+        res.status(e.status === 422 ? 422 : 500).json({ success: false, error: e.message });
     }
 });
 

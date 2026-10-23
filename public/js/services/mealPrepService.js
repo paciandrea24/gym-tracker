@@ -49,7 +49,7 @@ export const getPrep = (id) => richiesta(`/api/preps/${id}`);
 export const createPrep = (nome) => richiesta('/api/preps', 'POST', { nome });
 export const updatePrep = (id, data) => richiesta(`/api/preps/${id}`, 'PUT', data);
 export const deletePrep = (id) => richiesta(`/api/preps/${id}`, 'DELETE');
-export const analyzePrepVoice = (id, text) => richiesta(`/api/preps/${id}/analyze`, 'POST', { text });
+export const analyzePrepVoice = (id, audio) => richiesta(`/api/preps/${id}/analyze`, 'POST', { audio });
 
 // porzione: { mealId } per aggiungerla a un pasto esistente, altrimenti { pasto } per un nuovo pasto;
 // più { prepGrammi } oppure { prepPorzioni }

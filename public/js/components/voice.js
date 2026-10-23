@@ -1,143 +1,126 @@
 // public/js/components/voice.js
 // Registrazione vocale condivisa: tocca per parlare, tocca di nuovo per terminare.
 //
-// Correzioni per Safari su iPhone rispetto alla vecchia versione in NutritionView:
-// - dopo stop() iOS a volte non emette "onend": la sessione restava "in ascolto" per sempre e i
-//   tocchi successivi non facevano più nulla. Ora c'è un timer di sicurezza che chiude comunque.
-// - iOS spesso non marca come "finale" l'ultima frase quando si ferma a mano: si perdeva il testo
-//   e non succedeva niente. Ora si usano anche i risultati provvisori.
-// - iOS può ripetere i risultati già dati (trascrizione cumulativa): ora non si duplicano.
-// - mentre l'analisi è in corso i tocchi vengono ignorati, niente sessioni sovrapposte.
-// - con frasi brevi (tipico del secondo vocale di fila) iOS spesso manda il testo solo DOPO lo stop:
-//   prima si chiudeva dopo 1,5 s scartando tutto in silenzio. Ora senza testo si aspetta di più e,
-//   se non arriva niente, il pulsante lo dice.
+// Dal 23 ottobre 2026 non si usa più la dettatura di Safari (SpeechRecognition): su iPhone
+// funzionava solo la prima volta, poi "Non ho sentito nulla" (difetto noto di WebKit), e i ritocchi
+// non erano bastati. Ora si registra l'audio col microfono (MediaRecorder) e lo si manda al server,
+// dove Gemini lo ascolta, lo trascrive e calcola il pasto in una sola richiesta.
+// - dopo ogni registrazione il microfono viene spento: la volta dopo riparte pulito (e su iPhone
+//   sparisce il pallino arancione);
+// - mentre il microfono si accende o l'analisi è in corso i tocchi vengono ignorati, niente
+//   sessioni sovrapposte;
+// - un tocco e subito stop non manda niente: il pulsante dice che non ha sentito.
 
-import * as modal from './modal.js?v=41';
-import { icona } from './icons.js?v=41';
+import * as modal from './modal.js?v=42';
+import { icona } from './icons.js?v=42';
 
 const MAX_DURATA_MS = 60000;
-const ATTESA_FINE_MS = 1500;      // testo già arrivato: quanto aspettare "onend" prima di chiudere noi
-const ATTESA_RISULTATO_MS = 6000; // nessun testo ancora: quanto aspettare il risultato dopo lo stop
+const MIN_DURATA_MS = 600;
+const ATTESA_FINE_MS = 3000;  // se il registratore non avvisa che ha finito, chiudiamo noi
 const MESSAGGIO_MS = 2500;
+// Il primo che il telefono sa registrare: iPhone audio/mp4, Chrome ed Edge webm
+const FORMATI = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
 
 let sessione = null;
 // Aspetto originale di ogni pulsante, così un messaggio temporaneo non diventa il nuovo "originale"
 const originali = new WeakMap();
 
-// Vero mentre si registra o si analizza il testo: la schermata sotto non va ridisegnata
+// Vero mentre si registra o si analizza: la schermata sotto non va ridisegnata
 export function inUso() {
     return !!sessione;
 }
 
 export function isSupported() {
-    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    return !!(window.navigator?.mediaDevices?.getUserMedia && window.MediaRecorder);
 }
 
-// Unisce i risultati gestendo sia trascrizioni incrementali sia cumulative
-export function unisciTrascrizioni(parti) {
-    let testo = '';
-    for (const parte of parti) {
-        const t = (parte || '').trim();
-        if (!t) continue;
-        if (testo && t.toLowerCase().startsWith(testo.toLowerCase())) testo = t;
-        else if (!testo.toLowerCase().endsWith(t.toLowerCase())) testo = testo ? `${testo} ${t}` : t;
-    }
-    return testo;
+export function scegliFormato(supporta) {
+    return FORMATI.find(f => supporta(f)) || '';
 }
 
-function messaggioErrore(codice) {
-    switch (codice) {
-        case 'not-allowed':
-        case 'service-not-allowed':
-            return "Microfono o riconoscimento vocale non autorizzati. Su iPhone: Impostazioni › Privacy › Microfono e Riconoscimento vocale.";
-        case 'audio-capture':
-            return "Il microfono è occupato da un'altra app. Riprova tra un attimo.";
-        case 'network':
-            return "Il riconoscimento vocale richiede la connessione a Internet.";
-        case 'start-failed':
-            return "Non riesco ad avviare il microfono. Riprova.";
+function messaggioErrore(nome) {
+    switch (nome) {
+        case 'NotAllowedError':
+        case 'SecurityError':
+            return "Microfono non autorizzato: tocca «Consenti» quando l'app lo chiede. Se non lo chiede più, chiudi e riapri l'app (su iPhone: Impostazioni › App › Safari › Microfono).";
+        case 'NotFoundError':
+            return "Non trovo nessun microfono.";
+        case 'NotReadableError':
+        case 'AbortError':
+            return "Il microfono è occupato da un'altra app (per esempio una chiamata). Riprova tra un attimo.";
         default:
-            return `Errore microfono: ${codice}`;
+            return "Non riesco ad avviare il microfono. Riprova.";
     }
 }
 
-// button: il pulsante che avvia/ferma. onText(testo): async, riceve la trascrizione.
-// Va chiamata direttamente dal click: su iOS start() deve partire dentro il gesto dell'utente.
-export function toggleVoice(button, onText) {
+// button: il pulsante che avvia/ferma. onAudio({ data, mimeType }): async, riceve la registrazione
+// (data in base64). Va chiamata direttamente dal click: su iPhone il microfono parte dal gesto.
+export function toggleVoice(button, onAudio) {
     if (sessione) {
         if (sessione.fase === 'ascolto') ferma(sessione);
-        return; // in analisi: ignora i tocchi
+        return; // microfono in accensione o analisi in corso: ignora i tocchi
     }
     if (!isSupported()) {
-        modal.showModal({ type: 'error', title: 'Non supportato', message: "Il riconoscimento vocale non è supportato in questo browser." });
+        modal.showModal({ type: 'error', title: 'Non supportato', message: "La registrazione audio non è supportata in questo browser." });
         return;
     }
-    avvia(button, onText);
+    avvia(button, onAudio);
 }
 
-function avvia(button, onText) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SpeechRecognition();
-    rec.lang = 'it-IT';
-    rec.continuous = true;
-    rec.interimResults = true;
-
+async function avvia(button, onAudio) {
     if (!originali.has(button)) originali.set(button, { html: button.innerHTML, classe: button.className, timer: null });
     const orig = originali.get(button);
     clearTimeout(orig.timer);
 
     const s = {
-        rec, button, onText,
+        button, onAudio,
         originalHtml: orig.html,
         originalClass: orig.classe,
-        testo: '', errore: null, fase: 'ascolto', chiusa: false,
+        fase: 'avvio', chiusa: false,
+        stream: null, rec: null, parti: [], inizio: 0, durata: 0,
         timerFine: null, timerMax: null
     };
     sessione = s;
-
-    rec.onresult = (event) => {
-        const parti = [];
-        for (let i = 0; i < event.results.length; i++) parti.push(event.results[i][0].transcript);
-        s.testo = unisciTrascrizioni(parti);
-        // Testo arrivato dopo lo stop: se "onend" tarda chiudiamo a breve, senza aspettare il tempo lungo
-        if (s.fase === 'chiusura' && s.testo.trim()) attendiFine(s, ATTESA_FINE_MS);
-    };
-    rec.onerror = (event) => { s.errore = event.error; };
-    rec.onend = () => concludi(s);
-
-    button.innerHTML = `${icona.stop()} Ascoltando… tocca per terminare`;
+    button.innerHTML = `${icona.attesa()} Un attimo…`;
     button.className = orig.classe;
-    button.classList.add('animate-pulse', 'bg-red-600');
 
     try {
-        rec.start();
+        s.stream = await window.navigator.mediaDevices.getUserMedia({ audio: true });
+        const formato = scegliFormato(f => !!window.MediaRecorder.isTypeSupported?.(f));
+        s.rec = formato ? new window.MediaRecorder(s.stream, { mimeType: formato }) : new window.MediaRecorder(s.stream);
+        s.rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) s.parti.push(e.data); };
+        s.rec.onstop = () => concludi(s);
+        s.rec.start();
     } catch (e) {
-        s.errore = 'start-failed';
-        concludi(s);
+        spegniMicrofono(s);
+        sessione = null;
+        ripristinaPulsante(s);
+        await modal.showModal({ type: 'error', title: 'Microfono', message: messaggioErrore(e?.name) });
         return;
     }
+
+    s.fase = 'ascolto';
+    s.inizio = Date.now();
+    button.innerHTML = `${icona.stop()} Ascoltando… tocca per terminare`;
+    button.classList.add('animate-pulse', 'bg-red-600');
     s.timerMax = setTimeout(() => ferma(s), MAX_DURATA_MS);
 }
 
 function ferma(s) {
     if (s.chiusa || s.fase !== 'ascolto') return;
     s.fase = 'chiusura';
+    s.durata = Date.now() - s.inizio;
     clearTimeout(s.timerMax);
     s.button.innerHTML = `${icona.attesa()} Un attimo…`;
     s.button.className = s.originalClass;
-    s.button.classList.add('bg-red-600');
     try { s.rec.stop(); } catch { }
-    // Se iOS non emette "onend" chiudiamo noi: presto se il testo c'è già, altrimenti
-    // si aspetta di più perché il risultato può arrivare solo dopo lo stop
-    attendiFine(s, s.testo.trim() ? ATTESA_FINE_MS : ATTESA_RISULTATO_MS);
+    s.timerFine = setTimeout(() => concludi(s), ATTESA_FINE_MS);
 }
 
-function attendiFine(s, ms) {
-    clearTimeout(s.timerFine);
-    s.timerFine = setTimeout(() => {
-        try { s.rec.abort(); } catch { }
-        concludi(s);
-    }, ms);
+function spegniMicrofono(s) {
+    for (const traccia of s.stream?.getTracks() || []) {
+        try { traccia.stop(); } catch { }
+    }
 }
 
 function ripristinaPulsante(s) {
@@ -153,22 +136,26 @@ function mostraMessaggio(s, testo) {
     orig.timer = setTimeout(() => ripristinaPulsante(s), MESSAGGIO_MS);
 }
 
+async function inBase64(blob) {
+    const byte = new Uint8Array(await blob.arrayBuffer());
+    let binario = '';
+    for (let i = 0; i < byte.length; i += 0x8000) binario += String.fromCharCode(...byte.subarray(i, i + 0x8000));
+    return btoa(binario);
+}
+
 async function concludi(s) {
     if (s.chiusa) return;
     s.chiusa = true;
     clearTimeout(s.timerFine);
     clearTimeout(s.timerMax);
-    s.rec.onresult = s.rec.onerror = s.rec.onend = null;
+    spegniMicrofono(s);
+    if (s.rec) s.rec.ondataavailable = s.rec.onstop = null;
 
-    const testo = s.testo.trim();
-    if (!testo) {
+    const mimeType = (s.rec?.mimeType || s.parti[0]?.type || 'audio/mp4').split(';')[0];
+    const audio = new Blob(s.parti, { type: mimeType });
+    if (s.durata < MIN_DURATA_MS || audio.size === 0) {
         sessione = null;
-        if (s.errore && s.errore !== 'no-speech' && s.errore !== 'aborted') {
-            ripristinaPulsante(s);
-            await modal.showModal({ type: 'error', title: 'Microfono', message: messaggioErrore(s.errore) });
-        } else {
-            mostraMessaggio(s, "Non ho sentito nulla, riprova");
-        }
+        mostraMessaggio(s, "Non ho sentito nulla, riprova");
         return;
     }
 
@@ -178,7 +165,7 @@ async function concludi(s) {
     s.button.classList.add('bg-orange-500');
 
     try {
-        await s.onText(testo);
+        await s.onAudio({ data: await inBase64(audio), mimeType });
     } catch (e) {
         await modal.showModal({ type: 'error', title: 'Errore', message: e.message || 'Errore durante l\'analisi.' });
     } finally {

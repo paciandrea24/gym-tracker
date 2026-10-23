@@ -1,12 +1,12 @@
-import { formatDate, getWeekLabel } from './utils.js?v=41';
-import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=41';
-import { cercaProdottoOFF } from './services/pantryService.js?v=41';
-import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=41';
-import * as modal from './components/modal.js?v=41';
-import { icona } from './components/icons.js?v=41';
-import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=41';
-import { apriFoglio } from './components/sheet.js?v=41';
-import { ordinaPerUso, leggiUsi } from './services/preferitiLogic.js?v=41';
+import { formatDate, getWeekLabel } from './utils.js?v=42';
+import { etichettaPorzione, pastoPerOra } from './services/mealPrepService.js?v=42';
+import { cercaProdottoOFF } from './services/pantryService.js?v=42';
+import { campoCodiceHtml, collegaCampoCodice } from './components/barcodeField.js?v=42';
+import * as modal from './components/modal.js?v=42';
+import { icona } from './components/icons.js?v=42';
+import { intero, macroColonne, macroTesto, chiaveGiorno, lunediDi, nomeGiorno, nomeSettimana, ripartizioneCalorie } from './components/format.js?v=42';
+import { apriFoglio } from './components/sheet.js?v=42';
+import { ordinaPerUso, leggiUsi } from './services/preferitiLogic.js?v=42';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const BTN_PRINCIPALE = 'w-full bg-gray-900 text-white font-black text-[15px] py-4 rounded-2xl shadow-[0_8px_20px_rgb(0,0,0,0.15)] active:scale-95 transition-transform';
