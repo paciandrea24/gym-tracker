@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import compression from 'compression';
 import dotenv from 'dotenv';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, GoogleGenerativeAIAbortError } from '@google/generative-ai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import webpush from 'web-push';
@@ -491,33 +491,40 @@ const Subscription = mongoose.model('Subscription', SubscriptionSchema);
 
 // --- API NUTRIZIONE ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+// Principale e di riserva. A ottobre 2026 gemini-3.1-flash-lite restava fermo anche un minuto e poi
+// dava 503; 3.5-flash-lite rispondeva sempre in 4-6 s, 3.6-flash in 2-3 s ma a volte con 503.
+const GEMINI_MODELLI = [process.env.GEMINI_MODEL || "gemini-3.5-flash-lite", "gemini-3.6-flash"];
+const GEMINI_TIMEOUT_MS = 20000;
 
-// Chiama Gemini in modalità JSON. Su errori temporanei (troppe richieste, servizio sovraccarico)
-// riprova con attesa crescente invece di fallire subito: succedeva con due vocali ravvicinati.
-async function generaJSON(prompt, tentativi = 3) {
-    const model = genAI.getGenerativeModel({
-        model: GEMINI_MODEL,
-        generationConfig: { responseMimeType: "application/json" }
-    });
+// Chiama Gemini in modalità JSON. contenuto: il prompt, oppure le sue parti (es. audio + testo).
+// Su errori temporanei (troppe richieste, servizio sovraccarico, nessuna risposta in 20 s, modello
+// sparito) riprova alternando il modello principale e quello di riserva invece di fallire subito.
+// Ragionamento al minimo: per questi conti non serve e allunga molto l'attesa.
+async function generaJSON(contenuto, tentativi = 3) {
     for (let i = 1; ; i++) {
+        const nome = GEMINI_MODELLI[(i - 1) % GEMINI_MODELLI.length];
+        const model = genAI.getGenerativeModel({
+            model: nome,
+            generationConfig: { responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "minimal" } }
+        }, { timeout: GEMINI_TIMEOUT_MS });
         try {
-            const result = await model.generateContent(prompt);
+            const result = await model.generateContent(contenuto);
             return result.response.text();
         } catch (error) {
             const status = error.status || 0;
-            const temporaneo = status === 429 || status === 500 || status === 503;
-            console.error(`❌ Gemini tentativo ${i}/${tentativi} (status ${status}):`, error.message);
+            const scaduto = error instanceof GoogleGenerativeAIAbortError;
+            const temporaneo = scaduto || [404, 429, 500, 503, 504].includes(status);
+            console.error(`❌ Gemini ${nome} tentativo ${i}/${tentativi} (${scaduto ? 'nessuna risposta in tempo' : `status ${status}`}):`, error.message);
             if (!temporaneo || i >= tentativi) {
                 const err = new Error(status === 429
                     ? "Troppe richieste all'AI in poco tempo: riprova tra qualche secondo."
-                    : status === 503
+                    : scaduto || status === 503
                         ? "Il servizio AI è momentaneamente sovraccarico: riprova tra poco."
                         : "L'AI non è riuscita a elaborare la richiesta.");
                 err.dettaglio = error.message;
                 throw err;
             }
-            await new Promise(r => setTimeout(r, 1500 * i));
+            await new Promise(r => setTimeout(r, 800));
         }
     }
 }
