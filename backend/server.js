@@ -895,7 +895,8 @@ app.get('/api/today-meals', async (req, res) => {
 
 // --- API: COME CHIUDI DI SOLITO ---
 // L'ultimo giorno (negli ultimi 60) arrivato allo stesso punto con macro simili e i pasti con cui
-// è finito, pronti da copiare. Body: { obiettivi: { calorie, proteine, carboidrati, grassi } }
+// è finito, pronti da copiare: tra quelli che portano oggi all'obiettivo di calorie (o, se nessuno
+// ci arriva, quello che ci va più vicino). Body: { obiettivi: { calorie, proteine, carboidrati, grassi } }
 app.post('/api/day-suggestions', async (req, res) => {
     try {
         const mezzanotte = getItalyMidnight();

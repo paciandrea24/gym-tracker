@@ -99,6 +99,9 @@ Approvata con l'anteprima https://claude.ai/artifact/QrvGkG3QGF5hQSGu8dcNUN (pi�
   contatore nascosto, solo sul telefono (localStorage `usoPreferiti`, per nome; niente sul server),
   conta pasto nuovo, aggiunta a un pasto e ingrediente del meal prep; a parità, il più nuovo prima
   (`services/preferitiLogic.js`).
+- **Come ieri (23 ottobre)**: si propone il giorno simile più recente i cui pasti portano oggi
+  all'obiettivo di calorie (fino a 50 kcal sotto; sopra va bene, l'utente mette massa); se nessuno
+  ci arriva, quello che ci va più vicino. "Chiuderesti a X" non è più rosso sopra l'obiettivo.
 - **Chiedi all'IA**: titolo "Idee per la cena"; ogni opzione: cos'è, kcal e macro, ingredienti,
   "Con questo arrivi a" (barre, rosse se si supera), "+ Aggiungi a oggi"; "Vedi variante" bianco.
 - **Aggiungi a mano**: pasto con quattro pulsanti (preimpostato in base all'ora, nascosto se si

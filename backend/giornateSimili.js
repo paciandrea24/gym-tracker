@@ -1,7 +1,9 @@
 // backend/giornateSimili.js
 // "Come chiudi di solito": trova l'ultimo giorno arrivato allo stesso punto con macro simili
 // a quelli di oggi e propone come è finito. Il più recente, non il più simile: è quello di cui
-// verosimilmente si hanno ancora gli ingredienti.
+// verosimilmente si hanno ancora gli ingredienti. Conta però solo un giorno i cui pasti dopo
+// portano oggi all'obiettivo di calorie (fino a 50 kcal sotto; sopra va bene, l'utente mette massa):
+// copiare una giornata rimasta corta non serve. Se nessuno ci arriva, quello che ci va più vicino.
 //
 // Ogni pasto ha un posto nella giornata: Colazione 1, Pranzo 3, Cena 5; gli spuntini (e ogni altro
 // tipo) prendono il posto subito dopo il pasto principale che li precede (2, 4, 6).
@@ -69,8 +71,9 @@ function firma(pasti) {
 }
 
 // pastiOggi: pasti già segnati oggi. giorni: [{ giorno: 'YYYY-MM-DD', pasti }] dei giorni passati.
-// Ritorna al massimo `max` consigli, dal più recente: [{ giorno, distanza, aQuelPunto, pasti, totali, giorniUguali }]
-export function suggerisciChiusure(pastiOggi, giorni, { obiettivi = OBIETTIVI_BASE, max = 1, soglia = 0.15 } = {}) {
+// Ritorna al massimo `max` consigli: [{ giorno, distanza, aQuelPunto, pasti, totali, proiezione, giorniUguali }]
+// (proiezione: le calorie di oggi se si aggiungono quei pasti)
+export function suggerisciChiusure(pastiOggi, giorni, { obiettivi = OBIETTIVI_BASE, max = 1, soglia = 0.15, margine = 50 } = {}) {
     if (!pastiOggi || pastiOggi.length === 0) return [];
 
     const arrivati = Math.max(...slotPasti(pastiOggi).map(x => x.slot));
@@ -95,14 +98,19 @@ export function suggerisciChiusure(pastiOggi, giorni, { obiettivi = OBIETTIVI_BA
             firma: firma(rimanenti)
         });
     }
+    for (const c of candidati) c.proiezione = Math.round((oggi.calorie + c.totali.calorie) * 10) / 10;
 
-    candidati.sort((a, b) => b.giorno.localeCompare(a.giorno));
+    // I giorni che portano all'obiettivo, dal più recente; se non ce n'è, dal più vicino
+    const minimo = (Number(obiettivi.calorie) || OBIETTIVI_BASE.calorie) - margine;
+    let scelti = candidati.filter(c => c.proiezione >= minimo);
+    if (scelti.length > 0) scelti.sort((a, b) => b.giorno.localeCompare(a.giorno));
+    else scelti = candidati.sort((a, b) => b.proiezione - a.proiezione || b.giorno.localeCompare(a.giorno));
 
-    // Chiusure identiche: un solo consiglio (il più recente) con l'elenco degli altri giorni
+    // Chiusure identiche: un solo consiglio (il primo) con l'elenco degli altri giorni
     const perFirma = new Map();
-    for (const c of candidati) {
+    for (const c of scelti) {
         if (perFirma.has(c.firma)) perFirma.get(c.firma).giorniUguali.push(c.giorno);
-        else perFirma.set(c.firma, { giorno: c.giorno, distanza: c.distanza, aQuelPunto: c.aQuelPunto, pasti: c.pasti, totali: c.totali, giorniUguali: [] });
+        else perFirma.set(c.firma, { giorno: c.giorno, distanza: c.distanza, aQuelPunto: c.aQuelPunto, pasti: c.pasti, totali: c.totali, proiezione: c.proiezione, giorniUguali: [] });
     }
     return [...perFirma.values()].slice(0, max);
 }

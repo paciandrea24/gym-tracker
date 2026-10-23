@@ -1,7 +1,7 @@
 // public/js/components/dayClosure.js
 // Card "Come chiudi di solito": l'ultimo giorno arrivato allo stesso punto con macro simili a oggi
-// e i pasti con cui è finito. Si spuntano i pasti da registrare oggi; il totale previsto
-// si aggiorna con la selezione.
+// e i pasti con cui è finito (il server sceglie un giorno che porta all'obiettivo di calorie).
+// Si spuntano i pasti da registrare oggi; il totale previsto si aggiorna con la selezione.
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const intero = (n) => Math.round(Number(n) || 0).toLocaleString('it-IT');
@@ -78,9 +78,9 @@ export function renderChiusuraGiornata(el, suggerimenti, { consumate, goals, onA
             }
             const lista = scelti();
             const t = proiezione(consumate, lista);
-            const oltre = t.calorie > Number(goals.calorie);
+            // Niente rosso se si supera l'obiettivo: per mettere massa va bene (e il rosso è solo per eliminare)
             card.querySelector('.sugg-proiezione').innerHTML = `
-                Chiuderesti a <span class="${oltre ? 'text-red-500' : 'text-gray-900'} font-black">${intero(t.calorie)}</span> / ${intero(goals.calorie)} kcal<br>
+                Chiuderesti a <span class="text-gray-900 font-black">${intero(t.calorie)}</span> / ${intero(goals.calorie)} kcal<br>
                 Proteine ${intero(t.proteine)}/${goals.proteine} g · Carbo ${intero(t.carbo)}/${goals.carbo} g · Grassi ${intero(t.grassi)}/${goals.grassi} g`;
             bottone.disabled = lista.length === 0;
             bottone.textContent = lista.length === s.pasti.length && lista.length > 1

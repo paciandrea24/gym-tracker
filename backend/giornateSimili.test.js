@@ -129,13 +129,64 @@ test('giorni finiti allo stesso modo diventano un solo consiglio', () => {
 test('tra i giorni simili si propone il più recente, anche se un altro ha macro più vicini', () => {
     const giorni = [
         giorno('2026-10-01', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Pizza', [1300, 45, 150, 50]]),        // identico
-        giorno('2026-10-03', [[450, 25, 65, 14], [650, 42, 75, 20]], ['Salmone', [600, 40, 30, 25]]),        // simile, più recente
-        giorno('2026-10-04', [[150, 10, 20, 4], [300, 15, 40, 8]], ['Bistecca', [700, 60, 0, 40]])            // troppo diverso
+        giorno('2026-10-03', [[450, 25, 65, 14], [650, 42, 75, 20]], ['Salmone e riso', [1050, 60, 110, 35]]), // simile, più recente
+        giorno('2026-10-04', [[150, 10, 20, 4], [300, 15, 40, 8]], ['Bistecca', [1100, 60, 0, 40]])           // troppo diverso
     ];
 
     const r = suggerisciChiusure(oggiColazionePranzo(), giorni, { obiettivi: OBIETTIVI });
 
     assert.deepEqual(r.map(x => x.giorno), ['2026-10-03']);
+});
+
+// Oggi 1000 kcal, obiettivo 2000: servono pasti da almeno 950 kcal (50 kcal di margine)
+test('si propone il giorno più recente che fa arrivare all\'obiettivo, non uno rimasto sotto', () => {
+    const giorni = [
+        giorno('2026-10-01', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Pizza', [1100, 45, 130, 40]]),   // 2100: arriva
+        giorno('2026-10-03', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Insalata', [840, 40, 60, 30]])    // 1840: sotto
+    ];
+
+    const r = suggerisciChiusure(oggiColazionePranzo(), giorni, { obiettivi: OBIETTIVI });
+
+    assert.deepEqual(r.map(x => x.giorno), ['2026-10-01']);
+    assert.equal(r[0].proiezione, 2100);
+});
+
+test('bastano 50 kcal in meno dell\'obiettivo, non di più', () => {
+    const giorni = [
+        giorno('2026-10-01', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Pizza', [1100, 45, 130, 40]]),   // 2100
+        giorno('2026-10-02', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Piadina', [950, 40, 100, 35]]),   // 1950: va bene
+        giorno('2026-10-03', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Toast', [940, 40, 100, 35]])      // 1940: no
+    ];
+
+    const r = suggerisciChiusure(oggiColazionePranzo(), giorni, { obiettivi: OBIETTIVI });
+
+    assert.deepEqual(r.map(x => x.giorno), ['2026-10-02']);
+});
+
+test('se nessun giorno arriva all\'obiettivo si propone quello che ci va più vicino', () => {
+    const giorni = [
+        giorno('2026-10-01', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Pizza', [900, 45, 100, 30]]),     // 1900
+        giorno('2026-10-02', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Insalata', [500, 30, 30, 20]]),   // 1500
+        giorno('2026-10-03', [[400, 20, 60, 12], [600, 40, 70, 18]], ['Toast', [700, 40, 80, 25]])       // 1700
+    ];
+
+    const r = suggerisciChiusure(oggiColazionePranzo(), giorni, { obiettivi: OBIETTIVI });
+
+    assert.deepEqual(r.map(x => x.giorno), ['2026-10-01']);
+});
+
+test('i giorni uguali elencati sono solo quelli arrivati all\'obiettivo', () => {
+    const g = (giorno, kcal) => ({ giorno, pasti: [
+        pasto(giorno, '08:00', 'Colazione', 'Colazione', [400, 20, 60, 12]),
+        pasto(giorno, '13:00', 'Pranzo', 'Pranzo', [600, 40, 70, 18]),
+        pasto(giorno, '20:30', 'Cena', 'Pollo e patate', [kcal, 45, 80, 18])
+    ] });
+    const giorni = [g('2026-10-01', 1000), g('2026-10-02', 700), g('2026-10-03', 1050)];
+
+    const r = suggerisciChiusure(oggiColazionePranzo(), giorni, { obiettivi: OBIETTIVI });
+
+    assert.equal(r[0].giorno, '2026-10-03');
+    assert.deepEqual(r[0].giorniUguali, ['2026-10-01']);
 });
 
 test('un solo consiglio di default', () => {
